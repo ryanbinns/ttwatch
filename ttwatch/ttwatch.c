@@ -553,10 +553,13 @@ void do_get_activities(libusb_device_handle *device, const char *store, char **f
         free(ttbin);
     }
 
-    ptr = formats;
-    for (; *ptr; ++ptr)
-        free(*ptr);
-    free(formats);
+    if (formats)
+    {
+        ptr = formats;
+        for (; *ptr; ++ptr)
+            free(*ptr);
+        free(formats);
+    }
 
     free(files);
 }
