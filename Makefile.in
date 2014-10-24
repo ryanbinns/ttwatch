@@ -1,0 +1,23 @@
+.PHONY: clean all install
+
+export CC = @CC@
+export AR = @AR@
+export CFLAGS = @unsafe@
+export PREFIX = @prefix@
+
+all:
+	$(MAKE) -C ttbin
+	$(MAKE) -C ttwatch
+	$(MAKE) -C ttbincnv
+
+clean:
+	$(MAKE) -C ttbin clean
+	$(MAKE) -C ttwatch clean
+	$(MAKE) -C ttbincnv clean
+
+install:
+	$(MAKE) -C ttwatch install
+	$(MAKE) -C ttbincnv install
+
+# vim: noet
+
