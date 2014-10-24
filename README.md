@@ -19,19 +19,21 @@ System Requirements
 This program requires the following libraries to be compiled and installed
 before attempting to build it.
 
-1. openssl (tested against version 1.0.1f, other versions may work)
+1. openssl (tested against version 1.0.1f, other versions may work).
    Available from http://www.openssl.org, or with your linux distribution
-1. curl (tested against version 7.38.0, other versions may work)
+1. curl (tested against version 7.38.0, other versions may work).
    Available from http://curl.haxx.se/download.html
-2. libusb 1.0.16 or later (tested against version 1.0.19)
+2. libusb 1.0.16 or later (tested against version 1.0.19).
    Available from http://sourceforge.net/projects/libusb/
 
 Build Instructions
 ==================
 
+```
 $ ./configure
 $ make
 $ sudo make install
+```
 
 Setup for unprivileged access
 =============================
@@ -40,14 +42,18 @@ In order to have permission to access the USB devices when running as anyone
 other than root, a udev rule must be set up to allow access for unprivileged
 users. The rule I have set up is:
 
+```
 $ cat /etc/udev/rules.d/99-tomtom.rules
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="1390", ATTRS{idProduct}=="7474", SYMLINK+="tomtom", GROUP="usb", MODE="660"
+```
 
 This basically gives access to USB devices to members of the "usb" group.
 Create the "usb" group and add yourself to it using:
 
+```
 $ sudo addgroup usb
 $ sudo usermod -a -Gusb <your_username>
+```
 
 Note: if you leave out the -a option on usermod, you will remove your user
       from every group except "usb", rather than just adding "usb" to the
