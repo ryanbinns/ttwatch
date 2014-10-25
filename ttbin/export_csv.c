@@ -11,7 +11,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
     time_t initial_time = 0;
     uint32_t current_lap = 1;
 
-    fprintf(file, "time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles\r\n");
+    fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles\r\n", file);
 
     if (ttbin->activity != ACTIVITY_SWIMMING)
     switch (ttbin->activity)
@@ -25,8 +25,8 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             if (i == 0)
                 initial_time = record->timestamp;
 
-            /* this will happen if the activity is paused and then resumed */
-            if (record->timestamp == 0)
+            /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
+            if ((record->timestamp == 0) || ((record->latitude == 0) && (record->longitude == 0)))
                 continue;
 
             if (current_lap <= ttbin->lap_record_count)
