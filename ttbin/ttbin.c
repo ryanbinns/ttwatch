@@ -187,6 +187,10 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             if (initial_gps_time == 0)
                 initial_gps_time = gps_record.timestamp;
 
+            /* if the GPS signal is lost, 0xffffffff is stored in the file */
+            if (gps_record.timestamp == 0xffffffff)
+                break;
+
             index = gps_record.timestamp - initial_gps_time;
 
             /* expand the array if necessary */
