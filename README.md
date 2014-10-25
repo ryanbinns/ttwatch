@@ -79,18 +79,24 @@ a group - such as the usb group mentioned above) to run as.
 Multiple Watches
 ================
 
-The ttwatch program has rudimentary support for multiple watches. When running
-from the command line (non-daemon mode), a list of available watches can be
-displayed using the --devices option. A particular watch can be selected using
-a 0-based index with the --device (or just -d) option.
+The ttwatch program has support for multiple watches. When running from the
+from the command line a list of available watches can be displayed using the
+--devices option. A particular watch can be selected using the -d option with
+three different parameters possible:
 
-When running as a daemon, the ttwatch program will automatically process any
-watch that is connected, and place and activities downloaded from them into
-separate directories by watch name, as per the official TomTom software. Note
-that the --device (or -d) option cannot be used when running as a daemon, as
-the list of available devices will change over time, so the device index just
-doesn't make sense. Future updates may allow selecting watches based on watch
-name or serial number, rather than device index.
+1. a 0-based index into the device list
+2. a string that matches the watch serial number
+3. a string that matches the watch name
+
+All three pieces of information are displayed when listing available watches
+with the --devices option.
+
+When running as a daemon the device cannot be specifed by index, as the list
+of devices will change over time, so this index is meaningless. However, if
+the watch serial number or name are specified, the daemon will only process
+that particular watch. This can be used to store the activities from multiple
+watches in different users' home areas by starting multiple instances of the
+daemon running as different users, specifying different watches.
 
 Unsafe Functions
 ================

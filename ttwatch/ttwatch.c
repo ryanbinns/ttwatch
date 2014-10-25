@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include <unistd.h>
 #include <pwd.h>
@@ -53,7 +54,7 @@ typedef struct
     uint32_t file_id;
 #endif
     int select_device;
-    int device_number;
+    char *device;
     int show_versions;
     int list_devices;
     int get_time;
@@ -81,55 +82,128 @@ int show_packets = 0;
 
 /*************************************************************************************************/
 
-libusb_device_handle *open_usb_device(int list_devices, int select_device, int device_number)
+libusb_device_handle *open_selected_device(libusb_device *device, int *index, int print_info, int select_device, char *selection)
+{
+    struct libusb_device_descriptor desc;
+    int result;
+    libusb_device_handle *handle;
+    char serial[64];
+    char name[64];
+    int count;
+    int attach_kernel_driver = 0;
+    int device_number = -1;
+    int attempts = 0;
+
+    /* get the selected device number */
+    if (select_device && isdigit(*selection))
+    {
+        errno = 0;
+        device_number = strtoul(selection, NULL, 0);
+        if (errno != 0)
+            device_number = -1;
+    }
+
+    /* get the device descriptor */
+    libusb_get_device_descriptor(device, &desc);
+
+    /* ignore any non-TomTom devices */
+    /* PID 0x7474 is Multisport and Multisport Cardio */
+    if ((desc.idVendor  != TOMTOM_VENDOR_ID) ||
+        (desc.idProduct != TOMTOM_PRODUCT_ID))
+    {
+        return NULL;
+    }
+
+    /* open the device so we can read the serial number */
+    if (libusb_open(device, &handle))
+        return NULL;
+
+    /* Claim the device interface. If the device is busy (such as opened
+       by a daemon), wait up to 60 seconds for it to become available */
+    while (attempts++ < 60)
+    {
+        /* detach the kernel HID driver, otherwise we can't do anything */
+        libusb_detach_kernel_driver(handle, 0);
+        if (result = libusb_claim_interface(handle, 0))
+        {
+            if (result == LIBUSB_ERROR_BUSY)
+            {
+                if (attempts == 1)
+                    write_log(1, "Watch busy... waiting\n");
+                sleep(1);
+            }
+            else
+            {
+                libusb_attach_kernel_driver(handle, 0);
+                libusb_close(handle);
+                return NULL;
+            }
+        }
+        else
+            break;
+    }
+    /* if we have finished the attempts and it's still busy, abort */
+    if (result)
+    {
+        write_log(1, "Watch busy... aborted\n");
+        libusb_attach_kernel_driver(handle, 0);
+        libusb_close(handle);
+        return NULL;
+    }
+
+    /* get the watch serial number */
+    count = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, serial, sizeof(serial));
+    serial[count] = 0;
+
+    /* get the watch name */
+    if (get_watch_name(handle, name, sizeof(name)))
+        name[0] = 0;
+
+    /* print the device info if requested */
+    if (print_info)
+        write_log(0, "Device %u: %s (%s)\n", *index, serial, name);
+    *index += 1;
+
+    if (!select_device)
+        return handle;
+
+    /* see if we can match the device serial number, name or index */
+    if (strcasecmp(selection, serial) == 0)
+        return handle;
+    else if (strcasecmp(selection, name) == 0)
+        return handle;
+    else if ((device_number >= 0) && (device_number == (*index - 1)))
+        return handle;
+    else
+    {
+        libusb_close(handle);
+        return NULL;
+    }
+}
+
+libusb_device_handle *open_usb_device(int list_devices, int select_device, char *device)
 {
     libusb_device **list = 0;
     libusb_device_handle *selected_handle = 0;
     ssize_t count = 0;
     ssize_t i;
     unsigned index = 0;
-    unsigned char serial[64];
 
     count = libusb_get_device_list(NULL, &list);
     for (i = 0; i < count; ++i)
     {
-        struct libusb_device_descriptor desc;
-        int result;
-        libusb_device_handle *handle;
-
-        /* get the device descriptor */
-        libusb_get_device_descriptor(list[i], &desc);
-
-        /* ignore any non-TomTom devices */
-        /* PID 0x7474 is Multisport and Multisport Cardio */
-        if ((desc.idVendor  != TOMTOM_VENDOR_ID) ||
-            (desc.idProduct != TOMTOM_PRODUCT_ID))
+        libusb_device_handle *handle = open_selected_device(list[i], &index, list_devices, select_device, device);
+        if (handle)
         {
-            continue;
-        }
-
-        /* open the device so we can read the serial number */
-        if (!(result = libusb_open(list[i], &handle)))
-        {
-            int count = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, serial, sizeof(serial));
-            serial[count] = 0;
-
-            /* print the device list if requested */
-            if (list_devices)
-                write_log(0, "Device %u: %s\n", index, serial);
-
-            /* select this device if it's the one required */
-            if (!select_device || (device_number == index))
+            if (!selected_handle)
                 selected_handle = handle;
-
-            ++index;
-
-            /* close the handle again if this is not the chosen device */
-            if (selected_handle != handle)
+            else
+            {
+                libusb_release_interface(handle, 0);
+                libusb_attach_kernel_driver(handle, 0);
                 libusb_close(handle);
+            }
         }
-        else
-            write_log(1, "Unable to open device: %d\n", result);
     }
 
     libusb_free_device_list(list, 1);
@@ -1126,37 +1200,24 @@ int hotplug_attach_callback(struct libusb_context *ctx, struct libusb_device *de
     libusb_hotplug_event event, void *user_data)
 {
     libusb_device_handle *device = 0;
-    int result;
+    int index = 0;
     OPTIONS *options = (OPTIONS*)user_data;
 
     write_log(0, "Watch connected...\n");
 
-    if (!(result = libusb_open(dev, &device)))
+    device = open_selected_device(dev, &index, 0, options->select_device, options->device);
+    if (device)
     {
-        int attach_kernel_driver = 0;
+        daemon_watch_operations(device, options);
 
-        /* detach the kernel HID driver, otherwise we can't do anything */
-        if (libusb_kernel_driver_active(device, 0))
-        {
-            int result = libusb_detach_kernel_driver(device, 0);
-            if (!result)
-                attach_kernel_driver = 1;
-        }
-        if(!libusb_claim_interface(device, 0))
-        {
-            daemon_watch_operations(device, options);
+        write_log(0, "Finished watch operations\n");
 
-            write_log(0, "Finished watch operations\n");
-
-            libusb_release_interface(device, 0);
-        }
-        if (attach_kernel_driver)
-            libusb_attach_kernel_driver(device, 0);
+        libusb_release_interface(device, 0);
+        libusb_attach_kernel_driver(device, 0);
         libusb_close(device);
     }
     else
-        write_log(1, "Unable to open watch device: %d\n", result);
-
+        write_log(0, "Watch not processed - does not match user selection\n");
     return 0;
 }
 
@@ -1231,6 +1292,8 @@ void daemonise(const char *user)
             perror("getgrnam");
             _exit(1);
         }
+        /* rewrite the ':' so when we do a ps, we see the original command line... */
+        *(group - 1) = ':';
     }
 
     /* make the log directory... */
@@ -1265,7 +1328,7 @@ void help(char *argv[])
     write_log(0, "                               downloaded ttbin activity files\n");
     write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities\"\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
-    write_log(0, "  -d, --device=NUMBER        Specify which device to use (0, 1, 2, ...)\n");
+    write_log(0, "  -d, --device=NUMBER|STRING Specify which device to use (see below)\n");
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
     write_log(0, "                               currently stored on the watch\n");
@@ -1297,6 +1360,14 @@ void help(char *argv[])
 #endif
     write_log(0, "\n");
     write_log(0, "NUMBER is an integer specified in decimal, octal, or hexadecimal form.\n");
+    write_log(0, "\n");
+    write_log(0, "The --device (-d) option can take either a number or a string. The number\n");
+    write_log(0, "refers to the index of the device within the device list, as disaplyed by\n");
+    write_log(0, "the --devices option. The string can match either the serial number or the\n");
+    write_log(0, "name of the watch. Both are also printed out by the --devices option. When\n");
+    write_log(0, "running as a daemon, only the serial number or name can be specified; an\n");
+    write_log(0, "error is printed and execution is aborted if an attempt to match a watch\n");
+    write_log(0, "by index is performed when starting the daemon.\n");
 #ifdef UNSAFE
     write_log(0, "Read and Write commands require the file ID to be specified. Available\n");
     write_log(0, "IDs can be found using the List command. If a file ID of 0 is specified,\n");
@@ -1410,7 +1481,7 @@ int main(int argc, char *argv[])
         case 'd':   /* select device */
             options.select_device = 1;
             if (optarg)
-                options.device_number = strtoul(optarg, NULL, 10);
+                options.device = optarg;
             break;
         case 'v':   /* report version information */
             options.show_versions = 1;
@@ -1475,6 +1546,16 @@ int main(int argc, char *argv[])
     /* if daemon mode is requested ...*/
     if (options.daemon_mode)
     {
+        /* if the user has selected a device, make sure it's by name or serial number */
+        if (options.select_device)
+        {
+            if (isdigit(options.device[0]))
+            {
+                write_log(1, "Device selection in daemon mode must be by name or serial number\n");
+                return 1;
+            }
+        }
+
         /* become a daemon */
         daemonise(options.run_as ? options.run_as_user : NULL);
 
@@ -1512,7 +1593,7 @@ int main(int argc, char *argv[])
     libusb_init(NULL);
 
     /* look for compatible USB devices */
-    device = open_usb_device(options.list_devices, options.select_device, options.device_number);
+    device = open_usb_device(options.list_devices, options.select_device, options.device);
     if (!device)
     {
         if (!options.list_devices)
