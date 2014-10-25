@@ -80,9 +80,9 @@ Multiple Watches
 ================
 
 The ttwatch program has support for multiple watches. When running from the
-from the command line a list of available watches can be displayed using the
---devices option. A particular watch can be selected using the -d option with
-three different parameters possible:
+command line a list of available watches can be displayed using the --devices
+option. A particular watch can be selected using the -d option with three
+different parameters possible:
 
 1. a 0-based index into the device list
 2. a string that matches the watch serial number
