@@ -75,6 +75,8 @@ typedef struct
     uint32_t duration;          /* seconds, after adding 1 */
     uint16_t total_calories;
 
+    uint8_t  has_heart_rate;    /* 1 if heart rate records are found, 0 otherwise */
+
     uint32_t gps_record_count;
     GPS_RECORD *gps_records;
 

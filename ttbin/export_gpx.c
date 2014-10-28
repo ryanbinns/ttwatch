@@ -50,8 +50,17 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             fprintf(file, "                <ele>%d</ele>\r\n", (int)ttbin->gps_records[i].elevation);
             fputs(        "                <time>", file);
             fputs(timestr, file);
-            fputs("</time>\r\n"
-                          "            </trkpt>\r\n", file);
+            fputs("</time>\r\n", file);
+            if (ttbin->gps_records[i].heart_rate != 0)
+            {
+                fputs("                <extensions>\r\n"
+                      "                    <gpxtpx:TrackPointExtension>\r\n", file);
+                fprintf(file, "                        <gpxtpx:hr>%d</gpxtpx:hr>\r\n",
+                    ttbin->gps_records[i].heart_rate);
+                fputs("                    </gpxtpx:TrackPointExtension>\r\n"
+                      "                </extensions>\r\n", file);
+            }
+            fputs(        "            </trkpt>\r\n", file);
         }
     }
 

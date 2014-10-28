@@ -215,6 +215,8 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_HEART_RATE:
             memcpy(&heart_rate_record, data, sizeof(FILE_HEART_RATE_RECORD));
 
+            file->has_heart_rate = 1;
+
             if (initial_hr_time == 0)
                 initial_hr_time = heart_rate_record.timestamp;
 

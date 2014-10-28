@@ -103,30 +103,33 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
     make_kml_style(file, "graph", "http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png",
         0, 0, 0, 0, "$[description]");
 
-    strcpy(text_buf, "&lt;h2&gt;");
-    strcat(text_buf, type_text);
-    strcat(text_buf, " Distance laps&lt;/h2&gt;&lt;TABLE BORDER=\"1\"&gt;\r\n"
-        "&lt;TR&gt;&lt;TH&gt;Lap&lt;/TH&gt;&lt;TH&gt;Time&lt;/TH&gt;"
-        "&lt;TH&gt;Distance&lt;/TH&gt;&lt;TH&gt;Calories&lt;/TH&gt;&lt;TH&gt;Delta Time&lt;/TH&gt;"
-        "&lt;TH&gt;Delta Distance&lt;/TH&gt;&lt;TH&gt;Delta Calories&lt;/TH&gt;&lt;/TR&gt;\r\n");
-
-    initial_time = 0;
-    for (i = 0; i < ttbin->lap_record_count; ++i)
+    if (ttbin->lap_record_count)
     {
-        LAP_RECORD *lap = &ttbin->lap_records[i];
+        strcpy(text_buf, "&lt;h2&gt;");
+        strcat(text_buf, type_text);
+        strcat(text_buf, " Distance laps&lt;/h2&gt;&lt;TABLE BORDER=\"1\"&gt;\r\n"
+            "&lt;TR&gt;&lt;TH&gt;Lap&lt;/TH&gt;&lt;TH&gt;Time&lt;/TH&gt;"
+            "&lt;TH&gt;Distance&lt;/TH&gt;&lt;TH&gt;Calories&lt;/TH&gt;&lt;TH&gt;Delta Time&lt;/TH&gt;"
+            "&lt;TH&gt;Delta Distance&lt;/TH&gt;&lt;TH&gt;Delta Calories&lt;/TH&gt;&lt;/TR&gt;\r\n");
 
-        sprintf(text_buf + strlen(text_buf),
-            "&lt;TR&gt;&lt;TH&gt;%d&lt;/TH&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%.2f&lt;/TD&gt;"
-            "&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%.2f&lt;/TD&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;/TR&gt;\r\n",
-            i + 1, lap->total_time, lap->total_distance, lap->total_calories, lap->total_time - initial_time,
-            lap->total_distance - ((i > 0) ? (lap - 1)->total_distance : 0.0f),
-            lap->total_calories - ((i > 0) ? (lap - 1)->total_calories : 0));
-        initial_time = lap->total_time;
+        initial_time = 0;
+        for (i = 0; i < ttbin->lap_record_count; ++i)
+        {
+            LAP_RECORD *lap = &ttbin->lap_records[i];
+
+            sprintf(text_buf + strlen(text_buf),
+                "&lt;TR&gt;&lt;TH&gt;%d&lt;/TH&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%.2f&lt;/TD&gt;"
+                "&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%.2f&lt;/TD&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;/TR&gt;\r\n",
+                i + 1, lap->total_time, lap->total_distance, lap->total_calories, lap->total_time - initial_time,
+                lap->total_distance - ((i > 0) ? (lap - 1)->total_distance : 0.0f),
+                lap->total_calories - ((i > 0) ? (lap - 1)->total_calories : 0));
+            initial_time = lap->total_time;
+        }
+        sprintf(text_buf + strlen(text_buf), "&lt;/TABLE&gt;\r\n");
+
+        make_kml_style(file, "laps-balloon", "http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png",
+            0, 0, 0, 0, text_buf);
     }
-    sprintf(text_buf + strlen(text_buf), "&lt;/TABLE&gt;\r\n");
-
-    make_kml_style(file, "laps-balloon", "http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png",
-        0, 0, 0, 0, text_buf);
 
     fputs(        "        <Schema id=\"", file);
     fputs(        type_text, file);
@@ -147,6 +150,12 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
     {
         fputs(        "            <gx:SimpleArrayField name=\"steps\" type=\"int\">\r\n"
                       "                <displayName>Steps</displayName>\r\n"
+                      "            </gx:SimpleArrayField>\r\n", file);
+    }
+    if (ttbin->has_heart_rate)
+    {
+        fputs(        "            <gx:SimpleArrayField name=\"heartrate\" type=\"int\">\r\n"
+                      "                <displayName>Heart Rate</displayName>\r\n"
                       "            </gx:SimpleArrayField>\r\n", file);
     }
     fputs(        "        </Schema>\r\n"
@@ -222,6 +231,19 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
                 !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
             {
                 fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->gps_records[i].cycles);
+            }
+        }
+        fputs(        "                        </gx:SimpleArrayData>\r\n", file);
+    }
+    if (ttbin->has_heart_rate)
+    {
+        fputs(        "                        <gx:SimpleArrayData name=\"heartrate\">\r\n", file);
+        for (i = 0; i < ttbin->gps_record_count; ++i)
+        {
+            if ((ttbin->gps_records[i].timestamp != 0) &&
+                !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+            {
+                fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->gps_records[i].heart_rate);
             }
         }
         fputs(        "                        </gx:SimpleArrayData>\r\n", file);
