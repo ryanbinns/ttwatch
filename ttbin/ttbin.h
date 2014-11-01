@@ -28,7 +28,6 @@ typedef struct
     float    inc_distance;  /* metres */
     float    cum_distance;  /* metres */
     uint8_t  cycles;        /* steps/strokes/cycles etc. */
-    uint8_t  heart_rate;    /* bpm, initialised to 0 if no heart-rate information exists */
 } GPS_RECORD;
 
 typedef struct
@@ -44,7 +43,6 @@ typedef struct
     float    distance;      /* metres */
     uint16_t calories;
     uint32_t steps;
-    uint8_t  heart_rate;    /* bpm, initialised to 0 if no heart-rate information exists */
 } TREADMILL_RECORD;
 
 typedef struct
@@ -65,17 +63,22 @@ typedef struct
 
 typedef struct
 {
+    time_t  timestamp;          /* local time */
+    uint8_t heart_rate;         /* bpm */
+} HEART_RATE_RECORD;
+
+typedef struct
+{
     uint8_t  file_version;
     uint8_t  firmware_version[4];
     uint16_t product_id;
-    time_t   timestamp;
+    time_t   timestamp_local;
+    time_t   timestamp_utc;
 
     uint8_t  activity;
     float    total_distance;
     uint32_t duration;          /* seconds, after adding 1 */
     uint16_t total_calories;
-
-    uint8_t  has_heart_rate;    /* 1 if heart rate records are found, 0 otherwise */
 
     uint32_t gps_record_count;
     GPS_RECORD *gps_records;
@@ -91,6 +94,9 @@ typedef struct
 
     uint32_t lap_record_count;
     LAP_RECORD *lap_records;
+
+    uint32_t heart_rate_record_count;
+    HEART_RATE_RECORD *heart_rate_records;
 } TTBIN_FILE;
 
 /*****************************************************************************/
@@ -108,6 +114,8 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file);
 void export_gpx(TTBIN_FILE *ttbin, FILE *file);
 
 void export_kml(TTBIN_FILE *ttbin, FILE *file);
+
+void export_tcx(TTBIN_FILE *ttbin, FILE *file);
 
 #endif  /* __TTBIN_H__ */
 

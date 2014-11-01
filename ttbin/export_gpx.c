@@ -51,12 +51,12 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             fputs(        "                <time>", file);
             fputs(timestr, file);
             fputs("</time>\r\n", file);
-            if (ttbin->gps_records[i].heart_rate != 0)
+            if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
             {
                 fputs("                <extensions>\r\n"
                       "                    <gpxtpx:TrackPointExtension>\r\n", file);
                 fprintf(file, "                        <gpxtpx:hr>%d</gpxtpx:hr>\r\n",
-                    ttbin->gps_records[i].heart_rate);
+                    ttbin->heart_rate_records[i].heart_rate);
                 fputs("                    </gpxtpx:TrackPointExtension>\r\n"
                       "                </extensions>\r\n", file);
             }

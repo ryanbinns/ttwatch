@@ -573,7 +573,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, char **f
             download_elevation_data(ttbin);
         }
 
-        timestamp = gmtime(&ttbin->timestamp);
+        timestamp = gmtime(&ttbin->timestamp_local);
 
         /* create the directory name: [store]/[watch name]/[date] */
         strcpy(filename, store);
@@ -616,6 +616,8 @@ void do_get_activities(libusb_device_handle *device, const char *store, char **f
                         export_kml(ttbin, f);
                     else if (!strcasecmp(*ptr, "gpx"))
                         export_gpx(ttbin, f);
+                    else if (!strcasecmp(*ptr, "tcx"))
+                        export_tcx(ttbin, f);
 
                     fclose(f);
                 }

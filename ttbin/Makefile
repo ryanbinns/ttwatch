@@ -4,6 +4,7 @@ SRC = ttbin.c \
       export_csv.c \
       export_kml.c \
       export_gpx.c \
+      export_tcx.c \
 
 OUTPUT = libttbin.a
 

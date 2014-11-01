@@ -34,7 +34,10 @@ typedef struct __attribute__((packed))
     uint8_t  firmware_version[4];
     uint16_t product_id;
     uint32_t timestamp;     /* local time */
-    uint8_t  _unk[105];
+    uint8_t  _unk[96];
+    uint32_t timestamp2;    /* local time, duplicate */
+    int32_t local_time_offset;  /* seconds from UTC */
+    uint8_t  _unk2;
     uint8_t  length_count;  /* number of RECORD_LENGTH objects to follow */
 } FILE_HEADER;
 
@@ -120,18 +123,23 @@ TTBIN_FILE *read_ttbin_file(FILE *file)
     return ttbin;
 }
 
+#define realloc_array(ptr, count, index, size)                  \
+    do {                                                        \
+        if (index >= count)                                     \
+        {                                                       \
+            ptr = realloc(ptr, (index + 1) * size);             \
+            memset(ptr + count, 0, (index + 1 - count) * size); \
+            count = index + 1;                                  \
+        }                                                       \
+    } while (0)
 
 /*****************************************************************************/
 
 TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
 {
     uint8_t *end;
-    RECORD_LENGTH record_lengths[24] = {0};
+    RECORD_LENGTH *record_lengths;
     TTBIN_FILE *file;
-    uint32_t initial_gps_time = 0;
-    uint32_t initial_hr_time = 0;
-    uint32_t initial_treadmill_time = 0;
-    uint32_t initial_swim_time = 0;
     int index;
 
     FILE_HEADER             file_header;
@@ -144,7 +152,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     FILE_LAP_RECORD         lap_record;
 
     file = malloc(sizeof(TTBIN_FILE));
-    memset(file, 0, sizeof(*file));
+    memset(file, 0, sizeof(TTBIN_FILE));
 
     end = data + size;
 
@@ -156,13 +164,16 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_FILE_HEADER:
             memcpy(&file_header, data, sizeof(FILE_HEADER));
             data += sizeof(FILE_HEADER);
+            record_lengths = malloc((file_header.length_count + 1) * sizeof(RECORD_LENGTH));
             memcpy(record_lengths, data, file_header.length_count * sizeof(RECORD_LENGTH));
+            memset(record_lengths + file_header.length_count, 0, sizeof(RECORD_LENGTH));
             data += file_header.length_count * sizeof(RECORD_LENGTH);
 
             file->file_version = file_header.file_version;
             memcpy(file->firmware_version, file_header.firmware_version, sizeof(file->firmware_version));
             file->product_id = file_header.product_id;
-            file->timestamp  = file_header.timestamp;
+            file->timestamp_local  = file_header.timestamp;
+            file->timestamp_utc    = file_header.timestamp - file_header.local_time_offset;
             break;
         case TAG_SUMMARY:
             memcpy(&summary_record, data, sizeof(FILE_SUMMARY_RECORD));
@@ -184,22 +195,20 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_GPS:
             memcpy(&gps_record, data, sizeof(FILE_GPS_RECORD));
 
-            if (initial_gps_time == 0)
-                initial_gps_time = gps_record.timestamp;
-
             /* if the GPS signal is lost, 0xffffffff is stored in the file */
             if (gps_record.timestamp == 0xffffffff)
                 break;
 
-            index = gps_record.timestamp - initial_gps_time;
+            index = gps_record.timestamp - file->timestamp_utc;
+            if (index < 0)
+            {
+                file->timestamp_utc   += index;
+                file->timestamp_local += index;
+                index = 0;
+            }
 
             /* expand the array if necessary */
-            if (index >= file->gps_record_count)
-            {
-                file->gps_records = realloc(file->gps_records, (index + 1) * sizeof(GPS_RECORD));
-                memset(file->gps_records + file->gps_record_count, 0, (index + 1 - file->gps_record_count) * sizeof(GPS_RECORD));
-                file->gps_record_count = index + 1;
-            }
+            realloc_array(file->gps_records, file->gps_record_count, index, sizeof(GPS_RECORD));
 
             file->gps_records[index].latitude     = gps_record.latitude * 1e-7f;
             file->gps_records[index].longitude    = gps_record.longitude * 1e-7f;
@@ -215,40 +224,12 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_HEART_RATE:
             memcpy(&heart_rate_record, data, sizeof(FILE_HEART_RATE_RECORD));
 
-            file->has_heart_rate = 1;
+            index = heart_rate_record.timestamp - file->timestamp_local;
 
-            if (initial_hr_time == 0)
-                initial_hr_time = heart_rate_record.timestamp;
+            realloc_array(file->heart_rate_records, file->heart_rate_record_count, index, sizeof(HEART_RATE_RECORD));
 
-            index = heart_rate_record.timestamp - initial_hr_time;
-
-            if (file->gps_records)
-            {
-                /* expand the array if necessary */
-                if (index >= file->gps_record_count)
-                {
-                    file->gps_records = realloc(file->gps_records, (index + 1) * sizeof(GPS_RECORD));
-                    memset(file->gps_records + file->gps_record_count, 0, (index + 1 - file->gps_record_count) * sizeof(GPS_RECORD));
-                    file->gps_record_count = index + 1;
-                }
-
-                file->gps_records[index].timestamp  = initial_gps_time + index;
-                file->gps_records[index].heart_rate = heart_rate_record.heart_rate;
-            }
-            else if (file->treadmill_records)
-            {
-                /* expand the array if necessary */
-                if (index >= file->treadmill_record_count)
-                {
-                    file->treadmill_records = realloc(file->treadmill_records, (index + 1) * sizeof(TREADMILL_RECORD));
-                    memset(file->gps_records + file->treadmill_record_count, 0,
-                        (index + 1 - file->treadmill_record_count) * sizeof(TREADMILL_RECORD));
-                    file->treadmill_record_count = index + 1;
-                }
-
-                file->treadmill_records[index].timestamp = initial_treadmill_time + index;
-                file->treadmill_records[index].heart_rate = heart_rate_record.heart_rate;
-            }
+            file->heart_rate_records[index].timestamp  = heart_rate_record.timestamp;
+            file->heart_rate_records[index].heart_rate = heart_rate_record.heart_rate;
             break;
         case TAG_LAP:
             memcpy(&lap_record, data, sizeof(FILE_LAP_RECORD));
@@ -262,19 +243,10 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_TREADMILL:
             memcpy(&treadmill_record, data, sizeof(FILE_TREADMILL_RECORD));
 
-            if (initial_treadmill_time == 0)
-                initial_treadmill_time = treadmill_record.timestamp;
-
-            index = treadmill_record.timestamp - initial_treadmill_time;
+            index = treadmill_record.timestamp - file->timestamp_local;
 
             /* expand the array if necessary */
-            if (index >= file->treadmill_record_count)
-            {
-                file->treadmill_records = realloc(file->treadmill_records, (index + 1) * sizeof(TREADMILL_RECORD));
-                memset(file->treadmill_records + file->treadmill_record_count, 0,
-                    (index + 1 - file->treadmill_record_count) * sizeof(TREADMILL_RECORD));
-                file->treadmill_record_count = index + 1;
-            }
+            realloc_array(file->treadmill_records, file->treadmill_record_count, index, sizeof(TREADMILL_RECORD));
 
             file->treadmill_records[index].timestamp = treadmill_record.timestamp;
             file->treadmill_records[index].distance  = treadmill_record.distance;
@@ -284,19 +256,10 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_SWIM:
             memcpy(&swim_record, data, sizeof(FILE_SWIM_RECORD));
 
-            if (initial_swim_time == 0)
-                initial_swim_time = swim_record.timestamp;
-
-            index = swim_record.timestamp - initial_swim_time;
+            index = swim_record.timestamp - file->timestamp_local;
 
             /* expand the array if necessary */
-            if (index >= file->swim_record_count)
-            {
-                file->swim_records = realloc(file->swim_records, (index + 1) * sizeof(TREADMILL_RECORD));
-                memset(file->gps_records + file->swim_record_count, 0,
-                    (index + 1 - file->swim_record_count) * sizeof(TREADMILL_RECORD));
-                file->swim_record_count = index + 1;
-            }
+            realloc_array(file->swim_records, file->swim_record_count, index, sizeof(SWIM_RECORD));
 
             file->swim_records[index].timestamp      = swim_record.timestamp;
             file->swim_records[index].total_distance = swim_record.total_distance;
@@ -319,6 +282,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         }
     }
 
+    free(record_lengths);
     return file;
 }
 
@@ -327,7 +291,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
 const char *create_filename(TTBIN_FILE *ttbin, const char *ext)
 {
     static char filename[256];
-    struct tm *time = gmtime(&ttbin->timestamp);
+    struct tm *time = gmtime(&ttbin->timestamp_local);
 
     switch (ttbin->activity)
     {
