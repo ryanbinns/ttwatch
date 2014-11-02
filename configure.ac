@@ -31,8 +31,18 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <libusb-1.0/libusb.h>
 ]],
 [[
-#if LIBUSB_API_VERSION < 0x01000102
-#error "LIBUSB Version too old"
+#ifdef LIBUSB_API_VERSION
+#   if LIBUSB_API_VERSION < 0x01000102
+#       error "LIBUSB Version too old"
+#   endif
+#else
+#   ifdef LIBUSBX_API_VERSION
+#       if LIBUSBX_API_VERSION < 0x01000102
+#           error "LIBUSB Version too old"
+#       endif
+#   else
+#       error "Unable to determine LIBUSB version"
+#   endif
 #endif
 ]])],
 [], [AC_MSG_ERROR([[The libusb version must be 1.0.16 or higher]])])

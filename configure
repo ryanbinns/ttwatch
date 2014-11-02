@@ -3555,8 +3555,18 @@ int
 main ()
 {
 
-#if LIBUSB_API_VERSION < 0x01000102
-#error "LIBUSB Version too old"
+#ifdef LIBUSB_API_VERSION
+#   if LIBUSB_API_VERSION < 0x01000102
+#       error "LIBUSB Version too old"
+#   endif
+#else
+#   ifdef LIBUSBX_API_VERSION
+#       if LIBUSBX_API_VERSION < 0x01000102
+#           error "LIBUSB Version too old"
+#       endif
+#   else
+#       error "Unable to determine LIBUSB version"
+#   endif
 #endif
 
   ;
