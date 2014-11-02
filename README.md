@@ -10,7 +10,7 @@ the data they collect.
              with the watch, including downloading activity data, updating
              GPS data, and updating firmware.
 2. ttbincnv - Post-processor allowing conversion of the ttbin file formats
-              to either (currently) csv, gpx or kml files, using broadly
+              to either (currently) csv, gpx, kml or tcx  files, using broadly
               similar formats to the official TomTom file formats.
 
 System Requirements
@@ -55,9 +55,11 @@ $ sudo addgroup usb
 $ sudo usermod -a -Gusb <your_username>
 ```
 
-Note: if you leave out the -a option on usermod, you will remove your user
+Note: If you leave out the -a option on usermod, you will remove your user
       from every group except "usb", rather than just adding "usb" to the
       list of groups the user belongs to, so be careful...
+Note: You will have to log out and then log back in to see the change in
+      group membership.
 
 Daemon Mode
 ===========
