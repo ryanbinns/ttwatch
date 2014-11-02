@@ -73,6 +73,10 @@ typedef struct
     char *file;
 #endif
     char *activity_store;
+    int list_races;
+    int list_history;
+    int delete_history;
+    char *history_entry;
 } OPTIONS;
 
 
@@ -1179,6 +1183,248 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     free(data);
 }
 
+typedef struct __attribute__((packed))
+{
+    char     name[16];
+    uint32_t _unk1[5];
+    uint16_t _unk2;
+    uint32_t checkpoints;
+    uint32_t time;
+    uint32_t distance;
+    uint8_t  distances[1];
+} TT_RACE_FILE;
+
+void do_list_races(libusb_device_handle *device)
+{
+    /* read the list of all files so we can find the race files */
+    RXFindFilePacket *file;
+    RXFindFilePacket *files = get_file_list(device);
+    if (!files)
+        return;
+
+    for (file = files; !file->end_of_list; ++file)
+    {
+        uint8_t *data;
+        uint32_t length;
+        TT_RACE_FILE *race;
+        uint32_t i;
+        uint32_t index;
+
+        /* look for race file definitions */
+        if ((file->id & 0xffff0000) != 0x00710000)
+            continue;
+
+        /* read the file */
+        data = read_whole_file(device, file->id, &length);
+        if (!data)
+            continue;
+
+        race = (TT_RACE_FILE*)data;
+        printf("%d, %d, \"%s\", %ds, %dm, %d checkpoints = { ", (file->id >> 8) & 0xff,
+            file->id & 0xff, race->name, race->time, race->distance, race->checkpoints);
+        index = 0;
+        for (i = 0; i < race->checkpoints; ++i)
+        {
+            uint32_t distance = 0;
+            do
+            {
+                distance += race->distances[index];
+            }
+            while (race->distances[index++] == 0xff);
+            printf("%d", distance);
+            if (i < (race->checkpoints - 1))
+                printf(", ");
+            else
+                printf(" }\n");
+        }
+
+        free(data);
+    }
+    free(files);
+}
+
+typedef struct __attribute__((packed))
+{
+    uint32_t index;
+    uint8_t  activity;
+    uint32_t _unk1[2];
+    uint32_t year;
+    uint32_t month;
+    uint32_t day;
+    uint32_t _unk2[2];
+    uint32_t hour;
+    uint32_t minute;
+    uint32_t second;
+    uint32_t _unk3[2];
+    uint32_t duration;
+    float    distance;
+    uint32_t calories;
+    uint32_t file_id;           // does not exist for swim entries
+    uint32_t swolf;             // only exists for swim entries
+    uint32_t strokes_per_lap;   // only exists for swim entries
+} TT_HISTORY_ENTRY;
+
+typedef struct __attribute__((packed))
+{
+    uint32_t _unk1;
+    uint16_t activity;
+    uint16_t entry_length;
+    uint32_t entry_count;
+    uint8_t  data[1];
+} TT_HISTORY_FILE;
+
+void do_list_history(libusb_device_handle *device)
+{
+    /* read the list of all files so we can find the history files */
+    RXFindFilePacket *file;
+    RXFindFilePacket *files = get_file_list(device);
+    if (!files)
+        return;
+
+    for (file = files; !file->end_of_list; ++file)
+    {
+        uint8_t *data;
+        uint32_t length;
+        TT_HISTORY_FILE *history;
+        uint32_t i;
+        uint8_t *ptr;
+
+        /* look for history file definitions */
+        if ((file->id & 0xffff0000) != 0x00830000)
+            continue;
+
+        /* read the file */
+        data = read_whole_file(device, file->id, &length);
+        if (!data)
+            continue;
+
+        /* if there are no entries, skip this file */
+        history = (TT_HISTORY_FILE*)data;
+        if (history->entry_count == 0)
+        {
+            free(data);
+            continue;
+        }
+
+        switch (history->activity)
+        {
+        case ACTIVITY_RUNNING:   printf("Runnning:\r\n");  break;
+        case ACTIVITY_CYCLING:   printf("Cycling:\r\n");   break;
+        case ACTIVITY_SWIMMING:  printf("Swimming:\r\n");  break;
+        case ACTIVITY_TREADMILL: printf("Treadmill:\r\n"); break;
+        case ACTIVITY_FREESTYLE: printf("Freestyle:\r\n"); break;
+        }
+
+        ptr = history->data;
+        for (i = 0; i < history->entry_count; ++i)
+        {
+            TT_HISTORY_ENTRY *entry = (TT_HISTORY_ENTRY*)ptr;
+            printf("%d: %04d/%02d/%02d %02d:%02d:%02d, %4ds, %8.2fm, %4d calories", i + 1,
+                entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second,
+                entry->duration, entry->distance, entry->calories);
+            if (entry->activity == ACTIVITY_SWIMMING)
+                printf(", %d swolf, %d spl", entry->swolf, entry->strokes_per_lap);
+            printf("\n");
+
+            ptr += history->entry_length;
+        }
+
+        free(data);
+    }
+    free(files);
+}
+
+void do_delete_history_item(libusb_device_handle *device, const char *item)
+{
+    int activity;
+    int index;
+
+    /* read the list of all files so we can find the history files */
+    RXFindFilePacket *file;
+    RXFindFilePacket *files = get_file_list(device);
+    if (!files)
+        return;
+
+    /* decode the input string */
+    switch (item[0])
+    {
+    case 'r': activity = ACTIVITY_RUNNING;   break;
+    case 'c': activity = ACTIVITY_CYCLING;   break;
+    case 's': activity = ACTIVITY_SWIMMING;  break;
+    case 't': activity = ACTIVITY_TREADMILL; break;
+    case 'f': activity = ACTIVITY_FREESTYLE; break;
+    default:
+        write_log(1, "Invalid activity type specified, must be one of r, c, s, t or f\n");
+        free(files);
+        return;
+    }
+
+    if ((sscanf(item + 1, "%d", &index) < 1) || (index < 1))
+    {
+        write_log(1, "Invalid index specified, must be a positive integer (1, 2, 3 etc...)\n");
+        free(files);
+        return;
+    }
+    --index;    /* we really want a 0-based index */
+
+    for (file = files; !file->end_of_list; ++file)
+    {
+        uint8_t *data;
+        uint32_t length;
+        TT_HISTORY_FILE *history;
+        TT_HISTORY_ENTRY *entry;
+
+        /* look for history file definitions */
+        if ((file->id & 0xffff0000) != 0x00830000)
+            continue;
+
+        /* read the file */
+        data = read_whole_file(device, file->id, &length);
+        if (!data)
+            continue;
+
+        /* if there are no entries or this is the wrong activity, skip this file */
+        history = (TT_HISTORY_FILE*)data;
+        if ((history->entry_count == 0) || (history->activity != activity))
+        {
+            free(data);
+            continue;
+        }
+
+        /* check that the index is correct */
+        if (index >= history->entry_count)
+        {
+            write_log(1, "Invalid index specified, must be <= %d\n", history->entry_count);
+            free(data);
+            break;
+        }
+
+        /* delete any associated history data file */
+        if (activity != ACTIVITY_SWIMMING)
+        {
+            entry = (TT_HISTORY_ENTRY*)(history->data + (index * history->entry_length));
+            delete_file(device, 0x00730000 | entry->file_id);
+        }
+
+        /* move the data around to delete the unwanted entry */
+        if (index != (history->entry_count - 1))
+        {
+            memmove(history->data + (index * history->entry_length),
+                    history->data + ((index + 1) * history->entry_length),
+                    (history->entry_count - index - 1) * history->entry_length);
+        }
+
+        /* update the history file information and rewrite the file */
+        --history->entry_count;
+        length -= history->entry_length;
+        write_whole_file(device, file->id, data, length);
+
+        free(data);
+        break;
+    }
+    free(files);
+}
+
 void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
 {
     char **formats;
@@ -1330,6 +1576,7 @@ void help(char *argv[])
     write_log(0, "                               downloaded ttbin activity files\n");
     write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities\"\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
+    write_log(0, "      --delete-history=[ENTRY] Deletes a single history entry from the watch\n");
     write_log(0, "  -d, --device=NUMBER|STRING Specify which device to use (see below)\n");
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
@@ -1341,6 +1588,8 @@ void help(char *argv[])
 #ifdef UNSAFE
     write_log(0, "  -l, --list                 List files currently available on the device\n");
 #endif
+    write_log(0, "      --list-history         Lists the activity history as reported by the watch\n");
+    write_log(0, "      --list-races           List the available races on the watch\n");
     write_log(0, "      --packets              Displays the packets being sent/received\n");
     write_log(0, "                               to/from the watch. Only used for debugging\n");
 #ifdef UNSAFE
@@ -1360,6 +1609,12 @@ void help(char *argv[])
 #ifdef UNSAFE
     write_log(0, "  -w, --write=NUMBER         Writes the specified file on the device\n");
 #endif
+    write_log(0, "\n");
+    write_log(0, "ENTRY is a single-character activity type followed by a positive index\n");
+    write_log(0, "starting from 1. The indices are listed by the --list-history option. The\n");
+    write_log(0, "activity type is specified as 'r' for running, 'c' for cycling, 's' for\n");
+    write_log(0, "swimming, 't' for treadmill or 'f' for freestyle. For example:\n");
+    write_log(0, "\"--delete-history t3\" would delete the third treadmill entry.\n");
     write_log(0, "\n");
     write_log(0, "NUMBER is an integer specified in decimal, octal, or hexadecimal form.\n");
     write_log(0, "\n");
@@ -1425,6 +1680,8 @@ int main(int argc, char *argv[])
         { "get-formats",    no_argument,       &options.list_formats,    1 },
         { "get-name",       no_argument,       &options.get_name,        1 },
         { "daemon",         no_argument,       &options.daemon_mode,     1 },
+        { "list-races",     no_argument,       &options.list_races,      1 },
+        { "list-history",   no_argument,       &options.list_history,    1 },
         { "auto",           no_argument,       0, 'a' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
@@ -1438,6 +1695,7 @@ int main(int argc, char *argv[])
         { "set-name",       required_argument, 0, 1   },
         { "set-formats",    required_argument, 0, 2   },
         { "runas",          required_argument, 0, 3   },
+        { "delete-history", required_argument, 0, 4   },
     };
 
     /* check the command-line options */
@@ -1460,6 +1718,11 @@ int main(int argc, char *argv[])
         case 3:     /* set daemon user */
             options.run_as = 1;
             options.run_as_user = optarg;
+            break;
+        case 4:
+            options.delete_history = 1;
+            options.history_entry = optarg;
+            break;
         case 'a':   /* auto mode */
             options.update_firmware = 1;
             options.update_gps      = 1;
@@ -1539,7 +1802,8 @@ int main(int argc, char *argv[])
         !options.update_firmware && !options.update_gps && !options.show_versions &&
         !options.get_activities && !options.get_time && !options.set_time &&
         !options.list_devices && !options.get_name && !options.set_name &&
-        !options.list_formats && !options.set_formats && !options.daemon_mode)
+        !options.list_formats && !options.set_formats && !options.daemon_mode &&
+        !options.list_races && !options.list_history && !options.delete_history)
     {
         help(argv);
         return 0;
@@ -1641,7 +1905,7 @@ int main(int argc, char *argv[])
             else
                 f = fopen(options.file, "w");
             if (!f)
-                write_log(1, "Unable to open file: %s", options.file);
+                write_log(1, "Unable to open file: %s\n", options.file);
             else
             {
                 do_read_file(device, options.file_id, f);
@@ -1663,7 +1927,7 @@ int main(int argc, char *argv[])
             else
                 f = fopen(options.file, "r");
             if (!f)
-                write_log(1, "Unable to open file: %s", options.file);
+                write_log(1, "Unable to open file: %s\n", options.file);
             else
             {
                 do_write_file(device, options.file_id, f);
@@ -1700,6 +1964,15 @@ int main(int argc, char *argv[])
 
     if (options.set_formats)
         do_set_formats(device, options.formats);
+
+    if (options.list_races)
+        do_list_races(device);
+
+    if (options.list_history)
+        do_list_history(device);
+
+    if (options.delete_history)
+        do_delete_history_item(device, options.history_entry);
 
     libusb_release_interface(device, 0);
 
