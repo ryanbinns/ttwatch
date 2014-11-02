@@ -74,6 +74,8 @@ typedef struct
 #endif
     char *activity_store;
     int list_races;
+    int update_race;
+    char *race;
     int list_history;
     int delete_history;
     char *history_entry;
@@ -1187,7 +1189,8 @@ typedef struct __attribute__((packed))
 {
     char     name[16];
     uint32_t _unk1[5];
-    uint16_t _unk2;
+    uint8_t  _unk2;
+    uint8_t  _unk3;
     uint32_t checkpoints;
     uint32_t time;
     uint32_t distance;
@@ -1220,7 +1223,7 @@ void do_list_races(libusb_device_handle *device)
             continue;
 
         race = (TT_RACE_FILE*)data;
-        printf("%d, %d, \"%s\", %ds, %dm, %d checkpoints = { ", (file->id >> 8) & 0xff,
+        printf("%d, %d, \"%s\", %ds, %dm, %d laps = { ", (file->id >> 8) & 0xff,
             file->id & 0xff, race->name, race->time, race->distance, race->checkpoints);
         index = 0;
         for (i = 0; i < race->checkpoints; ++i)
@@ -1241,6 +1244,168 @@ void do_list_races(libusb_device_handle *device)
         free(data);
     }
     free(files);
+}
+
+void do_update_race(libusb_device_handle *device, char *race)
+{
+    int activity;
+    int index;
+    const char *name;
+    uint32_t duration;
+    uint32_t distance;
+    uint32_t checkpoints;
+    int num;
+    uint8_t *data;
+    uint32_t length;
+    float checkpoint_distance;
+    int required_length;
+    uint32_t current_distance;
+    TT_RACE_FILE *race_file;
+    int i, j;
+
+    /* parse the race data */
+    switch (race[0])
+    {
+    case 'r': activity = ACTIVITY_RUNNING;   break;
+    case 'c': activity = ACTIVITY_CYCLING;   break;
+    case 's': activity = ACTIVITY_SWIMMING;  break;
+    case 't': activity = ACTIVITY_TREADMILL; break;
+    case 'f': activity = ACTIVITY_FREESTYLE; break;
+    default:
+        write_log(1, "Invalid activity type specified, must be one of r, c, s, t or f\n");
+        return;
+    }
+
+    if ((sscanf(race + 1, "%d", &index) < 1) || (index < 1) || (index > 5))
+    {
+        write_log(1, "Invalid index specified, must be a integer between 1 and 5 inclusive\n");
+        return;
+    }
+    --index;    /* we really want a 0-based index */
+
+    name = strchr(race, ',');
+    if (!name)
+    {
+        write_log(1, "Insufficient race data specified\n");
+        return;
+    }
+    ++name;
+    race = strchr(name, ',');
+    if (!race)
+    {
+        write_log(1, "Invalid race data specified\n");
+        return;
+    }
+    if ((race - name) > 16)
+    {
+        write_log(1, "Race name can be a maximum of 16 characters\n");
+        return;
+    }
+    *race++ = 0;    /* null-terminate the name */
+
+    /* find the duration (just seconds, minutes:seconds or hours:minutes:seconds */
+    duration = 0;
+    for (i = 0; i < 3; ++i)
+    {
+        if (sscanf(race, "%d", &num) < 1)
+        {
+            write_log(1, "Invalid race data specified\n");
+            return;
+        }
+        duration += num;
+        while (isdigit(*race) && *race)
+            race++;
+        if (!*race)
+        {
+            write_log(1, "Insufficient race data specified\n");
+            return;
+        }
+        if (*race == ':')
+        {
+            if (i == 2)
+            {
+                write_log(1, "Invalid race data specified\n");
+                return;
+            }
+            ++race;
+            duration *= 60;
+        }
+        else if (*race == ',')
+        {
+            ++race;
+            break;
+        }
+        else
+        {
+            write_log(1, "Invalid race data specified\n");
+            return;
+        }
+    }
+
+    /* find the distance */
+    if ((sscanf(race, "%d", &distance) < 1) || (distance <= 0))
+    {
+        write_log(1, "Invalid race data specified\n");
+        return;
+    }
+    race = strchr(race, ',');
+    if (!race)
+    {
+        write_log(1, "Invalid race data specified\n");
+        return;
+    }
+    ++race;
+
+    /* find the number of checkpoints */
+    if ((sscanf(race, "%d", &checkpoints) < 1) || (checkpoints <= 0))
+    {
+        write_log(1, "Invalid race data specified\n");
+        return;
+    }
+
+    checkpoint_distance = (float)distance / checkpoints;
+    required_length = (int)((checkpoint_distance + 254) / 255) * checkpoints;
+
+    data = read_whole_file(device, 0x00710000 | (activity << 8) | index, &length);
+    if (!data)
+    {
+        write_log(1, "Unable to read current race data\n");
+        return;
+    }
+
+    /* resize the file if required */
+    if (length < (sizeof(TT_RACE_FILE) - 1 + required_length))
+        data = realloc(data, sizeof(TT_RACE_FILE) - 1 + required_length);
+
+    race_file = (TT_RACE_FILE*)data;
+
+    /* start copying the race data */
+    strncpy(race_file->name, name, 16);
+    race_file->distance    = distance;
+    race_file->time        = duration;
+    race_file->checkpoints = checkpoints;
+
+    /* add in the lap distances */
+    current_distance = 0;
+    j = 0;
+    for (i = 1; i <= checkpoints; ++i)
+    {
+        uint32_t end_distance = (distance * i + checkpoints / 2) / checkpoints;
+        while (current_distance < end_distance)
+        {
+            if ((end_distance - current_distance) >= 255)
+                race_file->distances[j++] = 255;
+            else
+                race_file->distances[j++] = end_distance - current_distance;
+            current_distance += race_file->distances[j - 1];
+        }
+    }
+
+    length = sizeof(TT_RACE_FILE) - 1 + required_length;
+    if (write_whole_file(device, 0x00710000 | (activity << 8) | index, data, length))
+        write_log(1, "Unable to write race data to watch\n");
+
+    free(data);
 }
 
 typedef struct __attribute__((packed))
@@ -1605,6 +1770,7 @@ void help(char *argv[])
     write_log(0, "                               Tomtom's website and updates the watch if\n");
     write_log(0, "                               newer firmware is found.\n");
     write_log(0, "      --update-gps           Updates the GPSQuickFix data on the watch\n");
+    write_log(0, "      --update-race=[RACE]   Update a race\n");
     write_log(0, "  -v, --version              Shows firmware version and device identifiers\n");
 #ifdef UNSAFE
     write_log(0, "  -w, --write=NUMBER         Writes the specified file on the device\n");
@@ -1647,6 +1813,22 @@ void help(char *argv[])
     write_log(0, "    kml, csv, gpx, tcx and fit.\n");
     write_log(0, "Case is not important, but there must be no spaces or other characters\n");
     write_log(0, "in the list.\n");
+    write_log(0, "\n");
+    write_log(0, "RACE is a race specification consisting of 5 comma-separated parts:\n");
+    write_log(0, "  <entry>,<name>,<duration>,<distance>,<laps>\n");
+    write_log(0, "Where: <entry>    is a single entry as per the entry for deleting a\n");
+    write_log(0, "                  history item. index must be between 1 and 5 inclusive.\n");
+    write_log(0, "       <name>     is the name of the race. Maximum of 16 characters,\n");
+    write_log(0, "                  although only 9 are visible on the watch screen.\n");
+    write_log(0, "       <duration> is the duration of the race, specified as seconds,\n");
+    write_log(0, "                  minutes:seconds or hours:minutes:seconds.\n");
+    write_log(0, "       <distance> is the race distance in metres, must be an integer.\n");
+    write_log(0, "       <laps>     is the number of laps to record, evenly spaced.\n");
+    write_log(0, "For example: --update-race \"r1,3KM 14:30MIN,14:30,3000,3\"\n");
+    write_log(0, "    specifies a race for runnign 3km in 14:30 minutes with 3 laps stored\n");
+    write_log(0, "    (every 1000m - automatically calculated).\n");
+    write_log(0, "If the name has spaces in it, the entire race specification must be\n");
+    write_log(0, "surrounded in quotes, or the space can be escaped with a '\\'.\n");
     write_log(0, "\n");
     write_log(0, "The program can be run as a daemon, which will automatically download\n");
     write_log(0, "and save activity files, update the GPSQuickFix information and update\n");
@@ -1696,6 +1878,7 @@ int main(int argc, char *argv[])
         { "set-formats",    required_argument, 0, 2   },
         { "runas",          required_argument, 0, 3   },
         { "delete-history", required_argument, 0, 4   },
+        { "update-race",    required_argument, 0, 5   },
     };
 
     /* check the command-line options */
@@ -1722,6 +1905,10 @@ int main(int argc, char *argv[])
         case 4:
             options.delete_history = 1;
             options.history_entry = optarg;
+            break;
+        case 5:
+            options.update_race = 1;
+            options.race = optarg;
             break;
         case 'a':   /* auto mode */
             options.update_firmware = 1;
@@ -1803,7 +1990,8 @@ int main(int argc, char *argv[])
         !options.get_activities && !options.get_time && !options.set_time &&
         !options.list_devices && !options.get_name && !options.set_name &&
         !options.list_formats && !options.set_formats && !options.daemon_mode &&
-        !options.list_races && !options.list_history && !options.delete_history)
+        !options.list_races && !options.list_history && !options.delete_history &&
+        !options.update_race)
     {
         help(argv);
         return 0;
@@ -1967,6 +2155,9 @@ int main(int argc, char *argv[])
 
     if (options.list_races)
         do_list_races(device);
+
+    if (options.update_race)
+        do_update_race(device, options.race);
 
     if (options.list_history)
         do_list_history(device);
