@@ -79,6 +79,7 @@ typedef struct
     int list_history;
     int delete_history;
     char *history_entry;
+    int clear_data;
 } OPTIONS;
 
 
@@ -564,7 +565,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, char **f
         struct tm *timestamp;
 
         /* check if this is a ttbin activity file */
-        if ((file->id & FILE_TTBIN_MASK) != FILE_TTBIN_DATA)
+        if ((file->id & FILE_TYPE_MASK) != FILE_TTBIN_DATA)
             continue;
 
         data = read_whole_file(device, file->id, &size);
@@ -1214,7 +1215,7 @@ void do_list_races(libusb_device_handle *device)
         uint32_t index;
 
         /* look for race file definitions */
-        if ((file->id & 0xffff0000) != 0x00710000)
+        if ((file->id & FILE_TYPE_MASK) != FILE_RACE_DATA)
             continue;
 
         /* read the file */
@@ -1366,7 +1367,7 @@ void do_update_race(libusb_device_handle *device, char *race)
     checkpoint_distance = (float)distance / checkpoints;
     required_length = (int)((checkpoint_distance + 254) / 255) * checkpoints;
 
-    data = read_whole_file(device, 0x00710000 | (activity << 8) | index, &length);
+    data = read_whole_file(device, FILE_RACE_DATA | (activity << 8) | index, &length);
     if (!data)
     {
         write_log(1, "Unable to read current race data\n");
@@ -1455,7 +1456,7 @@ void do_list_history(libusb_device_handle *device)
         uint8_t *ptr;
 
         /* look for history file definitions */
-        if ((file->id & 0xffff0000) != 0x00830000)
+        if ((file->id & FILE_TYPE_MASK) != FILE_HISTORY_SUMMARY)
             continue;
 
         /* read the file */
@@ -1540,7 +1541,7 @@ void do_delete_history_item(libusb_device_handle *device, const char *item)
         TT_HISTORY_ENTRY *entry;
 
         /* look for history file definitions */
-        if ((file->id & 0xffff0000) != 0x00830000)
+        if ((file->id & FILE_TYPE_MASK) != FILE_HISTORY_SUMMARY)
             continue;
 
         /* read the file */
@@ -1564,11 +1565,12 @@ void do_delete_history_item(libusb_device_handle *device, const char *item)
             break;
         }
 
-        /* delete any associated history data file */
+        /* delete any associated history data files */
         if (activity != ACTIVITY_SWIMMING)
         {
             entry = (TT_HISTORY_ENTRY*)(history->data + (index * history->entry_length));
-            delete_file(device, 0x00730000 | entry->file_id);
+            delete_file(device, FILE_HISTORY_DATA | entry->file_id);
+            delete_file(device, FILE_RACE_HISTORY_DATA | entry->file_id);
         }
 
         /* move the data around to delete the unwanted entry */
@@ -1586,6 +1588,43 @@ void do_delete_history_item(libusb_device_handle *device, const char *item)
 
         free(data);
         break;
+    }
+    free(files);
+}
+
+void do_clear_data(libusb_device_handle *device)
+{
+    /* read the list of all files so we can find the files we want to delete */
+    RXFindFilePacket *file;
+    RXFindFilePacket *files = get_file_list(device);
+    if (!files)
+        return;
+
+    for (file = files; !file->end_of_list; ++file)
+    {
+        uint32_t length;
+        uint8_t *data;
+
+        switch (file->id & FILE_TYPE_MASK)
+        {
+        case FILE_TTBIN_DATA:
+        case FILE_RACE_HISTORY_DATA:
+        case FILE_HISTORY_DATA:
+            delete_file(device, file->id);
+            break;
+
+        case FILE_HISTORY_SUMMARY:
+            data = read_whole_file(device, file->id, &length);
+            if (data)
+            {
+                TT_HISTORY_FILE *history = (TT_HISTORY_FILE*)data;
+                history->entry_count = 0;
+                length = sizeof(TT_HISTORY_FILE) - 1;
+                write_whole_file(device, file->id, data, length);
+                free(data);
+            }
+            break;
+        }
     }
     free(files);
 }
@@ -1740,6 +1779,8 @@ void help(char *argv[])
     write_log(0, "  -s, --activity-store=PATH Specify an alternate place for storing\n");
     write_log(0, "                               downloaded ttbin activity files\n");
     write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities\"\n");
+    write_log(0, "      --clear-data           Delete all activities and history data from the\n");
+    write_log(0, "                               watch. Does NOT save the data before delete it\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
     write_log(0, "      --delete-history=[ENTRY] Deletes a single history entry from the watch\n");
     write_log(0, "  -d, --device=NUMBER|STRING Specify which device to use (see below)\n");
@@ -1825,7 +1866,7 @@ void help(char *argv[])
     write_log(0, "       <distance> is the race distance in metres, must be an integer.\n");
     write_log(0, "       <laps>     is the number of laps to record, evenly spaced.\n");
     write_log(0, "For example: --update-race \"r1,3KM 14:30MIN,14:30,3000,3\"\n");
-    write_log(0, "    specifies a race for runnign 3km in 14:30 minutes with 3 laps stored\n");
+    write_log(0, "    specifies a race for running 3km in 14:30 minutes with 3 laps stored\n");
     write_log(0, "    (every 1000m - automatically calculated).\n");
     write_log(0, "If the name has spaces in it, the entire race specification must be\n");
     write_log(0, "surrounded in quotes, or the space can be escaped with a '\\'.\n");
@@ -1846,6 +1887,7 @@ int main(int argc, char *argv[])
     int opt;
     int option_index = 0;
     int attach_kernel_driver = 0;
+    int option_found = 0;
 
     OPTIONS options = {0};
 
@@ -1857,13 +1899,14 @@ int main(int argc, char *argv[])
         { "get-time",       no_argument,       &options.get_time,        1 },
         { "set-time",       no_argument,       &options.set_time,        1 },
         { "get-activities", no_argument,       &options.get_activities,  1 },
-        { "packets",        no_argument,       &show_packets,    1 },
+        { "packets",        no_argument,       &show_packets,            1 },
         { "devices",        no_argument,       &options.list_devices,    1 },
         { "get-formats",    no_argument,       &options.list_formats,    1 },
         { "get-name",       no_argument,       &options.get_name,        1 },
         { "daemon",         no_argument,       &options.daemon_mode,     1 },
         { "list-races",     no_argument,       &options.list_races,      1 },
         { "list-history",   no_argument,       &options.list_history,    1 },
+        { "clear-data",     no_argument,       &options.clear_data,      1 },
         { "auto",           no_argument,       0, 'a' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
@@ -1882,12 +1925,14 @@ int main(int argc, char *argv[])
     };
 
     /* check the command-line options */
-    while ((opt = getopt_long(argc, argv, "a?"
+    while ((opt = getopt_long(argc, argv, "ah"
 #ifdef UNSAFE
         "lr:w:"
 #endif
         "d:s:v", long_options, &option_index)) != -1)
     {
+        if (option_index != 5)
+            option_found = 1;
         switch (opt)
         {
         case 1:     /* list formats */
@@ -1899,6 +1944,7 @@ int main(int argc, char *argv[])
             options.formats = optarg;
             break;
         case 3:     /* set daemon user */
+            option_found = 0;   /* this is not an operation option */
             options.run_as = 1;
             options.run_as_user = optarg;
             break;
@@ -1931,6 +1977,7 @@ int main(int argc, char *argv[])
             break;
 #endif
         case 'd':   /* select device */
+            option_found = 0;   /* this is not an operation option */
             options.select_device = 1;
             if (optarg)
                 options.device = optarg;
@@ -1939,6 +1986,7 @@ int main(int argc, char *argv[])
             options.show_versions = 1;
             break;
         case 's':   /* activity store */
+            option_found = 0;   /* this is not an operation option */
             if (optarg)
                 options.activity_store = optarg;
             break;
@@ -1982,7 +2030,8 @@ int main(int argc, char *argv[])
     }
 
     /* we need to do something, otherwise just show the help */
-    if (
+    if (!option_found)
+#if 0
 #ifdef UNSAFE
         !options.read_file && !options.write_file && !options.list_files &&
 #endif
@@ -1991,7 +2040,8 @@ int main(int argc, char *argv[])
         !options.list_devices && !options.get_name && !options.set_name &&
         !options.list_formats && !options.set_formats && !options.daemon_mode &&
         !options.list_races && !options.list_history && !options.delete_history &&
-        !options.update_race)
+        !options.update_race && !options.clear_data)
+#endif
     {
         help(argv);
         return 0;
@@ -2164,6 +2214,9 @@ int main(int argc, char *argv[])
 
     if (options.delete_history)
         do_delete_history_item(device, options.history_entry);
+
+    if (options.clear_data)
+        do_clear_data(device);
 
     libusb_release_interface(device, 0);
 
