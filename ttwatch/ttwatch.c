@@ -1200,6 +1200,7 @@ typedef struct __attribute__((packed))
 
 void do_list_races(libusb_device_handle *device)
 {
+    static const char ACTIVITY_CHARS[] = "rcs    tf";
     /* read the list of all files so we can find the race files */
     RXFindFilePacket *file;
     RXFindFilePacket *files = get_file_list(device);
@@ -1224,8 +1225,8 @@ void do_list_races(libusb_device_handle *device)
             continue;
 
         race = (TT_RACE_FILE*)data;
-        printf("%d, %d, \"%s\", %ds, %dm, %d laps = { ", (file->id >> 8) & 0xff,
-            file->id & 0xff, race->name, race->time, race->distance, race->checkpoints);
+        printf("%c%d, \"%s\", %ds, %dm, %d laps = { ", ACTIVITY_CHARS[(file->id >> 8) & 0xff],
+            (file->id & 0xff) + 1, race->name, race->time, race->distance, race->checkpoints);
         index = 0;
         for (i = 0; i < race->checkpoints; ++i)
         {
