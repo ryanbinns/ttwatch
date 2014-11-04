@@ -65,14 +65,20 @@ Daemon Mode
 ===========
 
 The ttwatch program supports running as a daemon, which will wait for a watch
-to be connected, then automatically perform 3 operations:
+to be connected, then automatically perform whichever operations are specified
+on the command line. The following four operations are supported, and at least
+one of them must be specified to start the daemon:
 
-1. Download the activity files and store them, including converting them to
-   other file formats as specified in the watch preferences downloaded from
-   the watch.
-2. Updates the GPSQuickFix information in the watch from the internet.
-3. Checks for firmware updates, and updates the firmware in the watch if
-   newer firmware is found.
+1. --get-activities: Download the activity files and store them, including
+   converting them to other file formats as specified in the watch preferences
+   downloaded from the watch.
+2. --update-gps: Updates the GPSQuickFix information in the watch from the
+   internet.
+3. --update-fw: Checks for firmware updates, and updates the firmware in the
+   watch if newer firmware is found.
+4. --set-time: Sets the time on the watch to match the local system time.
+
+All four options can be specified with the -a (or --auto) option
 
 The daemon must be started as root (run by init or sudo), but the --runas
 parameter can be specified to provide an alternative user (and optionally

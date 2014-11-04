@@ -493,32 +493,64 @@ void do_get_time(libusb_device_handle *device)
     write_log(0, "GPS time: %s (UTC)\n", timestr);
 }
 
+typedef struct __attribute__((packed))
+{
+    uint16_t entry;
+    uint32_t value;
+} TT_MANIFEST_ENTRY;
+
+typedef struct __attribute__((packed))
+{
+    uint16_t file_type;
+    uint16_t entry_count;
+    TT_MANIFEST_ENTRY entries[1];
+} TT_MANIFEST_FILE;
+
 void do_set_time(libusb_device_handle *device)
 {
     uint32_t size = 0;
     uint8_t *data = 0;
+    TT_MANIFEST_FILE *manifest;
+    struct tm tm_local;
+    long utc_offset;
+    uint32_t i;
+    time_t utc_time = time(NULL);
 
-    /* read the preferences XML file */
-    data = read_whole_file(device, FILE_PREFERENCES_XML, &size);
-    if (size && data)
+    localtime_r(&utc_time, &tm_local);
+    utc_offset = tm_local.tm_gmtoff;
+
+    /* read the manifest file */
+    data = read_whole_file(device, FILE_MANIFEST1, &size);
+    if (!data)
     {
-        data = update_preferences_modified_time(data, &size);
+        write_log(1, "Unable to set watch time\n");
+        return;
+    }
 
-        /* write back the new preferences XML file data */
-        switch (write_verify_whole_file(device, FILE_PREFERENCES_XML, data, size))
+    /* look for the UTC offset entry in the manifest file */
+    manifest = (TT_MANIFEST_FILE*)data;
+    for (i = 0; i < manifest->entry_count; ++i)
+    {
+        if (manifest->entries[i].entry == 169) // utc offset entry
         {
-        case 0:
-            write_log(0, "Time updated\n");
-            break;
-        case 3:
-            write_log(1, "Verify error\n");
-        default:
-            write_log(1, "Time update failed\n");
+            write_log(0, "Old UTC offset: %d\n", (int)manifest->entries[i].value);
+            manifest->entries[i].value = (uint32_t)(int)utc_offset;
+            write_log(0, "New UTC offset: %d\n", (int)manifest->entries[i].value);
             break;
         }
-
-        free(data);
     }
+
+    /* write the file back to the device */
+    if (write_whole_file(device, FILE_MANIFEST1, data, size))
+    {
+        free(data);
+        write_log(1, "Unable to set watch time\n");
+        return;
+    }
+
+    /* perform a watch synchronisation */
+    get_watch_time(device, &utc_time);
+    free(data);
 }
 
 /* performs a 'mkdir -p', i.e. creates an entire directory tree */
@@ -574,7 +606,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, char **f
 
         /* parse the activity file */
         ttbin = parse_ttbin_data(data, size);
-        if (formats)
+        if (formats && ttbin->gps_record_count)
         {
             write_log(0, "Downloading elevation data\n");
             download_elevation_data(ttbin);
@@ -1642,11 +1674,17 @@ void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
 
     formats = get_configured_formats(device);
 
-    do_get_activities(device, options->activity_store, formats);
+    if (options->get_activities)
+        do_get_activities(device, options->activity_store, formats);
 
-    do_update_gps(device);
+    if (options->update_gps)
+        do_update_gps(device);
 
-    do_update_firmware(device);
+    if (options->update_firmware)
+        do_update_firmware(device);
+
+    if (options->set_time)
+        do_set_time(device);
 }
 
 int hotplug_attach_callback(struct libusb_context *ctx, struct libusb_device *dev,
@@ -1779,7 +1817,7 @@ void help(char *argv[])
     write_log(0, "  -h, --help                 Print this help\n");
     write_log(0, "  -s, --activity-store=PATH Specify an alternate place for storing\n");
     write_log(0, "                               downloaded ttbin activity files\n");
-    write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities\"\n");
+    write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --set-time\"\n");
     write_log(0, "      --clear-data           Delete all activities and history data from the\n");
     write_log(0, "                               watch. Does NOT save the data before delete it\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
@@ -1807,7 +1845,7 @@ void help(char *argv[])
     write_log(0, "      --set-formats=LIST     Sets the list of file formats that are saved\n");
     write_log(0, "                               when processing activity files\n");
     write_log(0, "      --set-name=STRING      Sets a new watch name\n");
-    write_log(0, "      --set-time             Updates the time on the watch (NOT WORKING)\n");
+    write_log(0, "      --set-time             Updates the time on the watch\n");
     write_log(0, "      --update-fw            Checks for available firmware updates from\n");
     write_log(0, "                               Tomtom's website and updates the watch if\n");
     write_log(0, "                               newer firmware is found.\n");
@@ -1872,15 +1910,15 @@ void help(char *argv[])
     write_log(0, "If the name has spaces in it, the entire race specification must be\n");
     write_log(0, "surrounded in quotes, or the space can be escaped with a '\\'.\n");
     write_log(0, "\n");
-    write_log(0, "The program can be run as a daemon, which will automatically download\n");
-    write_log(0, "and save activity files, update the GPSQuickFix information and update\n");
-    write_log(0, "the watch firmware whenever a watch is connected. The program must be\n");
-    write_log(0, "run as root initially, but the --runas parameter can be used to specify\n");
-    write_log(0, "a user (and optionally a group) that the program will drop privileges to\n");
-    write_log(0, "after it has finished initialising. Without this parameter specified,\n");
-    write_log(0, "the program will continue to run as root, which is not recommended for\n");
-    write_log(0, "security reasons. Note that this unprivileged user must have access to\n");
-    write_log(0, "the USB devices, and write access to the activity store location.\n");
+    write_log(0, "The program can be run as a daemon, which will automatically perform\n");
+    write_log(0, "the operations specified on the command line whenever a watch is\n");
+    write_log(0, "connected. The program must be run as root initially, but the --runas\n");
+    write_log(0, "parameter can be used to specify a user (and optionally a group) that the\n");
+    write_log(0, "program will drop privileges to after it has finished initialising.\n");
+    write_log(0, "Without this parameter specified, the program will continue to run as\n");
+    write_log(0, "root, which is not recommended for security reasons. Note that this\n");
+    write_log(0, "unprivileged user must have access to the USB devices, and write access\n");
+    write_log(0, "to the activity store location.\n");
 }
 
 int main(int argc, char *argv[])
@@ -1888,7 +1926,6 @@ int main(int argc, char *argv[])
     int opt;
     int option_index = 0;
     int attach_kernel_driver = 0;
-    int option_found = 0;
 
     OPTIONS options = {0};
 
@@ -1932,8 +1969,6 @@ int main(int argc, char *argv[])
 #endif
         "d:s:v", long_options, &option_index)) != -1)
     {
-        if (option_index != 5)
-            option_found = 1;
         switch (opt)
         {
         case 1:     /* list formats */
@@ -1945,7 +1980,6 @@ int main(int argc, char *argv[])
             options.formats = optarg;
             break;
         case 3:     /* set daemon user */
-            option_found = 0;   /* this is not an operation option */
             options.run_as = 1;
             options.run_as_user = optarg;
             break;
@@ -1961,6 +1995,7 @@ int main(int argc, char *argv[])
             options.update_firmware = 1;
             options.update_gps      = 1;
             options.get_activities  = 1;
+            options.set_time        = 1;
             break;
 #ifdef UNSAFE
         case 'l':   /* list files */
@@ -1978,7 +2013,6 @@ int main(int argc, char *argv[])
             break;
 #endif
         case 'd':   /* select device */
-            option_found = 0;   /* this is not an operation option */
             options.select_device = 1;
             if (optarg)
                 options.device = optarg;
@@ -1987,7 +2021,6 @@ int main(int argc, char *argv[])
             options.show_versions = 1;
             break;
         case 's':   /* activity store */
-            option_found = 0;   /* this is not an operation option */
             if (optarg)
                 options.activity_store = optarg;
             break;
@@ -2031,8 +2064,7 @@ int main(int argc, char *argv[])
     }
 
     /* we need to do something, otherwise just show the help */
-    if (!option_found)
-#if 0
+    if (
 #ifdef UNSAFE
         !options.read_file && !options.write_file && !options.list_files &&
 #endif
@@ -2042,7 +2074,6 @@ int main(int argc, char *argv[])
         !options.list_formats && !options.set_formats && !options.daemon_mode &&
         !options.list_races && !options.list_history && !options.delete_history &&
         !options.update_race && !options.clear_data)
-#endif
     {
         help(argv);
         return 0;
@@ -2059,6 +2090,18 @@ int main(int argc, char *argv[])
                 write_log(1, "Device selection in daemon mode must be by name or serial number\n");
                 return 1;
             }
+        }
+
+        /* we have to include some useful functions, otherwise there's no point... */
+        if (!options.update_firmware && !options.update_gps && !options.get_activities && !options.set_time)
+        {
+            write_log(1, "To run as a daemon, you must include one or more of:\n");
+            write_log(1, "    --update-fw\n");
+            write_log(1, "    --update-gps\n");
+            write_log(1, "    --get-activities\n");
+            write_log(1, "    --set-time\n");
+            write_log(1, "    --auto (OR -a)\n");
+            return 1;
         }
 
         /* become a daemon */
