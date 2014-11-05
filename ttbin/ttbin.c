@@ -39,6 +39,7 @@ typedef struct __attribute__((packed))
     int32_t local_time_offset;  /* seconds from UTC */
     uint8_t  _unk2;
     uint8_t  length_count;  /* number of RECORD_LENGTH objects to follow */
+    RECORD_LENGTH lengths[0];
 } FILE_HEADER;
 
 typedef struct __attribute__((packed))
@@ -138,18 +139,17 @@ TTBIN_FILE *read_ttbin_file(FILE *file)
 TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
 {
     uint8_t *end;
-    RECORD_LENGTH *record_lengths;
     TTBIN_FILE *file;
     int index;
 
-    FILE_HEADER             file_header;
-    FILE_SUMMARY_RECORD     summary_record;
-    FILE_GPS_RECORD         gps_record;
-    FILE_HEART_RATE_RECORD  heart_rate_record;
-    FILE_STATUS_RECORD      status_record;
-    FILE_TREADMILL_RECORD   treadmill_record;
-    FILE_SWIM_RECORD        swim_record;
-    FILE_LAP_RECORD         lap_record;
+    FILE_HEADER             *file_header = 0;
+    FILE_SUMMARY_RECORD     *summary_record;
+    FILE_GPS_RECORD         *gps_record;
+    FILE_HEART_RATE_RECORD  *heart_rate_record;
+    FILE_STATUS_RECORD      *status_record;
+    FILE_TREADMILL_RECORD   *treadmill_record;
+    FILE_SWIM_RECORD        *swim_record;
+    FILE_LAP_RECORD         *lap_record;
 
     file = malloc(sizeof(TTBIN_FILE));
     memset(file, 0, sizeof(TTBIN_FILE));
@@ -162,44 +162,40 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         switch (tag)
         {
         case TAG_FILE_HEADER:
-            memcpy(&file_header, data, sizeof(FILE_HEADER));
-            data += sizeof(FILE_HEADER);
-            record_lengths = malloc((file_header.length_count + 1) * sizeof(RECORD_LENGTH));
-            memcpy(record_lengths, data, file_header.length_count * sizeof(RECORD_LENGTH));
-            memset(record_lengths + file_header.length_count, 0, sizeof(RECORD_LENGTH));
-            data += file_header.length_count * sizeof(RECORD_LENGTH);
+            file_header = (FILE_HEADER*)data;
+            data += sizeof(FILE_HEADER) + file_header->length_count * sizeof(RECORD_LENGTH);
 
-            file->file_version = file_header.file_version;
-            memcpy(file->firmware_version, file_header.firmware_version, sizeof(file->firmware_version));
-            file->product_id = file_header.product_id;
-            file->timestamp_local  = file_header.timestamp;
-            file->timestamp_utc    = file_header.timestamp - file_header.local_time_offset;
+            file->file_version    = file_header->file_version;
+            memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
+            file->product_id      = file_header->product_id;
+            file->timestamp_local = file_header->timestamp;
+            file->timestamp_utc   = file_header->timestamp - file_header->local_time_offset;
             break;
         case TAG_SUMMARY:
-            memcpy(&summary_record, data, sizeof(FILE_SUMMARY_RECORD));
+            summary_record = (FILE_SUMMARY_RECORD*)data;
 
-            file->activity = summary_record.activity;
-            file->total_distance = summary_record.distance;
-            file->duration = summary_record.duration;
-            file->total_calories = summary_record.calories;
+            file->activity       = summary_record->activity;
+            file->total_distance = summary_record->distance;
+            file->duration       = summary_record->duration;
+            file->total_calories = summary_record->calories;
             break;
         case TAG_STATUS:
-            memcpy(&status_record, data, sizeof(FILE_STATUS_RECORD));
+            status_record = (FILE_STATUS_RECORD*)data;
             file->status_records = realloc(file->status_records, (file->status_record_count + 1) * sizeof(STATUS_RECORD));
 
-            file->status_records[file->status_record_count].status    = status_record.status;
-            file->status_records[file->status_record_count].activity  = status_record.activity;
-            file->status_records[file->status_record_count].timestamp = status_record.timestamp;
+            file->status_records[file->status_record_count].status    = status_record->status;
+            file->status_records[file->status_record_count].activity  = status_record->activity;
+            file->status_records[file->status_record_count].timestamp = status_record->timestamp;
             ++file->status_record_count;
             break;
         case TAG_GPS:
-            memcpy(&gps_record, data, sizeof(FILE_GPS_RECORD));
+            gps_record = (FILE_GPS_RECORD*)data;
 
             /* if the GPS signal is lost, 0xffffffff is stored in the file */
-            if (gps_record.timestamp == 0xffffffff)
+            if (gps_record->timestamp == 0xffffffff)
                 break;
 
-            index = gps_record.timestamp - file->timestamp_utc;
+            index = gps_record->timestamp - file->timestamp_utc;
             if (index < 0)
             {
                 file->timestamp_utc   += index;
@@ -210,79 +206,90 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             /* expand the array if necessary */
             realloc_array(file->gps_records, file->gps_record_count, index, sizeof(GPS_RECORD));
 
-            file->gps_records[index].latitude     = gps_record.latitude * 1e-7f;
-            file->gps_records[index].longitude    = gps_record.longitude * 1e-7f;
+            file->gps_records[index].latitude     = gps_record->latitude * 1e-7f;
+            file->gps_records[index].longitude    = gps_record->longitude * 1e-7f;
             file->gps_records[index].elevation    = 0.0f;
-            file->gps_records[index].heading      = gps_record.heading / 100.0f;
-            file->gps_records[index].speed        = gps_record.speed / 100.0f;
-            file->gps_records[index].timestamp    = gps_record.timestamp;
-            file->gps_records[index].calories     = gps_record.calories;
-            file->gps_records[index].inc_distance = gps_record.inc_distance;
-            file->gps_records[index].cum_distance = gps_record.cum_distance;
-            file->gps_records[index].cycles       = gps_record.cycles;
+            file->gps_records[index].heading      = gps_record->heading / 100.0f;
+            file->gps_records[index].speed        = gps_record->speed / 100.0f;
+            file->gps_records[index].timestamp    = gps_record->timestamp;
+            file->gps_records[index].calories     = gps_record->calories;
+            file->gps_records[index].inc_distance = gps_record->inc_distance;
+            file->gps_records[index].cum_distance = gps_record->cum_distance;
+            file->gps_records[index].cycles       = gps_record->cycles;
             break;
         case TAG_HEART_RATE:
-            memcpy(&heart_rate_record, data, sizeof(FILE_HEART_RATE_RECORD));
+            heart_rate_record = (FILE_HEART_RATE_RECORD*)data;
 
-            index = heart_rate_record.timestamp - file->timestamp_local;
+            index = heart_rate_record->timestamp - file->timestamp_local;
 
             realloc_array(file->heart_rate_records, file->heart_rate_record_count, index, sizeof(HEART_RATE_RECORD));
 
-            file->heart_rate_records[index].timestamp  = heart_rate_record.timestamp;
-            file->heart_rate_records[index].heart_rate = heart_rate_record.heart_rate;
+            file->heart_rate_records[index].timestamp  = heart_rate_record->timestamp;
+            file->heart_rate_records[index].heart_rate = heart_rate_record->heart_rate;
             break;
         case TAG_LAP:
-            memcpy(&lap_record, data, sizeof(FILE_LAP_RECORD));
+            lap_record = (FILE_LAP_RECORD*)data;
             file->lap_records = realloc(file->lap_records, (file->lap_record_count + 1) * sizeof(LAP_RECORD));
 
-            file->lap_records[file->lap_record_count].total_time     = lap_record.total_time;
-            file->lap_records[file->lap_record_count].total_distance = lap_record.total_distance;
-            file->lap_records[file->lap_record_count].total_calories = lap_record.total_calories;
+            file->lap_records[file->lap_record_count].total_time     = lap_record->total_time;
+            file->lap_records[file->lap_record_count].total_distance = lap_record->total_distance;
+            file->lap_records[file->lap_record_count].total_calories = lap_record->total_calories;
             ++file->lap_record_count;
             break;
         case TAG_TREADMILL:
-            memcpy(&treadmill_record, data, sizeof(FILE_TREADMILL_RECORD));
+            treadmill_record = (FILE_TREADMILL_RECORD*)data;
 
-            index = treadmill_record.timestamp - file->timestamp_local;
+            index = treadmill_record->timestamp - file->timestamp_local;
 
             /* expand the array if necessary */
             realloc_array(file->treadmill_records, file->treadmill_record_count, index, sizeof(TREADMILL_RECORD));
 
-            file->treadmill_records[index].timestamp = treadmill_record.timestamp;
-            file->treadmill_records[index].distance  = treadmill_record.distance;
-            file->treadmill_records[index].calories  = treadmill_record.calories;
-            file->treadmill_records[index].steps     = treadmill_record.steps;
+            file->treadmill_records[index].timestamp = treadmill_record->timestamp;
+            file->treadmill_records[index].distance  = treadmill_record->distance;
+            file->treadmill_records[index].calories  = treadmill_record->calories;
+            file->treadmill_records[index].steps     = treadmill_record->steps;
             break;
         case TAG_SWIM:
-            memcpy(&swim_record, data, sizeof(FILE_SWIM_RECORD));
+            swim_record = (FILE_SWIM_RECORD*)data;
 
-            index = swim_record.timestamp - file->timestamp_local;
+            index = swim_record->timestamp - file->timestamp_local;
 
             /* expand the array if necessary */
             realloc_array(file->swim_records, file->swim_record_count, index, sizeof(SWIM_RECORD));
 
-            file->swim_records[index].timestamp      = swim_record.timestamp;
-            file->swim_records[index].total_distance = swim_record.total_distance;
-            file->swim_records[index].strokes        = swim_record.strokes;
-            file->swim_records[index].completed_laps = swim_record.completed_laps;
-            file->swim_records[index].total_calories = swim_record.total_calories;
+            file->swim_records[index].timestamp      = swim_record->timestamp;
+            file->swim_records[index].total_distance = swim_record->total_distance;
+            file->swim_records[index].strokes        = swim_record->strokes;
+            file->swim_records[index].completed_laps = swim_record->completed_laps;
+            file->swim_records[index].total_calories = swim_record->total_calories;
             break;
         default:
             break;
         }
 
+        /* we should have got a file header first... */
+        if (!file_header)
+        {
+            free(file);
+            return 0;
+        }
+
         /* increment the data by the correct amount */
         if (tag != TAG_FILE_HEADER)
         {
-            RECORD_LENGTH *entry = record_lengths;
-            while ((entry->tag != tag) && (entry->tag != 0))
-                entry++;
-            if (entry->tag == tag)
-                data += entry->length - 1;
+            index = 0;
+            while ((index < file_header->length_count) && (file_header->lengths[index].tag < tag))
+                ++index;
+            if ((index < file_header->length_count) && (file_header->lengths[index].tag == tag))
+                data += file_header->lengths[index].length - 1;
+            else
+            {
+                free(file);
+                return 0;
+            }
         }
     }
 
-    free(record_lengths);
     return file;
 }
 
@@ -290,30 +297,19 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
 
 const char *create_filename(TTBIN_FILE *ttbin, const char *ext)
 {
-    static char filename[256];
+    static char filename[32];
     struct tm *time = gmtime(&ttbin->timestamp_local);
+    const char *type = "Unknown";
 
     switch (ttbin->activity)
     {
-    case ACTIVITY_RUNNING:
-        sprintf(filename, "Running_%02d-%02d-%02d.%s", time->tm_hour, time->tm_min, time->tm_sec, ext);
-        break;
-    case ACTIVITY_CYCLING:
-        sprintf(filename, "Cycling_%02d-%02d-%02d.%s", time->tm_hour, time->tm_min, time->tm_sec, ext);
-        break;
-    case ACTIVITY_SWIMMING:
-        sprintf(filename, "Pool_swim_%02d-%02d-%02d.%s", time->tm_hour, time->tm_min, time->tm_sec, ext);
-        break;
-    case ACTIVITY_TREADMILL:
-        sprintf(filename, "Treadmill_%02d-%02d-%02d.%s", time->tm_hour, time->tm_min, time->tm_sec, ext);
-        break;
-    case ACTIVITY_FREESTYLE:
-        sprintf(filename, "Freestyle_%02d-%02d-%02d.%s", time->tm_hour, time->tm_min, time->tm_sec, ext);
-        break;
-    default:
-        sprintf(filename, "Unknown_%02d-%02d-%02d.%s", time->tm_hour, time->tm_min, time->tm_sec, ext);
-        break;
+    case ACTIVITY_RUNNING:   type = "Running"; break;
+    case ACTIVITY_CYCLING:   type = "Cycling"; break;
+    case ACTIVITY_SWIMMING:  type = "Pool_swim"; break;
+    case ACTIVITY_TREADMILL: type = "Treadmill"; break;
+    case ACTIVITY_FREESTYLE: type = "Freestyle"; break;
     }
+    sprintf(filename, "%s_%02d-%02d-%02d.%s", type, time->tm_hour, time->tm_min, time->tm_sec, ext);
 
     return filename;
 }
