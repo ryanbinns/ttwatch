@@ -13,6 +13,17 @@
 
 /*****************************************************************************/
 
+const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT] = {
+    { OFFLINE_FORMAT_CSV, "csv", 0, export_csv },
+    { OFFLINE_FORMAT_FIT, "fit", 1, 0          },
+    { OFFLINE_FORMAT_GPX, "gpx", 1, export_gpx },
+    { OFFLINE_FORMAT_KML, "kml", 1, export_kml },
+    { OFFLINE_FORMAT_PWX, "pwx", 1, 0          },
+    { OFFLINE_FORMAT_TCX, "tcx", 1, export_tcx },
+};
+
+/*****************************************************************************/
+
 #define TAG_FILE_HEADER     (0x20)
 #define TAG_STATUS          (0x21)
 #define TAG_GPS             (0x22)
@@ -436,8 +447,38 @@ void download_elevation_data(TTBIN_FILE *ttbin)
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     if (result != CURLE_OK)
-    {
         fprintf(stderr, "Unable to download elevation data: %d\n", result);
-        return;
-    }
 }
+
+/*****************************************************************************/
+
+uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats)
+{
+    unsigned i;
+    FILE *f;
+
+    for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
+    {
+        if ((formats & OFFLINE_FORMATS[i].mask) && OFFLINE_FORMATS[i].producer)
+        {
+            if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_record_count)
+            {
+                f = fopen(create_filename(ttbin, OFFLINE_FORMATS[i].name), "w");
+                if (f)
+                {
+                    (*OFFLINE_FORMATS[i].producer)(ttbin, f);
+                    fclose(f);
+                }
+                else
+                    formats &= ~OFFLINE_FORMATS[i].mask;
+            }
+            else
+                formats &= ~OFFLINE_FORMATS[i].mask;
+        }
+        else
+            formats &= ~OFFLINE_FORMATS[i].mask;
+    }
+
+    return formats;
+}
+

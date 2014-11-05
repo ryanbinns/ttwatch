@@ -117,5 +117,27 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file);
 
 void export_tcx(TTBIN_FILE *ttbin, FILE *file);
 
+uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats);
+
+/*****************************************************************************/
+
+#define OFFLINE_FORMAT_CSV  (0x00000001)
+#define OFFLINE_FORMAT_FIT  (0x00000002)
+#define OFFLINE_FORMAT_GPX  (0x00000004)
+#define OFFLINE_FORMAT_KML  (0x00000008)
+#define OFFLINE_FORMAT_PWX  (0x00000010)
+#define OFFLINE_FORMAT_TCX  (0x00000020)
+
+typedef struct
+{
+    uint32_t mask;
+    const char *name;
+    int requires_gps;
+    void (*producer)(TTBIN_FILE* ttbin, FILE *file);
+} OFFLINE_FORMAT;
+
+#define OFFLINE_FORMAT_COUNT    (6)
+extern const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT];
+
 #endif  /* __TTBIN_H__ */
 

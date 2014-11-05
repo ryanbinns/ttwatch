@@ -82,29 +82,6 @@ typedef struct
     int clear_data;
 } OPTIONS;
 
-#define OFFLINE_FORMAT_CSV  (0x00000001)
-#define OFFLINE_FORMAT_FIT  (0x00000002)
-#define OFFLINE_FORMAT_GPX  (0x00000004)
-#define OFFLINE_FORMAT_KML  (0x00000008)
-#define OFFLINE_FORMAT_PWX  (0x00000010)
-#define OFFLINE_FORMAT_TCX  (0x00000020)
-
-const struct
-{
-    uint32_t mask;
-    const char *name;
-    int requires_gps;
-    void (*producer)(TTBIN_FILE* ttbin, FILE *file);
-} OFFLINE_FORMATS[] = {
-    { OFFLINE_FORMAT_CSV, "csv", 0, export_csv },
-    { OFFLINE_FORMAT_FIT, "fit", 1, 0          },
-    { OFFLINE_FORMAT_GPX, "gpx", 1, export_gpx },
-    { OFFLINE_FORMAT_KML, "kml", 1, export_kml },
-    { OFFLINE_FORMAT_PWX, "pwx", 1, 0          },
-    { OFFLINE_FORMAT_TCX, "tcx", 1, export_tcx },
-};
-#define OFFLINE_FORMAT_COUNT    (sizeof(OFFLINE_FORMATS) / sizeof(OFFLINE_FORMATS[0]))
-
 /*************************************************************************************************/
 
 int show_packets = 0;
@@ -602,6 +579,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
 {
     char filename[256] = {0};
     char **ptr;
+    unsigned i;
 
     /* read the list of all files so we can find the activity files */
     RXFindFilePacket *file;
@@ -662,27 +640,17 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
         else
             write_log(1, "Unable to write file: %s\n", filename);
 
+        /* export_formats returns the formats parameter with bits corresponding to failed exports cleared */
+        formats ^= export_formats(ttbin, formats);
         if (formats)
         {
-            unsigned i;
+            write_log(1, "Unable to write file formats: ");
             for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
             {
-                if ((formats & OFFLINE_FORMATS[i].mask) && OFFLINE_FORMATS[i].producer)
-                {
-                    if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_record_count)
-                    {
-                        sprintf(filename, "%s", create_filename(ttbin, OFFLINE_FORMATS[i].name));
-                        f = fopen(filename, "w");
-                        if (f)
-                        {
-                            (*OFFLINE_FORMATS[i].producer)(ttbin, f);
-                            fclose(f);
-                        }
-                        else
-                            write_log(1, "Unable to write file: %s\n", filename);
-                    }
-                }
+                if (formats & OFFLINE_FORMATS[i].mask)
+                    write_log(1, "%s ", OFFLINE_FORMATS[i].name);
             }
+            write_log(1, "\n");
         }
 
         free(ttbin);
