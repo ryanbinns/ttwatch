@@ -82,6 +82,28 @@ typedef struct
     int clear_data;
 } OPTIONS;
 
+#define OFFLINE_FORMAT_CSV  (0x00000001)
+#define OFFLINE_FORMAT_FIT  (0x00000002)
+#define OFFLINE_FORMAT_GPX  (0x00000004)
+#define OFFLINE_FORMAT_KML  (0x00000008)
+#define OFFLINE_FORMAT_PWX  (0x00000010)
+#define OFFLINE_FORMAT_TCX  (0x00000020)
+
+const struct
+{
+    uint32_t mask;
+    const char *name;
+    int requires_gps;
+    void (*producer)(TTBIN_FILE* ttbin, FILE *file);
+} OFFLINE_FORMATS[] = {
+    { OFFLINE_FORMAT_CSV, "csv", 0, export_csv },
+    { OFFLINE_FORMAT_FIT, "fit", 1, 0          },
+    { OFFLINE_FORMAT_GPX, "gpx", 1, export_gpx },
+    { OFFLINE_FORMAT_KML, "kml", 1, export_kml },
+    { OFFLINE_FORMAT_PWX, "pwx", 1, 0          },
+    { OFFLINE_FORMAT_TCX, "tcx", 1, export_tcx },
+};
+#define OFFLINE_FORMAT_COUNT    (sizeof(OFFLINE_FORMATS) / sizeof(OFFLINE_FORMATS[0]))
 
 /*************************************************************************************************/
 
@@ -541,7 +563,7 @@ void do_set_time(libusb_device_handle *device)
     }
 
     /* write the file back to the device */
-    if (write_whole_file(device, FILE_MANIFEST1, data, size))
+    if (write_verify_whole_file(device, FILE_MANIFEST1, data, size))
     {
         free(data);
         write_log(1, "Unable to set watch time\n");
@@ -576,7 +598,7 @@ static void _mkdir(const char *dir)
     mkdir(tmp, 0755);
 }
 
-void do_get_activities(libusb_device_handle *device, const char *store, char **formats)
+void do_get_activities(libusb_device_handle *device, const char *store, uint32_t formats)
 {
     char filename[256] = {0};
     char **ptr;
@@ -642,38 +664,28 @@ void do_get_activities(libusb_device_handle *device, const char *store, char **f
 
         if (formats)
         {
-            ptr = formats;
-            for(; *ptr; ++ptr)
+            unsigned i;
+            for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
             {
-                sprintf(filename, "%s", create_filename(ttbin, *ptr));
-                f = fopen(filename, "w");
-                if (f)
+                if ((formats & OFFLINE_FORMATS[i].mask) && OFFLINE_FORMATS[i].producer)
                 {
-                    if (!strcasecmp(*ptr, "csv"))
-                        export_csv(ttbin, f);
-                    else if (!strcasecmp(*ptr, "kml"))
-                        export_kml(ttbin, f);
-                    else if (!strcasecmp(*ptr, "gpx"))
-                        export_gpx(ttbin, f);
-                    else if (!strcasecmp(*ptr, "tcx"))
-                        export_tcx(ttbin, f);
-
-                    fclose(f);
+                    if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_record_count)
+                    {
+                        sprintf(filename, "%s", create_filename(ttbin, OFFLINE_FORMATS[i].name));
+                        f = fopen(filename, "w");
+                        if (f)
+                        {
+                            (*OFFLINE_FORMATS[i].producer)(ttbin, f);
+                            fclose(f);
+                        }
+                        else
+                            write_log(1, "Unable to write file: %s\n", filename);
+                    }
                 }
-                else
-                    write_log(1, "Unable to write file: %s\n", filename);
             }
         }
 
         free(ttbin);
-    }
-
-    if (formats)
-    {
-        ptr = formats;
-        for (; *ptr; ++ptr)
-            free(*ptr);
-        free(formats);
     }
 
     free(files);
@@ -1000,29 +1012,20 @@ void do_set_watch_name(libusb_device_handle *device, const char *name)
     free(data);
 }
 
-/* convert an entire string to lowercase */
-void tolower_s(char *str)
-{
-    char *ptr;
-    for (ptr = str; *ptr; ++ptr)
-        *ptr = tolower(*ptr);
-}
-
-char **get_configured_formats(libusb_device_handle *device)
+uint32_t get_configured_formats(libusb_device_handle *device)
 {
     uint32_t size;
     char *data;
     char *start, *end;
     char *start1, *start2;
-    char **formats = 0;
-    int num_formats = 0;
+    uint32_t formats;
 
     /* the preferences XML file contains the export formats */
     data = read_whole_file(device, FILE_PREFERENCES_XML, &size);
     if (!data)
     {
         write_log(1, "Unable to read watch preferences\n");
-        goto cleanup;
+        return 0;
     }
 
     /* we don't attempt to process online exporters */
@@ -1030,7 +1033,8 @@ char **get_configured_formats(libusb_device_handle *device)
     if (!start)
     {
         write_log(1, "Unable to read watch preferences\n");
-        goto cleanup;
+        free(data);
+        return 0;
     }
     start += 9;
 
@@ -1040,77 +1044,41 @@ char **get_configured_formats(libusb_device_handle *device)
     while (start1 && start2 && (start1 < start2))
     {
         char *ptr;
+        unsigned i;
 
         start1 += 12;
         end = strchr(start1, '\"');
         if (!end)
-            goto cleanup;
+        {
+            free(data);
+            return 1;
+        }
         *end++ = 0;
 
-        tolower_s(start1);
-        formats = (char**)realloc(formats, ++num_formats * sizeof(char*));
-        formats[num_formats - 1] = strdup(start1);
+        for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
+        {
+            if (strcasecmp(start1, OFFLINE_FORMATS[i].name) == 0)
+                formats |= OFFLINE_FORMATS[i].mask;
+        }
 
         start1 = strstr(end, "<export id=\"");
         start2 = strstr(end, "</offline>");
     }
-
-    formats = (char**)realloc(formats, ++num_formats * sizeof(char*));
-    formats[num_formats - 1] = 0;
-
-cleanup:
-    if (data)
-        free(data);
 
     return formats;
 }
 
 void do_list_formats(libusb_device_handle *device)
 {
-    uint32_t size;
-    char *data;
-    char *start, *end;
-    char *start1, *start2;
-
-    /* the preferences XML file contains the export formats */
-    data = read_whole_file(device, FILE_PREFERENCES_XML, &size);
-    if (!data)
+    unsigned i;
+    uint32_t formats = get_configured_formats(device);
+    for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
-        write_log(1, "Unable to read watch preferences\n");
-        goto cleanup;
+        if (formats & OFFLINE_FORMATS[i].mask)
+            write_log(0, "%s ", OFFLINE_FORMATS[i].name);
     }
 
-    /* we don't attempt to process online exporters */
-    start = strstr(data, "<offline>");
-    if (!start)
-    {
-        write_log(1, "Unable to read watch preferences\n");
-        goto cleanup;
-    }
-    start += 9;
-
-    start1 = strstr(start, "<export id=\"");
-    start2 = strstr(start, "</offline>");
-
-    while (start1 && start2 && (start1 < start2))
-    {
-        char *ptr;
-
-        start1 += 12;
-        end = strchr(start1, '\"');
-        if (!end)
-            goto cleanup;
-        *end++ = 0;
-        tolower_s(start1);
-        write_log(0, "%s\n", start1);
-
-        start1 = strstr(end, "<export id=\"");
-        start2 = strstr(end, "</offline>");
-    }
-
-cleanup:
-    if (data)
-        free(data);
+    write_log(0, "\n");
 }
 
 void do_set_formats(libusb_device_handle *device, char *formats)
@@ -1119,9 +1087,10 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     char *data, *new_data;
     char *ptr, *str;
     char *start, *end;
-    char *fmts[8];
+    const char *fmts[OFFLINE_FORMAT_COUNT];
     int fmt_count = 0;
     int i, len, diff;
+
 
     /* scan the formats list to find the recognised formats */
     str = formats;
@@ -1130,11 +1099,18 @@ void do_set_formats(libusb_device_handle *device, char *formats)
         ptr = strchr(str, ',');
         if (ptr)
             *ptr = 0;
-        if (!strcasecmp(str, "kml") || !strcasecmp(str, "gpx") ||
-            !strcasecmp(str, "csv") || !strcasecmp(str, "fit") ||
-            !strcasecmp(str, "tcx"))
+        for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
         {
-            fmts[fmt_count++] = str;
+            if (!strcasecmp(str, OFFLINE_FORMATS[i].name))
+            {
+                fmts[fmt_count++] = OFFLINE_FORMATS[i].name;
+                break;
+            }
+        }
+        if (i >= OFFLINE_FORMAT_COUNT)
+        {
+            write_log(1, "Unknown file format encountered: %s\n", str);
+            return;
         }
         str = ptr + 1;
     }
@@ -1210,7 +1186,6 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     free(data);
 
     data = update_preferences_modified_time(new_data, &size);
-    fwrite(data, 1, size, stdout);
 
     if (write_verify_whole_file(device, FILE_PREFERENCES_XML, data, size))
         write_log(1, "Unable to write new watch name\n");
@@ -1436,7 +1411,7 @@ void do_update_race(libusb_device_handle *device, char *race)
     }
 
     length = sizeof(TT_RACE_FILE) - 1 + required_length;
-    if (write_whole_file(device, 0x00710000 | (activity << 8) | index, data, length))
+    if (write_verify_whole_file(device, 0x00710000 | (activity << 8) | index, data, length))
         write_log(1, "Unable to write race data to watch\n");
 
     free(data);
@@ -1617,7 +1592,7 @@ void do_delete_history_item(libusb_device_handle *device, const char *item)
         /* update the history file information and rewrite the file */
         --history->entry_count;
         length -= history->entry_length;
-        write_whole_file(device, file->id, data, length);
+        write_verify_whole_file(device, file->id, data, length);
 
         free(data);
         break;
@@ -1653,7 +1628,7 @@ void do_clear_data(libusb_device_handle *device)
                 TT_HISTORY_FILE *history = (TT_HISTORY_FILE*)data;
                 history->entry_count = 0;
                 length = sizeof(TT_HISTORY_FILE) - 1;
-                write_whole_file(device, file->id, data, length);
+                write_verify_whole_file(device, file->id, data, length);
                 free(data);
             }
             break;
@@ -1664,18 +1639,14 @@ void do_clear_data(libusb_device_handle *device)
 
 void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
 {
-    char **formats;
     send_startup_message_group(device);
 
-    /* not configurable at this stage - to match the TomTom software:
-        1. Download activity files
-        2. Update the GPSQuickFix data
-        3. Update the system firmware */
-
-    formats = get_configured_formats(device);
-
+    /* perform the activities the user has requested */
     if (options->get_activities)
+    {
+        uint32_t formats = get_configured_formats(device);
         do_get_activities(device, options->activity_store, formats);
+    }
 
     if (options->update_gps)
         do_update_gps(device);
@@ -2227,7 +2198,7 @@ int main(int argc, char *argv[])
         do_set_time(device);
 
     if (options.get_activities)
-        do_get_activities(device, options.activity_store, NULL);
+        do_get_activities(device, options.activity_store, 0);
 
     if (options.update_gps)
         do_update_gps(device);

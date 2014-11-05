@@ -377,6 +377,10 @@ void download_elevation_data(TTBIN_FILE *ttbin)
     ELEV_DATA_INFO info = {0};
     int result;
 
+    /* only download elevation data if we have GPS records */
+    if (!ttbin || !ttbin->gps_record_count || !ttbin->gps_records)
+        return;
+
     curl = curl_easy_init();
     if (!curl)
     {
