@@ -6,6 +6,7 @@
 #include "messages.h"
 #include "ttbin.h"
 #include "log.h"
+#include "files.h"
 
 #include <getopt.h>
 #include <stdlib.h>
@@ -103,9 +104,7 @@ libusb_device_handle *open_selected_device(libusb_device *device, int *index, in
     /* get the selected device number */
     if (select_device && isdigit(*selection))
     {
-        errno = 0;
-        device_number = strtoul(selection, NULL, 0);
-        if (errno != 0)
+        if (sscanf(selection, "%d", &device_number) != 1)
             device_number = -1;
     }
 
@@ -190,7 +189,7 @@ libusb_device_handle *open_selected_device(libusb_device *device, int *index, in
 libusb_device_handle *open_usb_device(int list_devices, int select_device, char *device)
 {
     libusb_device **list = 0;
-    libusb_device_handle *selected_handle = 0;
+    libusb_device_handle *handle, *selected_handle = 0;
     ssize_t count = 0;
     ssize_t i;
     unsigned index = 0;
@@ -198,7 +197,7 @@ libusb_device_handle *open_usb_device(int list_devices, int select_device, char 
     count = libusb_get_device_list(NULL, &list);
     for (i = 0; i < count; ++i)
     {
-        libusb_device_handle *handle = open_selected_device(list[i], &index, list_devices, select_device, device);
+        handle = open_selected_device(list[i], &index, list_devices, select_device, device);
         if (handle)
         {
             if (!selected_handle)
@@ -482,28 +481,45 @@ uint8_t *update_preferences_modified_time(uint8_t *data, uint32_t *size)
 
 void do_get_time(libusb_device_handle *device)
 {
+    uint32_t size = 0;
+    uint8_t *data = 0;
+    TT_MANIFEST_FILE *manifest;
     char timestr[64];
     time_t time;
+    int i;
     if (get_watch_time(device, &time))
         return;
 
     strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
 
-    write_log(0, "GPS time: %s (UTC)\n", timestr);
+    write_log(0, "UTC time:   %s\n", timestr);
+
+    data = read_whole_file(device, FILE_MANIFEST1, &size);
+    if (!data)
+    {
+        write_log(1, "Unable to read watch local time offset\n");
+        return;
+    }
+
+    /* look for the UTC offset entry in the manifest file */
+    manifest = (TT_MANIFEST_FILE*)data;
+    for (i = 0; i < manifest->entry_count; ++i)
+    {
+        if (manifest->entries[i].entry == TT_MANIFEST_ENTRY_UTC_OFFSET)
+        {
+            /* generate, format and display the local time value */
+            time += manifest->entries[i].value;
+            strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
+            if (manifest->entries[i].value % 3600)
+                write_log(0, "Local time: %s (UTC+%.1f)\n", timestr, manifest->entries[i].value / 3600.0);
+            else
+                write_log(0, "Local time: %s (UTC+%d)\n", timestr, manifest->entries[i].value / 3600);
+            break;
+        }
+    }
+
+    free(data);
 }
-
-typedef struct __attribute__((packed))
-{
-    uint16_t entry;
-    uint32_t value;
-} TT_MANIFEST_ENTRY;
-
-typedef struct __attribute__((packed))
-{
-    uint16_t file_type;
-    uint16_t entry_count;
-    TT_MANIFEST_ENTRY entries[1];
-} TT_MANIFEST_FILE;
 
 void do_set_time(libusb_device_handle *device)
 {
@@ -511,12 +527,10 @@ void do_set_time(libusb_device_handle *device)
     uint8_t *data = 0;
     TT_MANIFEST_FILE *manifest;
     struct tm tm_local;
-    long utc_offset;
     uint32_t i;
     time_t utc_time = time(NULL);
 
     localtime_r(&utc_time, &tm_local);
-    utc_offset = tm_local.tm_gmtoff;
 
     /* read the manifest file */
     data = read_whole_file(device, FILE_MANIFEST1, &size);
@@ -530,11 +544,9 @@ void do_set_time(libusb_device_handle *device)
     manifest = (TT_MANIFEST_FILE*)data;
     for (i = 0; i < manifest->entry_count; ++i)
     {
-        if (manifest->entries[i].entry == 169) // utc offset entry
+        if (manifest->entries[i].entry == TT_MANIFEST_ENTRY_UTC_OFFSET)
         {
-            write_log(0, "Old UTC offset: %d\n", (int)manifest->entries[i].value);
-            manifest->entries[i].value = (uint32_t)(int)utc_offset;
-            write_log(0, "New UTC offset: %d\n", (int)manifest->entries[i].value);
+            manifest->entries[i].value = (uint32_t)(int32_t)tm_local.tm_gmtoff;
             break;
         }
     }
@@ -594,7 +606,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
         uint8_t *data;
         TTBIN_FILE *ttbin;
         FILE *f;
-        struct tm *timestamp;
+        struct tm timestamp;
 
         /* check if this is a ttbin activity file */
         if ((file->id & FILE_TYPE_MASK) != FILE_TTBIN_DATA)
@@ -612,7 +624,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
             download_elevation_data(ttbin);
         }
 
-        timestamp = gmtime(&ttbin->timestamp_local);
+        gmtime_r(&ttbin->timestamp_local, &timestamp);
 
         /* create the directory name: [store]/[watch name]/[date] */
         strcpy(filename, store);
@@ -620,7 +632,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
         if (!get_watch_name(device, filename + strlen(filename), sizeof(filename) - strlen(filename)))
             strcat(filename, "/");
         sprintf(filename + strlen(filename), "%04d-%02d-%02d",
-            timestamp->tm_year + 1900, timestamp->tm_mon + 1, timestamp->tm_mday);
+            timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday);
         _mkdir(filename);
         chdir(filename);
 
@@ -628,14 +640,27 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
         sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
 
         /* write the ttbin file */
-        f = fopen(filename, "w");
+        f = fopen(filename, "w+");
         if (f)
         {
+            uint8_t *data1;
             fwrite(data, 1, size, f);
-            fclose(f);
 
-            /* delete the file from the watch */
-            delete_file(device, file->id);
+            /* verify that the file was written correctly */
+            fseek(f, 0, SEEK_SET);
+            data1 = malloc(size);
+            if (fread(data1, 1, size, f) != size)
+                write_log(1, "TTBIN file did not verify correctly\n");
+            else if (memcmp(data, data1, size) != 0)
+                write_log(1, "TTBIN file did not verify correctly\n");
+            else
+            {
+                /* delete the file from the watch only if verification passed */
+                delete_file(device, file->id);
+            }
+            free(data1);
+
+            fclose(f);
         }
         else
             write_log(1, "Unable to write file: %s\n", filename);
@@ -654,6 +679,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
         }
 
         free(ttbin);
+        free(data);
     }
 
     free(files);
@@ -737,7 +763,9 @@ void do_update_firmware(libusb_device_handle *device)
     char url[128];
     DOWNLOAD download;
     uint32_t current_version;
+    uint32_t current_ble_version;
     uint32_t latest_version;
+    uint32_t latest_ble_version;
     FIRMWARE_FILE *firmware_files = 0;
     int file_count = 0;
     int i;
@@ -752,6 +780,14 @@ void do_update_firmware(libusb_device_handle *device)
         goto cleanup;
     }
 
+    /* get the current firmware version */
+    current_version = get_firmware_version(device);
+    if (!current_version)
+    {
+        write_log(1, "Unable to determine current firmware version\n");
+        goto cleanup;
+    }
+
     /* download the firmware information file */
     sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/FirmwareVersionConfigV2.xml?timestamp=%d",
         product_id, (int)time(NULL));
@@ -762,19 +798,29 @@ void do_update_firmware(libusb_device_handle *device)
        but since it's XML it's only the last closing bracket) */
     download.data[download.length - 1] = 0;
 
-    /* get the current firmware version */
-    current_version = get_firmware_version(device);
-    if (!current_version)
-    {
-        write_log(1, "Unable to determine current firmware version\n");
-        goto cleanup;
-    }
-
     /* get the latest firmware version */
     latest_version = decode_latest_firmware_version(download.data);
     if (!latest_version)
     {
         write_log(1, "Unable to determine latest firmware version\n");
+        goto cleanup;
+    }
+
+    /* get the current BLE version */
+    current_ble_version = get_ble_version(device);
+
+    /* find the latest BLE version */
+    ptr = strstr(download.data, "<BLE version=\"");
+    if (!ptr)
+    {
+        write_log(1, "Unable to determine latest BLE version\n");
+        goto cleanup;
+    }
+    latest_ble_version = strtoul(ptr + 14, NULL, 0);
+
+    if (current_ble_version < latest_ble_version)
+    {
+        write_log(1, "Sorry, BLE firmware updating not supported yet\n");
         goto cleanup;
     }
 
@@ -809,7 +855,6 @@ void do_update_firmware(libusb_device_handle *device)
             sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/%s", product_id, fw_url);
             free(fw_url);
             write_log(0, "Download %s ... ", url);
-            fflush(stdout);
             if (download_file(url, &firmware_files[file_count - 1].download))
             {
                 write_log(0, "Failed\n");
@@ -831,29 +876,24 @@ void do_update_firmware(libusb_device_handle *device)
         /* resetting the watch causes the watch to disconnect and
            reconnect. This can take almost 90 seconds to complete */
         reset_watch(device);
+        write_log(0, "Waiting for watch to restart");
+        for (i = 0; i < 45; ++i)
+        {
+            sleep(2);
+            write_log(0, ".");
+        }
+        write_log(0, "\n");
 
         write_log(0, "Firmware updated\n");
     }
 
-    /* get the current BLE version */
-    current_version = get_ble_version(device);
-
-    /* find the latest BLE version */
-    ptr = strstr(download.data, "<BLE version=\"");
-    if (!ptr)
-    {
-        write_log(1, "Unable to determine latest BLE version\n");
-        goto cleanup;
-    }
-    latest_version = strtoul(ptr + 14, NULL, 0);
-
     /* check to see if we need to do anything */
-    if (latest_version <= current_version)
+    if (latest_ble_version <= current_ble_version)
         write_log(1, "Current BLE firmware is already at latest version\n");
     else
     {
-        write_log(0, "Current BLE Firmware Version: %u\n", current_version);
-        write_log(0, "Latest BLE Firmware Version : %u\n", latest_version);
+        write_log(0, "Current BLE Firmware Version: %u\n", current_ble_version);
+        write_log(0, "Latest BLE Firmware Version : %u\n", latest_ble_version);
 
         /* find the download URL of the BLE firmware */
         ptr = strstr(ptr, "URL=\"");
@@ -909,13 +949,15 @@ cleanup:
     /* free all the allocated data */
     if (download.data)
         free(download.data);
-    while (file_count--)
-    {
-        if (firmware_files[file_count].download.data)
-            free(firmware_files[file_count].download.data);
-    }
     if (firmware_files)
+    {
+        while (file_count--)
+        {
+            if (firmware_files[file_count].download.data)
+                free(firmware_files[file_count].download.data);
+        }
         free(firmware_files);
+    }
 }
 
 void do_get_watch_name(libusb_device_handle *device)
@@ -1033,6 +1075,7 @@ uint32_t get_configured_formats(libusb_device_handle *device)
         start2 = strstr(end, "</offline>");
     }
 
+    free(data);
     return formats;
 }
 
@@ -1051,14 +1094,13 @@ void do_list_formats(libusb_device_handle *device)
 
 void do_set_formats(libusb_device_handle *device, char *formats)
 {
-    uint32_t size;
-    char *data, *new_data;
+    uint32_t size = 0;
+    char *data = 0, *new_data;
     char *ptr, *str;
     char *start, *end;
     const char *fmts[OFFLINE_FORMAT_COUNT];
     int fmt_count = 0;
     int i, len, diff;
-
 
     /* scan the formats list to find the recognised formats */
     str = formats;
@@ -1092,8 +1134,8 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     }
 
     /* create the string for the new file formats */
-    ptr = str = malloc(45 * fmt_count + 30);
-    ptr += sprintf(ptr, "<offline>\n");
+    ptr = str = malloc(45 * fmt_count + 40);
+    ptr += sprintf(ptr, "        <offline>\n");
     for (i = 0; i < fmt_count; ++i)
         ptr += sprintf(ptr, "            <export id=\"%s\" autoOpen=\"0\"/>\n", fmts[i]);
     ptr += sprintf(ptr, "        </offline>\n");
@@ -1130,6 +1172,10 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     }
     else
     {
+        /* skip back to the beginning of the line */
+        while (*--start == ' ')
+            --start;
+        ++start;
         /* find the end of the offline section, so we replace the whole thing */
         end = strstr(start, "</offline>");
         if (!end)
@@ -1138,7 +1184,11 @@ void do_set_formats(libusb_device_handle *device, char *formats)
             free(data);
             return;
         }
-        end += 10;
+        /* skip to the end of the line */
+        while (*end && (*end != '\n'))
+            ++end;
+        if (*end)
+            ++end;
     }
 
     /* find the difference in length between the two strings and
@@ -1160,18 +1210,6 @@ void do_set_formats(libusb_device_handle *device, char *formats)
 
     free(data);
 }
-
-typedef struct __attribute__((packed))
-{
-    char     name[16];
-    uint32_t _unk1[5];
-    uint8_t  _unk2;
-    uint8_t  _unk3;
-    uint32_t checkpoints;
-    uint32_t time;
-    uint32_t distance;
-    uint8_t  distances[1];
-} TT_RACE_FILE;
 
 void do_list_races(libusb_device_handle *device)
 {
@@ -1200,7 +1238,7 @@ void do_list_races(libusb_device_handle *device)
             continue;
 
         race = (TT_RACE_FILE*)data;
-        printf("%c%d, \"%s\", %ds, %dm, %d laps = { ", ACTIVITY_CHARS[(file->id >> 8) & 0xff],
+        printf("%c%d, \"%s\", %ds, %dm, %d checkpoints = { ", ACTIVITY_CHARS[(file->id >> 8) & 0xff],
             (file->id & 0xff) + 1, race->name, race->time, race->distance, race->checkpoints);
         index = 0;
         for (i = 0; i < race->checkpoints; ++i)
@@ -1319,22 +1357,8 @@ void do_update_race(libusb_device_handle *device, char *race)
         }
     }
 
-    /* find the distance */
-    if ((sscanf(race, "%d", &distance) < 1) || (distance <= 0))
-    {
-        write_log(1, "Invalid race data specified\n");
-        return;
-    }
-    race = strchr(race, ',');
-    if (!race)
-    {
-        write_log(1, "Invalid race data specified\n");
-        return;
-    }
-    ++race;
-
-    /* find the number of checkpoints */
-    if ((sscanf(race, "%d", &checkpoints) < 1) || (checkpoints <= 0))
+    /* find the distance and number of checkpoints */
+    if ((sscanf(race, "%d,%d", &distance, &checkpoints) < 2) || (distance <= 0) || (checkpoints <= 0))
     {
         write_log(1, "Invalid race data specified\n");
         return;
@@ -1371,10 +1395,10 @@ void do_update_race(libusb_device_handle *device, char *race)
         while (current_distance < end_distance)
         {
             if ((end_distance - current_distance) >= 255)
-                race_file->distances[j++] = 255;
+                race_file->distances[j] = 255;
             else
-                race_file->distances[j++] = end_distance - current_distance;
-            current_distance += race_file->distances[j - 1];
+                race_file->distances[j] = end_distance - current_distance;
+            current_distance += race_file->distances[j++];
         }
     }
 
@@ -1384,36 +1408,6 @@ void do_update_race(libusb_device_handle *device, char *race)
 
     free(data);
 }
-
-typedef struct __attribute__((packed))
-{
-    uint32_t index;
-    uint8_t  activity;
-    uint32_t _unk1[2];
-    uint32_t year;
-    uint32_t month;
-    uint32_t day;
-    uint32_t _unk2[2];
-    uint32_t hour;
-    uint32_t minute;
-    uint32_t second;
-    uint32_t _unk3[2];
-    uint32_t duration;
-    float    distance;
-    uint32_t calories;
-    uint32_t file_id;           // does not exist for swim entries
-    uint32_t swolf;             // only exists for swim entries
-    uint32_t strokes_per_lap;   // only exists for swim entries
-} TT_HISTORY_ENTRY;
-
-typedef struct __attribute__((packed))
-{
-    uint32_t _unk1;
-    uint16_t activity;
-    uint16_t entry_length;
-    uint32_t entry_count;
-    uint8_t  data[1];
-} TT_HISTORY_FILE;
 
 void do_list_history(libusb_device_handle *device)
 {
@@ -1450,23 +1444,23 @@ void do_list_history(libusb_device_handle *device)
 
         switch (history->activity)
         {
-        case ACTIVITY_RUNNING:   printf("Runnning:\r\n");  break;
-        case ACTIVITY_CYCLING:   printf("Cycling:\r\n");   break;
-        case ACTIVITY_SWIMMING:  printf("Swimming:\r\n");  break;
-        case ACTIVITY_TREADMILL: printf("Treadmill:\r\n"); break;
-        case ACTIVITY_FREESTYLE: printf("Freestyle:\r\n"); break;
+        case ACTIVITY_RUNNING:   write_log(0, "Runnning:\n");  break;
+        case ACTIVITY_CYCLING:   write_log(0, "Cycling:\n");   break;
+        case ACTIVITY_SWIMMING:  write_log(0, "Swimming:\n");  break;
+        case ACTIVITY_TREADMILL: write_log(0, "Treadmill:\n"); break;
+        case ACTIVITY_FREESTYLE: write_log(0, "Freestyle:\n"); break;
         }
 
         ptr = history->data;
         for (i = 0; i < history->entry_count; ++i)
         {
             TT_HISTORY_ENTRY *entry = (TT_HISTORY_ENTRY*)ptr;
-            printf("%d: %04d/%02d/%02d %02d:%02d:%02d, %4ds, %8.2fm, %4d calories", i + 1,
+            write_log(0, "%d: %04d/%02d/%02d %02d:%02d:%02d, %4ds, %8.2fm, %4d calories", i + 1,
                 entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second,
                 entry->duration, entry->distance, entry->calories);
             if (entry->activity == ACTIVITY_SWIMMING)
-                printf(", %d swolf, %d spl", entry->swolf, entry->strokes_per_lap);
-            printf("\n");
+                write_log(0, ", %d swolf, %d spl", entry->swolf, entry->strokes_per_lap);
+            write_log(0, "\n");
 
             ptr += history->entry_length;
         }
@@ -1662,8 +1656,8 @@ void daemonise(const char *user)
     /* we must be run as root */
     if (getuid() != 0)
     {
-        fprintf(stderr, "This daemon must be run as root. The --runas=[USER[:GROUP]] parameter can be\n");
-        fprintf(stderr, "used to run as an unprivileged user after daemon initialisation\n");
+        write_log(1, "This daemon must be run as root. The --runas=[USER[:GROUP]] parameter can be\n");
+        write_log(1, "used to run as an unprivileged user after daemon initialisation\n");
         exit(1);
     }
 
@@ -1887,11 +1881,6 @@ int main(int argc, char *argv[])
         { "auto",           no_argument,       0, 'a' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
-#ifdef UNSAFE
-        { "list",           no_argument,       0, 'l' },
-        { "read",           required_argument, 0, 'r' },
-        { "write",          required_argument, 0, 'w' },
-#endif
         { "device",         required_argument, 0, 'd' },
         { "activity-store", required_argument, 0, 's' },
         { "set-name",       required_argument, 0, 1   },
@@ -1899,14 +1888,19 @@ int main(int argc, char *argv[])
         { "runas",          required_argument, 0, 3   },
         { "delete-history", required_argument, 0, 4   },
         { "update-race",    required_argument, 0, 5   },
+#ifdef UNSAFE
+        { "list",           no_argument,       0, 'l' },
+        { "read",           required_argument, 0, 'r' },
+        { "write",          required_argument, 0, 'w' },
+#endif
     };
 
     /* check the command-line options */
-    while ((opt = getopt_long(argc, argv, "ah"
+    while ((opt = getopt_long(argc, argv,
 #ifdef UNSAFE
         "lr:w:"
 #endif
-        "d:s:v", long_options, &option_index)) != -1)
+        "ahd:s:v", long_options, &option_index)) != -1)
     {
         switch (opt)
         {
@@ -1922,11 +1916,11 @@ int main(int argc, char *argv[])
             options.run_as = 1;
             options.run_as_user = optarg;
             break;
-        case 4:
+        case 4:     /* delete history entry */
             options.delete_history = 1;
             options.history_entry = optarg;
             break;
-        case 5:
+        case 5:     /* redefine a race mysports entry */
             options.update_race = 1;
             options.race = optarg;
             break;
@@ -1985,6 +1979,12 @@ int main(int argc, char *argv[])
         write_log(1, "File argument is only used to read/write files\n");
         return 1;
     }
+#else
+    if (optind <= argc)
+    {
+        write_log("Invalid parameter specified: %s", argv[optind]);
+        return 1;
+    }
 #endif
 
     if (!options.activity_store)
@@ -2010,9 +2010,9 @@ int main(int argc, char *argv[])
         !options.update_firmware && !options.update_gps && !options.show_versions &&
         !options.get_activities && !options.get_time && !options.set_time &&
         !options.list_devices && !options.get_name && !options.set_name &&
-        !options.list_formats && !options.set_formats && !options.daemon_mode &&
-        !options.list_races && !options.list_history && !options.delete_history &&
-        !options.update_race && !options.clear_data)
+        !options.list_formats && !options.set_formats && !options.list_races &&
+        !options.list_history && !options.delete_history && !options.update_race &&
+        !options.clear_data)
     {
         help(argv);
         return 0;
