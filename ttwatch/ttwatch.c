@@ -1982,7 +1982,7 @@ int main(int argc, char *argv[])
 #else
     if (optind <= argc)
     {
-        write_log("Invalid parameter specified: %s", argv[optind]);
+        write_log(1, "Invalid parameter specified: %s", argv[optind]);
         return 1;
     }
 #endif
