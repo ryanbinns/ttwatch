@@ -12,7 +12,6 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 
     fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles\r\n", file);
 
-    if (ttbin->activity != ACTIVITY_SWIMMING)
     switch (ttbin->activity)
     {
     case ACTIVITY_RUNNING:
