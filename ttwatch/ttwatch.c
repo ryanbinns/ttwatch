@@ -81,6 +81,10 @@ typedef struct
     int delete_history;
     char *history_entry;
     int clear_data;
+    int display_settings;
+    int setting;
+    char *setting_spec;
+    int list_settings;
 } OPTIONS;
 
 /*************************************************************************************************/
@@ -1599,6 +1603,394 @@ void do_clear_data(libusb_device_handle *device)
     free(files);
 }
 
+void do_display_settings(libusb_device_handle* device)
+{
+    uint32_t size;
+    uint8_t *data;
+    TT_MANIFEST_FILE *manifest;
+    uint32_t i;
+    uint32_t j;
+    struct MANIFEST_ENUM_DEFINITION *enum_defn;
+    struct MANIFEST_INT_DEFINITION *int_defn;
+    struct MANIFEST_FLOAT_DEFINITION *float_defn;
+    struct MANIFEST_DEFINITION** definitions = 0;
+    uint32_t defn_count = 0;
+
+    /* get the current firmware version */
+    uint32_t version = get_firmware_version(device);
+    if (!version)
+    {
+        write_log(1, "Unable to read watch version\n");
+        return;
+    }
+
+    /* check to make sure we support this firmware version */
+    for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
+    {
+        if (MANIFEST_DEFINITIONS[i].version == version)
+        {
+            definitions = MANIFEST_DEFINITIONS[i].definitions;
+            defn_count  = MANIFEST_DEFINITIONS[i].count;
+            break;
+        }
+    }
+    if (!definitions)
+    {
+        write_log(1, "Firmware version not supported\n");
+        return;
+    }
+
+    /* read the manifest file */
+    data = read_whole_file(device, FILE_MANIFEST1, &size);
+    if (!data)
+        return;
+    manifest = (TT_MANIFEST_FILE*)data;
+
+    /* loop through the manifest entries and display them */
+    for (i = 0; i < manifest->entry_count; ++i)
+    {
+        if (i >= defn_count)
+            continue;
+
+        if (!definitions[i])
+            continue;
+
+        write_log(0, "%s = ", definitions[i]->name);
+        switch (definitions[i]->type)
+        {
+        case MANIFEST_TYPE_ENUM:
+            enum_defn = (struct MANIFEST_ENUM_DEFINITION*)definitions[i];
+            for (j = 0; j < enum_defn->value_count; ++j)
+            {
+                if (manifest->entries[i].value == enum_defn->values[j].value)
+                {
+                    write_log(0, "%s", enum_defn->values[j].name);
+                    break;
+                }
+            }
+            if (j >= enum_defn->value_count)
+                write_log(0, "unknown (%u)", manifest->entries[i].value);
+            break;
+        case MANIFEST_TYPE_INT:
+            int_defn = (struct MANIFEST_INT_DEFINITION*)definitions[i];
+            write_log(0, "%d %s", manifest->entries[i].value, int_defn->units);
+            break;
+        case MANIFEST_TYPE_FLOAT:
+            float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
+            write_log(0, "%.2f %s", manifest->entries[i].value / float_defn->scaling_factor, float_defn->units);
+            break;
+        }
+        write_log(0, "\n");
+    }
+
+    free(data);
+}
+
+void do_set_setting(libusb_device_handle *device, const char *setting, const char *value)
+{
+    uint32_t size;
+    uint8_t *data;
+    uint32_t i;
+    int j;
+    TT_MANIFEST_FILE *manifest;
+    struct MANIFEST_ENUM_DEFINITION *enum_defn;
+    struct MANIFEST_INT_DEFINITION *int_defn;
+    struct MANIFEST_FLOAT_DEFINITION *float_defn;
+    uint32_t int_val;
+    float float_val;
+    struct MANIFEST_DEFINITION** definitions = 0;
+    uint32_t defn_count = 0;
+
+    /* get the current firmware version */
+    uint32_t version = get_firmware_version(device);
+    if (!version)
+    {
+        write_log(1, "Unable to read watch version\n");
+        return;
+    }
+
+    /* check to make sure we support this firmware version */
+    for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
+    {
+        if (MANIFEST_DEFINITIONS[i].version == version)
+        {
+            definitions = MANIFEST_DEFINITIONS[i].definitions;
+            defn_count  = MANIFEST_DEFINITIONS[i].count;
+            break;
+        }
+    }
+    if (!definitions)
+    {
+        write_log(1, "Firmware version not supported\n");
+        return;
+    }
+
+    /* check to see if the setting exists */
+    for (i = 0; i < defn_count; ++i)
+    {
+        if (!definitions[i])
+            continue;
+
+        if (strcasecmp(definitions[i]->name, setting))
+            continue;
+
+        if (!definitions[i]->writable)
+        {
+            write_log(1, "Setting is not writable: %s\n", setting);
+            return;
+        }
+
+        data = read_whole_file(device, FILE_MANIFEST1, &size);
+        if (!data)
+        {
+            write_log(1, "Unable to read watch settings\n");
+            return;
+        }
+        manifest = (TT_MANIFEST_FILE*)data;
+
+        switch (definitions[i]->type)
+        {
+        case MANIFEST_TYPE_ENUM:
+            enum_defn = (struct MANIFEST_ENUM_DEFINITION*)definitions[i];
+            for (j = 0; j < enum_defn->value_count; ++j)
+            {
+                if (!strcasecmp(value, enum_defn->values[j].name))
+                {
+                    manifest->entries[i].value = enum_defn->values[j].value;
+                    break;
+                }
+            }
+            if (j >= enum_defn->value_count)
+            {
+                write_log(0, "Unknown value: %s\n", value);
+                free(data);
+                return;
+            }
+            break;
+        case MANIFEST_TYPE_INT:
+            int_defn = (struct MANIFEST_INT_DEFINITION*)definitions[i];
+            if (sscanf(value, "%u", &int_val) != 1)
+            {
+                write_log(1, "Invalid value specified: %s\n", value);
+                free(data);
+                return;
+            }
+            if ((int_val < int_defn->min) || (int_val > int_defn->max))
+            {
+                write_log(1, "Valid out of range: %u (%u <= value <= %u)\n", int_val,
+                    int_defn->min, int_defn->max);
+                free(data);
+                return;
+            }
+            manifest->entries[i].value = int_val;
+            break;
+        case MANIFEST_TYPE_FLOAT:
+            float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
+            if (sscanf(value, "%f", &float_val) != 1)
+            {
+                write_log(1, "Invalid value specified: %s\n", value);
+                free(data);
+                return;
+            }
+            if ((float_val < float_defn->min) || (float_val > float_defn->max))
+            {
+                write_log(1, "Valid out of range: %.3f (%.3f <= value <= %.3f)\n", float_val,
+                    float_defn->min, float_defn->max);
+                free(data);
+                return;
+            }
+            manifest->entries[i].value = (uint32_t)(float_val * float_defn->scaling_factor);
+            break;
+        }
+        if (write_verify_whole_file(device, FILE_MANIFEST1, data, size))
+            write_log(1, "Unable to write watch settings\n");
+
+        free(data);
+        return;
+    }
+    write_log(1, "Unknown setting: %s\n", setting);
+}
+
+void do_get_setting(libusb_device_handle *device, const char *setting)
+{
+    uint32_t size;
+    uint8_t *data;
+    uint32_t i;
+    int j;
+    TT_MANIFEST_FILE *manifest;
+    struct MANIFEST_ENUM_DEFINITION *enum_defn;
+    struct MANIFEST_INT_DEFINITION *int_defn;
+    struct MANIFEST_FLOAT_DEFINITION *float_defn;
+    struct MANIFEST_DEFINITION** definitions = 0;
+    uint32_t defn_count = 0;
+
+    /* get the current firmware version */
+    uint32_t version = get_firmware_version(device);
+    if (!version)
+    {
+        write_log(1, "Unable to read watch version\n");
+        return;
+    }
+
+    /* check to make sure we support this firmware version */
+    for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
+    {
+        if (MANIFEST_DEFINITIONS[i].version == version)
+        {
+            definitions = MANIFEST_DEFINITIONS[i].definitions;
+            defn_count  = MANIFEST_DEFINITIONS[i].count;
+            break;
+        }
+    }
+    if (!definitions)
+    {
+        write_log(1, "Firmware version not supported\n");
+        return;
+    }
+
+    /* check to see if the setting exists */
+    for (i = 0; i < defn_count; ++i)
+    {
+        if (!definitions[i])
+            continue;
+
+        if (strcasecmp(definitions[i]->name, setting))
+            continue;
+
+        data = read_whole_file(device, FILE_MANIFEST1, &size);
+        if (!data)
+        {
+            write_log(1, "Unable to read watch settings\n");
+            return;
+        }
+        manifest = (TT_MANIFEST_FILE*)data;
+
+        write_log(0, "%s = ", definitions[i]->name);
+        switch (definitions[i]->type)
+        {
+        case MANIFEST_TYPE_ENUM:
+            enum_defn = (struct MANIFEST_ENUM_DEFINITION*)definitions[i];
+            for (j = 0; j < enum_defn->value_count; ++j)
+            {
+                if (manifest->entries[i].value == enum_defn->values[j].value)
+                {
+                    write_log(0, "%s", enum_defn->values[j].name);
+                    break;
+                }
+            }
+            if (j >= enum_defn->value_count)
+                write_log(0, "unknown (%u)", manifest->entries[i].value);
+            break;
+        case MANIFEST_TYPE_INT:
+            int_defn = (struct MANIFEST_INT_DEFINITION*)definitions[i];
+            write_log(0, "%d %s", manifest->entries[i].value, int_defn->units);
+            break;
+        case MANIFEST_TYPE_FLOAT:
+            float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
+            write_log(0, "%.2f %s", manifest->entries[i].value / float_defn->scaling_factor, float_defn->units);
+            break;
+        }
+        write_log(0, "\n");
+
+        free(data);
+        return;
+    }
+    write_log(1, "Unknown setting: %s\n", setting);
+}
+
+void do_list_settings(libusb_device_handle *device)
+{
+    uint32_t i;
+    int j;
+    TT_MANIFEST_FILE *manifest;
+    struct MANIFEST_ENUM_DEFINITION *enum_defn;
+    struct MANIFEST_INT_DEFINITION *int_defn;
+    struct MANIFEST_FLOAT_DEFINITION *float_defn;
+    struct MANIFEST_DEFINITION** definitions = 0;
+    uint32_t defn_count = 0;
+
+    /* get the current firmware version */
+    uint32_t version = get_firmware_version(device);
+    if (!version)
+    {
+        write_log(1, "Unable to read watch version\n");
+        return;
+    }
+
+    /* check to make sure we support this firmware version */
+    for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
+    {
+        if (MANIFEST_DEFINITIONS[i].version == version)
+        {
+            definitions = MANIFEST_DEFINITIONS[i].definitions;
+            defn_count  = MANIFEST_DEFINITIONS[i].count;
+            break;
+        }
+    }
+    if (!definitions)
+    {
+        write_log(1, "Firmware version not supported\n");
+        return;
+    }
+
+    for (i = 0; i < defn_count; ++i)
+    {
+        if (!definitions[i])
+            continue;
+
+        write_log(0, "%s = ", definitions[i]->name);
+        switch (definitions[i]->type)
+        {
+        case MANIFEST_TYPE_ENUM:
+            enum_defn = (struct MANIFEST_ENUM_DEFINITION*)definitions[i];
+            write_log(0, "( ");
+            for (j = 0; j < enum_defn->value_count; ++j)
+            {
+                write_log(0, "%s", enum_defn->values[j].name);
+                if (j < enum_defn->value_count - 1)
+                    write_log(0, ", ");
+            }
+            write_log(0, " )");
+            break;
+        case MANIFEST_TYPE_INT:
+            int_defn = (struct MANIFEST_INT_DEFINITION*)definitions[i];
+            write_log(0, "integer");
+            if ((int_defn->min > 0) || (int_defn->max < 4294967295ul))
+            {
+                write_log(0, " (");
+                if (int_defn->min > 0)
+                    write_log(0, "%u <= ", int_defn->min);
+                write_log(0, "value");
+                if (int_defn->max < 4294967295ul)
+                    write_log(0, " <= %u", int_defn->max);
+                write_log(0, ")");
+            }
+            if (int_defn->units[0])
+                write_log(0, ", units = %s", int_defn->units);
+            break;
+        case MANIFEST_TYPE_FLOAT:
+            float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
+            write_log(0, "float");
+            if ((float_defn->min > 0) || (float_defn->max < 4294967.295f))
+            {
+                write_log(0, " (");
+                if (float_defn->min > 0)
+                    write_log(0, "%.3f <= ", float_defn->min);
+                write_log(0, "value");
+                if (float_defn->max < 4294967.295f)
+                    write_log(0, " <= %.3f", float_defn->max);
+                write_log(0, ")");
+            }
+            if (float_defn->units[0])
+                write_log(0, ", units = %s", float_defn->units);
+            break;
+        }
+        if (!definitions[i]->writable)
+            write_log(0, " READ-ONLY");
+        write_log(0, "\n");
+    }
+}
+
 void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
 {
     send_startup_message_group(device);
@@ -1751,8 +2143,9 @@ void help(char *argv[])
     write_log(0, "  -s, --activity-store=PATH Specify an alternate place for storing\n");
     write_log(0, "                               downloaded ttbin activity files\n");
     write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --set-time\"\n");
+    write_log(0, "      --all-settings         List all the current settings on the watch\n");
     write_log(0, "      --clear-data           Delete all activities and history data from the\n");
-    write_log(0, "                               watch. Does NOT save the data before delete it\n");
+    write_log(0, "                               watch. Does NOT save the data before deleting it\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
     write_log(0, "      --delete-history=[ENTRY] Deletes a single history entry from the watch\n");
     write_log(0, "  -d, --device=NUMBER|STRING Specify which device to use (see below)\n");
@@ -1779,9 +2172,14 @@ void help(char *argv[])
     write_log(0, "                               when processing activity files\n");
     write_log(0, "      --set-name=STRING      Sets a new watch name\n");
     write_log(0, "      --set-time             Updates the time on the watch\n");
+    write_log(0, "      --settings             Lists all available settings and their valid\n");
+    write_log(0, "                               values and physical units\n");
+    write_log(0, "      --setting [SETTING[=VALUE]] Gets or sets a setting on the watch. To get\n");
+    write_log(0, "                               the current value of a setting, simply leave off\n");
+    write_log(0, "                               the \"=VALUE\" part\n");
     write_log(0, "      --update-fw            Checks for available firmware updates from\n");
     write_log(0, "                               Tomtom's website and updates the watch if\n");
-    write_log(0, "                               newer firmware is found.\n");
+    write_log(0, "                               newer firmware is found\n");
     write_log(0, "      --update-gps           Updates the GPSQuickFix data on the watch\n");
     write_log(0, "      --update-race=[RACE]   Update a race\n");
     write_log(0, "  -v, --version              Shows firmware version and device identifiers\n");
@@ -1805,6 +2203,7 @@ void help(char *argv[])
     write_log(0, "error is printed and execution is aborted if an attempt to match a watch\n");
     write_log(0, "by index is performed when starting the daemon.\n");
 #ifdef UNSAFE
+    write_log(0, "\n");
     write_log(0, "Read and Write commands require the file ID to be specified. Available\n");
     write_log(0, "IDs can be found using the List command. If a file ID of 0 is specified,\n");
     write_log(0, "the read command will read all available files and store them in files in\n");
@@ -1878,6 +2277,8 @@ int main(int argc, char *argv[])
         { "list-races",     no_argument,       &options.list_races,      1 },
         { "list-history",   no_argument,       &options.list_history,    1 },
         { "clear-data",     no_argument,       &options.clear_data,      1 },
+        { "all-settings",   no_argument,       &options.display_settings,1 },
+        { "settings",       no_argument,       &options.list_settings,   1 },
         { "auto",           no_argument,       0, 'a' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
@@ -1888,6 +2289,7 @@ int main(int argc, char *argv[])
         { "runas",          required_argument, 0, 3   },
         { "delete-history", required_argument, 0, 4   },
         { "update-race",    required_argument, 0, 5   },
+        { "setting",        required_argument, 0, 6   },
 #ifdef UNSAFE
         { "list",           no_argument,       0, 'l' },
         { "read",           required_argument, 0, 'r' },
@@ -1923,6 +2325,10 @@ int main(int argc, char *argv[])
         case 5:     /* redefine a race mysports entry */
             options.update_race = 1;
             options.race = optarg;
+            break;
+        case 6:     /* get or set a setting on the watch */
+            options.setting = 1;
+            options.setting_spec = optarg;
             break;
         case 'a':   /* auto mode */
             options.update_firmware = 1;
@@ -1965,7 +2371,7 @@ int main(int argc, char *argv[])
 
 #ifdef UNSAFE
     /* keep track of the file argument if one was provided */
-    if (optind <= argc)
+    if (optind < argc)
         options.file = argv[optind];
 
     /* make sure we've got compatible command-line options */
@@ -1980,9 +2386,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 #else
-    if (optind <= argc)
+    if (optind < argc)
     {
-        write_log("Invalid parameter specified: %s", argv[optind]);
+        write_log(0, "Invalid parameter specified: %s", argv[optind]);
         return 1;
     }
 #endif
@@ -2012,7 +2418,8 @@ int main(int argc, char *argv[])
         !options.list_devices && !options.get_name && !options.set_name &&
         !options.list_formats && !options.set_formats && !options.list_races &&
         !options.list_history && !options.delete_history && !options.update_race &&
-        !options.clear_data)
+        !options.clear_data && !options.display_settings && !options.setting &&
+        !options.list_settings)
     {
         help(argv);
         return 0;
@@ -2200,6 +2607,24 @@ int main(int argc, char *argv[])
 
     if (options.clear_data)
         do_clear_data(device);
+
+    if (options.display_settings)
+        do_display_settings(device);
+
+    if (options.setting)
+    {
+        char *str = strchr(options.setting_spec, '=');
+        if (str)
+        {
+            *str = 0;
+            do_set_setting(device, options.setting_spec, ++str);
+        }
+        else
+            do_get_setting(device, options.setting_spec);
+    }
+
+    if (options.list_settings)
+        do_list_settings(device);
 
     libusb_release_interface(device, 0);
 

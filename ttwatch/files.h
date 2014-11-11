@@ -78,3 +78,19 @@ typedef struct __attribute__((packed))
     uint8_t  data[0];   // cannot be TT_HISTORY_ENTRY's because they are variable size...
 } TT_HISTORY_FILE;
 
+/*****************************************************************************/
+
+#include "manifest_definitions.h"
+
+struct
+{
+    uint32_t version;
+    uint32_t count;
+    struct MANIFEST_DEFINITION **definitions;
+} MANIFEST_DEFINITIONS[] =
+{
+    { 0x00010819, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
+};
+
+#define MANIFEST_DEFINITION_COUNT (1)
+

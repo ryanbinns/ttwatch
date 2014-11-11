@@ -11,6 +11,8 @@ $(OUTPUT): $(SRC:.c=.o) ../ttbin/libttbin.a
 	@echo Linking $(OUTPUT)...
 	@$(CC) -o $(OUTPUT) $(SRC:.c=.o) $(LDFLAGS)
 
+ttwatch.o: manifest_definitions.h
+
 %.o: %.c
 	@echo Compiling $@...
 	@$(CC) -c $(CFLAGS) $< -o $*.o
@@ -20,6 +22,9 @@ $(OUTPUT): $(SRC:.c=.o) ../ttbin/libttbin.a
 	@sed -e 's/.*://' -e 's/\\$$//' < $*.d.tmp | fmt -1 | \
 	  sed -e 's/^ *//' -e 's/$$/:/' >> $*.d
 	@rm -f $*.d.tmp
+
+manifest_definitions.h: manifest.txt make_manifest.pl
+	@./make_manifest.pl <$< >$@
 
 clean:
 	@rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d)
