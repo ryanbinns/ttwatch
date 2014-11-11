@@ -132,7 +132,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             }
             fputs(        "                        <Extensions>\r\n"
                           "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
-            fprintf(file, "                                <Speed>%.6f</Speed>\r\n", ttbin->gps_records[j].speed);
+            fprintf(file, "                                <Speed>%.2f</Speed>\r\n", ttbin->gps_records[j].speed);
             fputs(        "                            </TPX>\r\n"
                           "                        </Extensions>\r\n"
                           "                    </Trackpoint>\r\n", file);
