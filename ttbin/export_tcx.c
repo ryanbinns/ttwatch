@@ -116,7 +116,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
             strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&ttbin->gps_records[j].timestamp));
 
-            fputs(        "                    <TrackPoint>\r\n", file);
+            fputs(        "                    <Trackpoint>\r\n", file);
             fprintf(file, "                        <Time>%s</Time>\r\n", timestr);
             fputs(        "                        <Position>\r\n", file);
             fprintf(file, "                            <LatitudeDegrees>%.7f</LatitudeDegrees>\r\n", ttbin->gps_records[j].latitude);
@@ -132,10 +132,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             }
             fputs(        "                        <Extensions>\r\n"
                           "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
-            fprintf(file, "                                <Speed>%.6f</Speed>\r\n", ttbin->gps_records[j].speed);
+            fprintf(file, "                                <Speed>%.2f</Speed>\r\n", ttbin->gps_records[j].speed);
             fputs(        "                            </TPX>\r\n"
                           "                        </Extensions>\r\n"
-                          "                    </TrackPoint>\r\n", file);
+                          "                    </Trackpoint>\r\n", file);
             ++j;
         }
         fputs(        "                    <Extensions>\r\n"
@@ -161,6 +161,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                   "            </Creator>\r\n"
                   "        </Activity>\r\n"
                   "    </Activities>\r\n"
-                  "<TrainingCenterDatabase>\r\n", file);
+                  "</TrainingCenterDatabase>\r\n", file);
 }
 

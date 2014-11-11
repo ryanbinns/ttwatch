@@ -31,7 +31,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                     ++current_lap;
             }
 
-            fprintf(file, "%u,%d,%d,%.2f,%.2f,%d,%.6f,%.6f,%.2f,",
+            fprintf(file, "%u,%d,%d,%.5f,%.2f,%d,%.7f,%.7f,%.2f,",
                 i, ttbin->activity, current_lap, record->cum_distance, record->speed,
                 record->calories, record->latitude, record->longitude, record->elevation);
             if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
