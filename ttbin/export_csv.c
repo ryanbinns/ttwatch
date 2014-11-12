@@ -7,7 +7,7 @@
 
 void export_csv(TTBIN_FILE *ttbin, FILE *file)
 {
-    uint32_t i;
+    uint32_t i, steps_prev = 0;
     uint32_t current_lap = 1;
 
     fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles\r\n", file);
@@ -52,7 +52,8 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             fprintf(file, "%u,7,1,%.2f,,%d,,,,", i, record->distance, record->calories);
             if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
                 fprintf(file, "%d", ttbin->heart_rate_records[i].heart_rate);
-            fprintf(file, ",%d\r\n", record->steps);
+            fprintf(file, ",%d\r\n", record->steps - steps_prev);
+            steps_prev = record->steps;
         }
         break;
 
