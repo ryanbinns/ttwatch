@@ -9,8 +9,9 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t i, steps_prev = 0;
     uint32_t current_lap = 1;
+    char timestr[32];
 
-    fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles\r\n", file);
+    fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles,localtime\r\n", file);
 
     switch (ttbin->activity)
     {
@@ -31,12 +32,14 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                     ++current_lap;
             }
 
+            strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->timestamp));
+
             fprintf(file, "%u,%d,%d,%.5f,%.2f,%d,%.7f,%.7f,%.2f,",
                 i, ttbin->activity, current_lap, record->cum_distance, record->speed,
                 record->calories, record->latitude, record->longitude, record->elevation);
             if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
                 fprintf(file, "%d", ttbin->heart_rate_records[i].heart_rate);
-            fprintf(file, ",%d\r\n", record->cycles);
+            fprintf(file, ",%d,%s\r\n", record->cycles, timestr);
         }
         break;
 
@@ -49,10 +52,12 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             if (record->timestamp == 0)
                 continue;
 
+            strftime(timestr, sizeof(timestr), "%FT%X", gmtime(&record->timestamp));
+
             fprintf(file, "%u,7,1,%.2f,,%d,,,,", i, record->distance, record->calories);
             if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
                 fprintf(file, "%d", ttbin->heart_rate_records[i].heart_rate);
-            fprintf(file, ",%d\r\n", record->steps - steps_prev);
+            fprintf(file, ",%d,%s\r\n", record->steps - steps_prev, timestr);
             steps_prev = record->steps;
         }
         break;
@@ -66,8 +71,11 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             if (record->timestamp == 0)
                 continue;
 
-            fprintf(file, "%u,2,%d,%.2f,,%d,,,,,%d\r\n",
-                i, record->completed_laps + 1, record->total_distance, record->total_calories, record->strokes * 60);
+            strftime(timestr, sizeof(timestr), "%FT%X", gmtime(&record->timestamp));
+
+            fprintf(file, "%u,2,%d,%.2f,,%d,,,,,%d,%s\r\n",
+                i, record->completed_laps + 1, record->total_distance,
+                record->total_calories, record->strokes * 60, timestr);
         }
         break;
     }
