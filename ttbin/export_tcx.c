@@ -91,7 +91,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         {
             fputs(        "                <AverageHeartRateBpm>\r\n", file);
             fprintf(file, "                    <Value>%d</Value>\r\n",
-                (total_heart_rate / heart_rate_count));
+                (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count);
             fputs(        "                </AverageHeartRateBpm>\r\n", file);
             fputs(        "                <MaximumHeartRateBpm>\r\n", file);
             fprintf(file, "                    <Value>%d</Value>\r\n", max_heart_rate);
