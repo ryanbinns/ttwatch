@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    free(ttbin);
+    free_ttbin(ttbin);
 
     return 0;
 }

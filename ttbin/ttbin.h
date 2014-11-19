@@ -69,6 +69,22 @@ typedef struct
 
 typedef struct
 {
+    struct
+    {
+        float    distance;  /* metres */
+        uint32_t duration;  /* seconds */
+        char     name[17];  /* always null-terminated */
+    } setup;
+    struct
+    {
+        float    distance;  /* metres */
+        uint32_t duration;  /* seconds */
+        uint16_t calories;
+    } result;
+} RACE_RECORD;
+
+typedef struct
+{
     uint8_t  file_version;
     uint8_t  firmware_version[4];
     uint16_t product_id;
@@ -79,6 +95,8 @@ typedef struct
     float    total_distance;
     uint32_t duration;          /* seconds, after adding 1 */
     uint16_t total_calories;
+
+    RACE_RECORD *race;
 
     uint32_t gps_record_count;
     GPS_RECORD *gps_records;
@@ -118,6 +136,8 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file);
 void export_tcx(TTBIN_FILE *ttbin, FILE *file);
 
 uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats);
+
+void free_ttbin(TTBIN_FILE *ttbin);
 
 /*****************************************************************************/
 

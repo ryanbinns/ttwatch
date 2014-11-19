@@ -32,6 +32,8 @@ const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT] = {
 #define TAG_LAP             (0x2f)
 #define TAG_TREADMILL       (0x32)
 #define TAG_SWIM            (0x34)
+#define TAG_RACE_SETUP      (0x3c)
+#define TAG_RACE_RESULT     (0x3d)
 
 typedef struct __attribute__((packed))
 {
@@ -115,6 +117,21 @@ typedef struct __attribute__((packed))
     uint16_t total_calories;
 } FILE_LAP_RECORD;
 
+typedef struct __attribute__((packed))
+{
+    uint32_t _unk[4];
+    float    distance;  /* metres */
+    uint32_t duration;  /* seconds */
+    char     name[16];  /* unused characters are zero */
+} FILE_RACE_SETUP_RECORD;
+
+typedef struct __attribute__((packed))
+{
+    uint32_t duration;  /* seconds */
+    float    distance;  /* metres */
+    uint16_t calories;
+} FILE_RACE_RESULT_RECORD;
+
 /*****************************************************************************/
 
 TTBIN_FILE *read_ttbin_file(FILE *file)
@@ -161,6 +178,8 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     FILE_TREADMILL_RECORD   *treadmill_record;
     FILE_SWIM_RECORD        *swim_record;
     FILE_LAP_RECORD         *lap_record;
+    FILE_RACE_SETUP_RECORD  *race_setup_record;
+    FILE_RACE_RESULT_RECORD *race_result_record;
 
     file = malloc(sizeof(TTBIN_FILE));
     memset(file, 0, sizeof(TTBIN_FILE));
@@ -273,6 +292,32 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             file->swim_records[index].strokes        = swim_record->strokes;
             file->swim_records[index].completed_laps = swim_record->completed_laps;
             file->swim_records[index].total_calories = swim_record->total_calories;
+            break;
+        case TAG_RACE_SETUP:
+            race_setup_record = (FILE_RACE_SETUP_RECORD*)data;
+
+            if (!file->race)
+            {
+                file->race = (RACE_RECORD*)malloc(sizeof(RACE_RECORD));
+                memset(file->race, 0, sizeof(RACE_RECORD));
+            }
+
+            file->race->setup.distance = race_setup_record->distance;
+            file->race->setup.duration = race_setup_record->duration;
+            memcpy(file->race->setup.name, race_setup_record->name, sizeof(race_setup_record->name));
+            break;
+        case TAG_RACE_RESULT:
+            race_result_record = (FILE_RACE_RESULT_RECORD*)data;
+
+            if (!file->race)
+            {
+                file->race = (RACE_RECORD*)malloc(sizeof(RACE_RECORD));
+                memset(file->race, 0, sizeof(RACE_RECORD));
+            }
+
+            file->race->result.distance = race_result_record->distance;
+            file->race->result.duration = race_result_record->duration;
+            file->race->result.calories = race_result_record->calories;
             break;
         default:
             break;
@@ -482,3 +527,26 @@ uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats)
     return formats;
 }
 
+/*****************************************************************************/
+
+void free_ttbin(TTBIN_FILE *ttbin)
+{
+    if (ttbin)
+    {
+        if (ttbin->race)
+            free(ttbin->race);
+        if (ttbin->gps_records)
+            free(ttbin->gps_records);
+        if (ttbin->status_records)
+            free(ttbin->status_records);
+        if (ttbin->treadmill_records)
+            free(ttbin->treadmill_records);
+        if (ttbin->swim_records)
+            free(ttbin->swim_records);
+        if (ttbin->lap_records)
+            free(ttbin->lap_records);
+        if (ttbin->heart_rate_records)
+            free(ttbin->heart_rate_records);
+        free(ttbin);
+    }
+}

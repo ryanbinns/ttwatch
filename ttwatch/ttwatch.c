@@ -682,7 +682,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
             write_log(1, "\n");
         }
 
-        free(ttbin);
+        free_ttbin(ttbin);
         free(data);
     }
 
