@@ -85,6 +85,14 @@ typedef struct
 
 typedef struct
 {
+    uint8_t  tag;
+    uint16_t length;
+    time_t   timestamp;     /* utc time */
+    uint8_t  *data;
+} UNKNOWN_RECORD;
+
+typedef struct
+{
     uint8_t  file_version;
     uint8_t  firmware_version[4];
     uint16_t product_id;
@@ -116,6 +124,9 @@ typedef struct
 
     uint32_t heart_rate_record_count;
     HEART_RATE_RECORD *heart_rate_records;
+
+    uint32_t unknown_record_count;
+    UNKNOWN_RECORD *unknown_records;
 } TTBIN_FILE;
 
 /*****************************************************************************/

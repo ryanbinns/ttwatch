@@ -52,7 +52,7 @@ typedef struct __attribute__((packed))
     int32_t local_time_offset;  /* seconds from UTC */
     uint8_t  _unk2;
     uint8_t  length_count;  /* number of RECORD_LENGTH objects to follow */
-    RECORD_LENGTH lengths[0];
+    RECORD_LENGTH lengths[1];
 } FILE_HEADER;
 
 typedef struct __attribute__((packed))
@@ -169,6 +169,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     uint8_t *end;
     TTBIN_FILE *file;
     int index;
+    unsigned length;
 
     FILE_HEADER             *file_header = 0;
     FILE_SUMMARY_RECORD     *summary_record;
@@ -189,11 +190,29 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     while (data < end)
     {
         uint8_t tag = *data++;
+
+        /* find the length of this tag */
+        if (tag != TAG_FILE_HEADER)
+        {
+            index = 0;
+            while ((index < file_header->length_count) && (file_header->lengths[index].tag < tag))
+                ++index;
+            if ((index < file_header->length_count) && (file_header->lengths[index].tag == tag))
+                length = file_header->lengths[index].length - 1;
+            else
+            {
+                free_ttbin(file);
+                return 0;
+            }
+        }
+        else
+            length = 0;
+
         switch (tag)
         {
         case TAG_FILE_HEADER:
             file_header = (FILE_HEADER*)data;
-            data += sizeof(FILE_HEADER) + file_header->length_count * sizeof(RECORD_LENGTH);
+            data += sizeof(FILE_HEADER) + (file_header->length_count - 1) * sizeof(RECORD_LENGTH);
 
             file->file_version    = file_header->file_version;
             memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
@@ -213,12 +232,13 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_STATUS:
             status_record = (FILE_STATUS_RECORD*)data;
             status_record->timestamp -= file->utc_offset;
-            file->status_records = realloc(file->status_records, (file->status_record_count + 1) * sizeof(STATUS_RECORD));
+            index = file->status_record_count;
 
-            file->status_records[file->status_record_count].status    = status_record->status;
-            file->status_records[file->status_record_count].activity  = status_record->activity;
-            file->status_records[file->status_record_count].timestamp = status_record->timestamp;
-            ++file->status_record_count;
+            realloc_array(file->status_records, file->status_record_count, index, sizeof(STATUS_RECORD));
+
+            file->status_records[index].status    = status_record->status;
+            file->status_records[index].activity  = status_record->activity;
+            file->status_records[index].timestamp = status_record->timestamp;
             break;
         case TAG_GPS:
             gps_record = (FILE_GPS_RECORD*)data;
@@ -252,7 +272,6 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_HEART_RATE:
             heart_rate_record = (FILE_HEART_RATE_RECORD*)data;
             heart_rate_record->timestamp -= file->utc_offset;
-
             index = heart_rate_record->timestamp - file->timestamp_utc;
 
             realloc_array(file->heart_rate_records, file->heart_rate_record_count, index, sizeof(HEART_RATE_RECORD));
@@ -323,30 +342,37 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             file->race->result.calories = race_result_record->calories;
             break;
         default:
+            index = file->unknown_record_count;
+
+            /* expand the array if necessary */
+            realloc_array(file->unknown_records, file->unknown_record_count, index, sizeof(UNKNOWN_RECORD));
+
+            file->unknown_records[index].tag = tag;
+            file->unknown_records[index].length = length;
+            if (file->gps_records)
+                file->unknown_records[index].timestamp = file->gps_records[file->gps_record_count - 1].timestamp;
+            else if (file->treadmill_records)
+                file->unknown_records[index].timestamp = file->treadmill_records[file->treadmill_record_count - 1].timestamp;
+            else if (file->swim_records)
+                file->unknown_records[index].timestamp = file->swim_records[file->swim_record_count - 1].timestamp;
+            else if (file->heart_rate_records)
+                file->unknown_records[index].timestamp = file->heart_rate_records[file->heart_rate_record_count - 1].timestamp;
+            else if (file->status_records)
+                file->unknown_records[index].timestamp = file->status_records[file->status_record_count - 1].timestamp;
+            file->unknown_records[index].data = malloc(length);
+            memcpy(file->unknown_records[index].data, data, length);
             break;
         }
 
         /* we should have got a file header first... */
         if (!file_header)
         {
-            free(file);
+            free_ttbin(file);
             return 0;
         }
 
-        /* increment the data by the correct amount */
-        if (tag != TAG_FILE_HEADER)
-        {
-            index = 0;
-            while ((index < file_header->length_count) && (file_header->lengths[index].tag < tag))
-                ++index;
-            if ((index < file_header->length_count) && (file_header->lengths[index].tag == tag))
-                data += file_header->lengths[index].length - 1;
-            else
-            {
-                free(file);
-                return 0;
-            }
-        }
+        /* skip to the next record */
+        data += length;
     }
 
     return file;
@@ -550,6 +576,13 @@ void free_ttbin(TTBIN_FILE *ttbin)
             free(ttbin->lap_records);
         if (ttbin->heart_rate_records)
             free(ttbin->heart_rate_records);
+        if (ttbin->unknown_records)
+        {
+            int i;
+            for (i = 0; i < ttbin->unknown_record_count; ++i)
+                free(ttbin->unknown_records[i].data);
+            free(ttbin->unknown_records);
+        }
         free(ttbin);
     }
 }
