@@ -200,6 +200,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             file->product_id      = file_header->product_id;
             file->timestamp_local = file_header->timestamp;
             file->timestamp_utc   = file_header->timestamp - file_header->local_time_offset;
+            file->utc_offset      = file_header->local_time_offset;
             break;
         case TAG_SUMMARY:
             summary_record = (FILE_SUMMARY_RECORD*)data;
@@ -211,6 +212,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             break;
         case TAG_STATUS:
             status_record = (FILE_STATUS_RECORD*)data;
+            status_record->timestamp -= file->utc_offset;
             file->status_records = realloc(file->status_records, (file->status_record_count + 1) * sizeof(STATUS_RECORD));
 
             file->status_records[file->status_record_count].status    = status_record->status;
@@ -249,8 +251,9 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             break;
         case TAG_HEART_RATE:
             heart_rate_record = (FILE_HEART_RATE_RECORD*)data;
+            heart_rate_record->timestamp -= file->utc_offset;
 
-            index = heart_rate_record->timestamp - file->timestamp_local;
+            index = heart_rate_record->timestamp - file->timestamp_utc;
 
             realloc_array(file->heart_rate_records, file->heart_rate_record_count, index, sizeof(HEART_RATE_RECORD));
 
@@ -268,8 +271,8 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             break;
         case TAG_TREADMILL:
             treadmill_record = (FILE_TREADMILL_RECORD*)data;
-
-            index = treadmill_record->timestamp - file->timestamp_local;
+            treadmill_record->timestamp -= file->utc_offset;
+            index = treadmill_record->timestamp - file->timestamp_utc;
 
             /* expand the array if necessary */
             realloc_array(file->treadmill_records, file->treadmill_record_count, index, sizeof(TREADMILL_RECORD));
@@ -281,8 +284,8 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             break;
         case TAG_SWIM:
             swim_record = (FILE_SWIM_RECORD*)data;
-
-            index = swim_record->timestamp - file->timestamp_local;
+            swim_record->timestamp -= file->utc_offset;
+            index = swim_record->timestamp - file->timestamp_utc;
 
             /* expand the array if necessary */
             realloc_array(file->swim_records, file->swim_record_count, index, sizeof(SWIM_RECORD));

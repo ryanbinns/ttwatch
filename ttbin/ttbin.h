@@ -34,12 +34,12 @@ typedef struct
 {
     uint8_t  status;        /* 0 = ready, 1 = active, 2 = paused, 3 = stopped */
     uint8_t  activity;      /* 0 = running, 1 = cycling, 2 = swimming, 7 = treadmill, 8 = freestyle */
-    time_t   timestamp;     /* local time */
+    time_t   timestamp;     /* utc time */
 } STATUS_RECORD;
 
 typedef struct
 {
-    time_t   timestamp;     /* local time */
+    time_t   timestamp;     /* utc time */
     float    distance;      /* metres */
     uint16_t calories;
     uint32_t steps;
@@ -47,7 +47,7 @@ typedef struct
 
 typedef struct
 {
-    time_t   timestamp;         /* local time */
+    time_t   timestamp;         /* utc time */
     float    total_distance;    /* metres */
     uint32_t strokes;           /* since the last report */
     uint32_t completed_laps;
@@ -63,7 +63,7 @@ typedef struct
 
 typedef struct
 {
-    time_t  timestamp;          /* local time */
+    time_t  timestamp;          /* utc time */
     uint8_t heart_rate;         /* bpm */
 } HEART_RATE_RECORD;
 
@@ -90,10 +90,11 @@ typedef struct
     uint16_t product_id;
     time_t   timestamp_local;
     time_t   timestamp_utc;
+    unsigned utc_offset;
 
     uint8_t  activity;
     float    total_distance;
-    uint32_t duration;          /* seconds, after adding 1 */
+    uint32_t duration;          /* seconds */
     uint16_t total_calories;
 
     RACE_RECORD *race;

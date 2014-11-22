@@ -52,7 +52,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             if (record->timestamp == 0)
                 continue;
 
-            strftime(timestr, sizeof(timestr), "%FT%X", gmtime(&record->timestamp));
+            strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->timestamp));
 
             fprintf(file, "%u,7,1,%.2f,,%d,,,,", i, record->distance, record->calories);
             if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
@@ -71,7 +71,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             if (record->timestamp == 0)
                 continue;
 
-            strftime(timestr, sizeof(timestr), "%FT%X", gmtime(&record->timestamp));
+            strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->timestamp));
 
             fprintf(file, "%u,2,%d,%.2f,,%d,,,,,%d,%s\r\n",
                 i, record->completed_laps + 1, record->total_distance,
