@@ -27,6 +27,13 @@ void replace_lap_list(TTBIN_FILE *ttbin, const char *laps)
     /* remove the current lap records */
     if (ttbin->lap_record_count)
     {
+        for (i = 0; i < ttbin->lap_record_count; ++i)
+        {
+            ttbin->lap_records[i]->prev->next = ttbin->lap_records[i]->next;
+            ttbin->lap_records[i]->next->prev = ttbin->lap_records[i]->prev;
+            free(ttbin->lap_records[i]->lap);
+            free(ttbin->lap_records[i]);
+        }
         free(ttbin->lap_records);
         ttbin->lap_records = 0;
         ttbin->lap_record_count = 0;
@@ -34,16 +41,31 @@ void replace_lap_list(TTBIN_FILE *ttbin, const char *laps)
 
     for (i = 0; i < ttbin->gps_record_count; ++i)
     {
+        TTBIN_RECORD *lap_record;
         /* skip records until we reach the desired lap distance */
-        if (ttbin->gps_records[i].cum_distance < end_of_lap)
+        if (ttbin->gps_records[i]->gps->cum_distance < end_of_lap)
             continue;
 
         /* right, so we need to add a lap marker here */
+        lap_record = insert_before(ttbin, ttbin->gps_records[i]);
+        /*ttbin->gps_records[i]->prev->next = (TTBIN_RECORD*)malloc(sizeof(TTBIN_RECORD));
+        ttbin->gps_records[i]->prev->next->next = ttbin->gps_records[i];
+        ttbin->gps_records[i]->prev->next->prev = ttbin->gps_records[i]->prev;
+        ttbin->gps_records[i]->prev = ttbin->gps_records[i]->prev->next;*/
+
+        lap_record->tag = TAG_LAP;
+        lap_record->length = 10;
+        lap_record->lap = (LAP_RECORD*)malloc(sizeof(LAP_RECORD));
+        lap_record->lap->total_time = i;
+        lap_record->lap->total_distance = ttbin->gps_records[i]->gps->cum_distance;;
+        lap_record->lap->total_calories = ttbin->gps_records[i]->gps->calories;
+
         ttbin->lap_records = realloc(ttbin->lap_records, (ttbin->lap_record_count + 1) * sizeof(LAP_RECORD));
-        ttbin->lap_records[ttbin->lap_record_count].total_time = i;
+        /*ttbin->lap_records[ttbin->lap_record_count].total_time = i;
         ttbin->lap_records[ttbin->lap_record_count].total_distance = ttbin->gps_records[i].cum_distance;
         ttbin->lap_records[ttbin->lap_record_count].total_calories = ttbin->gps_records[i].calories;
-        ++ttbin->lap_record_count;
+        ++ttbin->lap_record_count;*/
+        ttbin->lap_records[ttbin->lap_record_count++] = lap_record;
 
         /* scan the next lap distance */
         while (*ptr && (*ptr != ','))
@@ -84,7 +106,7 @@ void help(char *argv[])
     printf("  -h, --help         Print this help.\n");
     printf("  -l, --laps=[list]  Replace the laps recorded on the watch with a list of\n");
     printf("                       alternative laps.\n");
-    printf("  -a, --all          Output all supported filed formats.\n");
+    printf("  -a, --all          Output all supported file formats.\n");
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (OFFLINE_FORMATS[i].producer)
@@ -222,6 +244,15 @@ int main(int argc, char *argv[])
     /* set the list of laps if we have been asked to */
     if (set_laps)
         replace_lap_list(ttbin, lap_definitions);
+
+    {
+        FILE *f = fopen("test.ttbin", "w");
+        if (f)
+        {
+            write_ttbin_file(ttbin, f);
+            fclose(f);
+        }
+    }
 
     /* write the output files */
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)

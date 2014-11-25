@@ -9,6 +9,8 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t i;
     char timestr[32];
+    TTBIN_RECORD *record;
+    int heart_rate;
 
     if (!ttbin->gps_records)
         return;
@@ -39,7 +41,7 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
     }
     fputs("</name>\r\n        <trkseg>\r\n", file);
 
-    for (i = 0; i < ttbin->gps_record_count; ++i)
+    /*for (i = 0; i < ttbin->gps_record_count; ++i)
     {
         if ((ttbin->gps_records[i].timestamp != 0) &&
             !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
@@ -62,8 +64,39 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             }
             fputs(        "            </trkpt>\r\n", file);
         }
+    }*/
+    heart_rate = 0;
+    for (record = ttbin->first; record; record = record->next)
+    {
+        switch (record->tag)
+        {
+        case TAG_GPS:
+            /* this will happen if the GPS signal is lost or the activity is paused */
+            if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
+                continue;
+            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps->timestamp));
+            fprintf(file, "            <trkpt lon=\"%.6f\" lat=\"%.6f\">\r\n",
+                record->gps->longitude, record->gps->latitude);
+            fprintf(file, "                <ele>%d</ele>\r\n", (int)record->gps->elevation);
+            fputs(        "                <time>", file);
+            fputs(timestr, file);
+            fputs("</time>\r\n", file);
+            if (heart_rate > 0)
+            {
+                fputs("                <extensions>\r\n"
+                      "                    <gpxtpx:TrackPointExtension>\r\n", file);
+                fprintf(file, "                        <gpxtpx:hr>%d</gpxtpx:hr>\r\n", heart_rate);
+                fputs("                    </gpxtpx:TrackPointExtension>\r\n"
+                      "                </extensions>\r\n", file);
+            }
+            fputs(        "            </trkpt>\r\n", file);
+            break;
+        case TAG_HEART_RATE:
+            heart_rate = record->heart_rate->heart_rate;
+            break;
+        }
     }
 
-    fputs(        "        </trkseg>\r\n    </trk>\r\n</gpx>\r\n", file);
+    fputs("        </trkseg>\r\n    </trk>\r\n</gpx>\r\n", file);
 }
 

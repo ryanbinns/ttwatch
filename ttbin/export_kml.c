@@ -124,7 +124,7 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
         initial_time = 0;
         for (i = 0; i < ttbin->lap_record_count; ++i)
         {
-            LAP_RECORD *lap = &ttbin->lap_records[i];
+            LAP_RECORD *lap = ttbin->lap_records[i]->lap;
 
             fprintf(file,
                 "&lt;TR&gt;&lt;TH&gt;%d&lt;/TH&gt;&lt;TD&gt;%d&lt;/TD&gt;&lt;TD&gt;%.2f&lt;/TD&gt;"
@@ -177,15 +177,16 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
                   "                <altitudeMode>clamptoground</altitudeMode>\r\n", file);
     for (i = 0; i < ttbin->gps_record_count; ++i)
     {
-        if ((ttbin->gps_records[i].timestamp != 0) &&
-            !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+        if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+            !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
         {
-            strftime(text_buf, sizeof(text_buf), "%FT%X.000Z", gmtime(&ttbin->gps_records[i].timestamp));
+            strftime(text_buf, sizeof(text_buf), "%FT%X.000Z", gmtime(&ttbin->gps_records[i]->gps->timestamp));
             fputs(        "                <when>", file);
             fputs(        text_buf, file);
             fputs(        "</when>\r\n", file);
             fprintf(file, "                <gx:coord>%.6f %.6f %d</gx:coord>\r\n",
-                ttbin->gps_records[i].longitude, ttbin->gps_records[i].latitude, (int)ttbin->gps_records[i].elevation);
+                ttbin->gps_records[i]->gps->longitude, ttbin->gps_records[i]->gps->latitude,
+                (int)ttbin->gps_records[i]->gps->elevation);
         }
     }
     fputs(        "                <ExtendedData>\r\n"
@@ -195,40 +196,40 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
                   "                        <gx:SimpleArrayData name=\"calories\">\r\n", file);
     for (i = 0; i < ttbin->gps_record_count; ++i)
     {
-        if ((ttbin->gps_records[i].timestamp != 0) &&
-            !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
-            fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->gps_records[i].calories);
+        if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+            !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
+            fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->gps_records[i]->gps->calories);
     }
     fputs(        "                        </gx:SimpleArrayData>\r\n"
                   "                        <gx:SimpleArrayData name=\"distance\">\r\n", file);
     for (i = 0; i < ttbin->gps_record_count; ++i)
     {
-        if ((ttbin->gps_records[i].timestamp != 0) &&
-            !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+        if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+            !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
         {
             fprintf(file, "                            <gx:value>%.*f</gx:value>\r\n",
-                (ttbin->gps_records[i].cum_distance == 0.0f) ? 0 : (5 - (int)floor(log10(ttbin->gps_records[i].cum_distance))),
-                ttbin->gps_records[i].cum_distance);
+                (ttbin->gps_records[i]->gps->cum_distance == 0.0f) ? 0 : (5 - (int)floor(log10(ttbin->gps_records[i]->gps->cum_distance))),
+                ttbin->gps_records[i]->gps->cum_distance);
         }
     }
     fputs(        "                        </gx:SimpleArrayData>\r\n"
                   "                        <gx:SimpleArrayData name=\"speed\">\r\n", file);
     for (i = 0; i < ttbin->gps_record_count; ++i)
     {
-        if ((ttbin->gps_records[i].timestamp != 0) &&
-            !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+        if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+            !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
         {
-            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", ttbin->gps_records[i].speed);
+            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", ttbin->gps_records[i]->gps->speed);
         }
     }
     fputs(        "                        </gx:SimpleArrayData>\r\n"
                   "                        <gx:SimpleArrayData name=\"pace\">\r\n", file);
     for (i = 0; i < ttbin->gps_record_count; ++i)
     {
-        if ((ttbin->gps_records[i].timestamp != 0) &&
-            !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+        if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+            !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
         {
-            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", 1000.0f / (60.0f * ttbin->gps_records[i].speed));
+            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", 1000.0f / (60.0f * ttbin->gps_records[i]->gps->speed));
         }
     }
     fputs(        "                        </gx:SimpleArrayData>\r\n", file);
@@ -237,10 +238,10 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
         fputs(        "                        <gx:SimpleArrayData name=\"steps\">\r\n", file);
         for (i = 0; i < ttbin->gps_record_count; ++i)
         {
-            if ((ttbin->gps_records[i].timestamp != 0) &&
-                !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+            if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+                !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
             {
-                fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->gps_records[i].cycles);
+                fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->gps_records[i]->gps->cycles);
             }
         }
         fputs(        "                        </gx:SimpleArrayData>\r\n", file);
@@ -250,10 +251,10 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
         fputs(        "                        <gx:SimpleArrayData name=\"heartrate\">\r\n", file);
         for (i = 0; i < ttbin->heart_rate_record_count; ++i)
         {
-            if ((ttbin->gps_records[i].timestamp != 0) &&
-                !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
+            if ((ttbin->gps_records[i]->gps->timestamp != 0) &&
+                !((ttbin->gps_records[i]->gps->latitude == 0) && (ttbin->gps_records[i]->gps->longitude == 0)))
             {
-                fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->heart_rate_records[i].heart_rate);
+                fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->heart_rate_records[i]->heart_rate->heart_rate);
             }
         }
         fputs(        "                        </gx:SimpleArrayData>\r\n", file);
@@ -265,38 +266,38 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
                   "        <Placemark>\r\n"
                   "            <name>Start</name>\r\n", file);
     fprintf(file, "            <description>%.6f,%.6f</description>\r\n",
-        ttbin->gps_records[0].longitude, ttbin->gps_records[0].latitude);
+        ttbin->gps_records[0]->gps->longitude, ttbin->gps_records[0]->gps->latitude);
     fputs(        "            <styleUrl>#start-track</styleUrl>\r\n"
                   "            <Point>\r\n", file);
     fprintf(file, "                <coordinates>%.6f,%.6f</coordinates>\r\n",
-        ttbin->gps_records[0].longitude, ttbin->gps_records[0].latitude);
+        ttbin->gps_records[0]->gps->longitude, ttbin->gps_records[0]->gps->latitude);
     fputs(        "            </Point>\r\n"
                   "        </Placemark>\r\n"
                   "        <Placemark>\r\n"
                   "            <name>End</name>\r\n", file);
     fprintf(file, "            <description>%.6f,%.6f</description>\r\n",
-        ttbin->gps_records[ttbin->gps_record_count - 1].longitude,
-        ttbin->gps_records[ttbin->gps_record_count - 1].latitude);
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->longitude,
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->latitude);
     fputs(        "            <styleUrl>#end-track</styleUrl>\r\n"
                   "            <Point>\r\n", file);
     fprintf(file, "                <coordinates>%.6f,%.6f</coordinates>\r\n",
-        ttbin->gps_records[ttbin->gps_record_count - 1].longitude,
-        ttbin->gps_records[ttbin->gps_record_count - 1].latitude);
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->longitude,
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->latitude);
     fputs(        "            </Point>\r\n"
                   "        </Placemark>\r\n"
                   "        <Placemark>\r\n"
                   "            <name>Distance laps</name>\r\n", file);
     fprintf(file, "            <description>%.6f,%.6f</description>\r\n",
-        ttbin->gps_records[ttbin->gps_record_count - 1].longitude,
-        ttbin->gps_records[ttbin->gps_record_count - 1].latitude);
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->longitude,
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->latitude);
     fputs(        "            <styleUrl>#laps-balloon</styleUrl>\r\n"
                   "            <Point>\r\n", file);
     fprintf(file, "                <coordinates>%.6f,%.6f</coordinates>\r\n",
-        ttbin->gps_records[ttbin->gps_record_count - 1].longitude,
-        ttbin->gps_records[ttbin->gps_record_count - 1].latitude);
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->longitude,
+        ttbin->gps_records[ttbin->gps_record_count - 1]->gps->latitude);
     fputs(        "            </Point>\r\n"
                   "        </Placemark>\r\n"
                   "    </Document>\r\n"
-                  "</kml>\r\n", file);
+        "</kml>\r\n", file);
 }
 
