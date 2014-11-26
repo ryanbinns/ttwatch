@@ -150,13 +150,13 @@ TTBIN_RECORD *append_record(TTBIN_FILE *ttbin, uint8_t tag, uint16_t length)
     {
         record->prev = ttbin->last;
         ttbin->last->next = record;
-        ttbin->last = record;
     }
     else
     {
-        ttbin->first = ttbin->last = malloc(sizeof(TTBIN_RECORD));
         record->prev = 0;
+        ttbin->first = record;
     }
+    ttbin->last = record;
     record->next = 0;
     record->length = length;
     record->tag = tag;
@@ -171,9 +171,8 @@ TTBIN_RECORD *append_record(TTBIN_FILE *ttbin, uint8_t tag, uint16_t length)
 
 TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
 {
-    uint8_t *end;
+    const uint8_t *const end = data + size;
     TTBIN_FILE *file;
-    int index;
     unsigned length;
 
     FILE_HEADER             *file_header = 0;
@@ -189,45 +188,43 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
 
     TTBIN_RECORD *record;
 
+    /* check that the file is long enough */
+    if (size < (sizeof(FILE_HEADER) - sizeof(RECORD_LENGTH)))
+        return 0;
+
+    if (*data++ != TAG_FILE_HEADER)
+        return 0;
+
     file = malloc(sizeof(TTBIN_FILE));
     memset(file, 0, sizeof(TTBIN_FILE));
 
-    end = data + size;
+    file_header = (FILE_HEADER*)data;
+    data += sizeof(FILE_HEADER) + (file_header->length_count - 1) * sizeof(RECORD_LENGTH);
+    file->file_version    = file_header->file_version;
+    memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
+    file->product_id      = file_header->product_id;
+    file->timestamp_local = file_header->timestamp;
+    file->timestamp_utc   = file_header->timestamp - file_header->local_time_offset;
+    file->utc_offset      = file_header->local_time_offset;
 
-    while (data < end)
+    for (; data < end; data += length)
     {
+        unsigned index = 0;
         uint8_t tag = *data++;
 
         /* find the length of this tag */
-        if (tag != TAG_FILE_HEADER)
-        {
-            index = 0;
-            while ((index < file_header->length_count) && (file_header->lengths[index].tag < tag))
-                ++index;
-            if ((index < file_header->length_count) && (file_header->lengths[index].tag == tag))
-                length = file_header->lengths[index].length - 1;
-            else
-            {
-                free_ttbin(file);
-                return 0;
-            }
-        }
+        while ((index < file_header->length_count) && (file_header->lengths[index].tag < tag))
+            ++index;
+        if ((index < file_header->length_count) && (file_header->lengths[index].tag == tag))
+            length = file_header->lengths[index].length - 1;
         else
-            length = 0;
+        {
+            free_ttbin(file);
+            return 0;
+        }
 
         switch (tag)
         {
-        case TAG_FILE_HEADER:
-            file_header = (FILE_HEADER*)data;
-            data += sizeof(FILE_HEADER) + (file_header->length_count - 1) * sizeof(RECORD_LENGTH);
-
-            file->file_version    = file_header->file_version;
-            memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
-            file->product_id      = file_header->product_id;
-            file->timestamp_local = file_header->timestamp;
-            file->timestamp_utc   = file_header->timestamp - file_header->local_time_offset;
-            file->utc_offset      = file_header->local_time_offset;
-            break;
         case TAG_SUMMARY:
             summary_record = (FILE_SUMMARY_RECORD*)data;
 
@@ -239,12 +236,12 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         case TAG_STATUS:
             status_record = (FILE_STATUS_RECORD*)data;
             status_record->timestamp -= file->utc_offset;
-            index = file->status_record_count;
 
             record = append_record(file, tag, length);
             record->status = (STATUS_RECORD*)malloc(sizeof(STATUS_RECORD));
             record->status->status = status_record->status;
             record->status->activity = status_record->activity;
+            record->status->timestamp = status_record->timestamp;
             insert_pointer(file->status_records, file->status_record_count, record);
             break;
         case TAG_GPS:
@@ -321,7 +318,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record->race_setup->distance = race_setup_record->distance;
             record->race_setup->duration = race_setup_record->duration;
             memcpy(record->race_setup->name, race_setup_record->name, sizeof(race_setup_record->name));
-            file->race_setup = record->race_setup;
+            file->race_setup = record;
             break;
         case TAG_RACE_RESULT:
             race_result_record = (FILE_RACE_RESULT_RECORD*)data;
@@ -331,7 +328,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record->race_result->distance = race_result_record->distance;
             record->race_result->duration = race_result_record->duration;
             record->race_result->calories = race_result_record->calories;
-            file->race_result = record->race_result;
+            file->race_result = record;
             break;
         default:
             record = append_record(file, tag, length);
@@ -339,16 +336,6 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             memcpy(record->data, data, length);
             break;
         }
-
-        /* we should have got a file header first... */
-        if (!file_header)
-        {
-            free_ttbin(file);
-            return 0;
-        }
-
-        /* skip to the next record */
-        data += length;
     }
 
     return file;
@@ -360,7 +347,7 @@ void insert_length_record(FILE_HEADER *header, uint8_t tag, uint16_t length)
 {
     unsigned i = 0;
     /* look for the position to put the new tag (numerical order) */
-    while ((tag < header->lengths[i].tag) && (header->lengths[i].tag != 0))
+    while ((tag > header->lengths[i].tag) && (header->lengths[i].tag != 0))
         ++i;
 
     /* make sure we don't insert duplicates */
@@ -381,10 +368,14 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     int more;
     unsigned i;
     TTBIN_RECORD *record;
+    uint8_t tag = TAG_FILE_HEADER;
+    unsigned size;
+    FILE_HEADER *header;
+    FILE_SUMMARY_RECORD summary;
 
     /* create and write the file header */
-    unsigned size = sizeof(FILE_HEADER) + 29 * sizeof(RECORD_LENGTH);
-    FILE_HEADER *header = (FILE_HEADER*)malloc(size);
+    size = sizeof(FILE_HEADER) + 29 * sizeof(RECORD_LENGTH);
+    header = (FILE_HEADER*)malloc(size);
     memset(header, 0, size);
     header->file_version = ttbin->file_version;
     memcpy(header->firmware_version, ttbin->firmware_version, sizeof(header->firmware_version));
@@ -393,13 +384,15 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     header->timestamp2 = ttbin->timestamp_local;
     header->local_time_offset = ttbin->utc_offset;
     insert_length_record(header, TAG_FILE_HEADER, sizeof(FILE_HEADER) - sizeof(RECORD_LENGTH));
-    insert_length_record(header, TAG_SUMMARY, sizeof(FILE_SUMMARY_RECORD));
+    insert_length_record(header, TAG_SUMMARY, sizeof(FILE_SUMMARY_RECORD) + 1);
     for (record = ttbin->first; record; record = record->next)
-        insert_length_record(header, record->tag, record->length);
+        insert_length_record(header, record->tag, record->length + 1);
+    fwrite(&tag, 1, 1, file);
     fwrite(header, 1, sizeof(FILE_HEADER) + (header->length_count - 1) * sizeof(RECORD_LENGTH), file);
 
     for (record = ttbin->first; record; record = record->next)
     {
+        fwrite(&record->tag, 1, 1, file);
         switch (record->tag)
         {
         case TAG_STATUS: {
@@ -481,15 +474,28 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
         }
         case TAG_RACE_RESULT: {
             FILE_RACE_RESULT_RECORD r = {
-                record->race_result->distance,
                 record->race_result->duration,
+                record->race_result->distance,
                 record->race_result->calories
             };
             fwrite(&r, 1, sizeof(FILE_RACE_RESULT_RECORD), file);
             break;
         }
+        default: {
+            fwrite(record->data, 1, record->length, file);
+            break;
+        }
         }
     }
+
+    /* write the summary record */
+    summary.activity = ttbin->activity;
+    summary.distance = ttbin->total_distance;
+    summary.duration = ttbin->duration;
+    summary.calories = ttbin->total_calories;
+    tag = TAG_SUMMARY;
+    fwrite(&tag, 1, 1, file);
+    fwrite(&summary, 1, sizeof(FILE_SUMMARY_RECORD), file);
 }
 
 /*****************************************************************************/
@@ -534,6 +540,46 @@ TTBIN_RECORD *insert_after(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
        r->prev->next = r;
    }
    return r;
+}
+
+/*****************************************************************************/
+
+#define remove_array(record, array, count) do {                               \
+        unsigned i;                                                           \
+        for (i = 0; i < count; ++i)                                           \
+        {                                                                     \
+            if (array[i] == record)                                           \
+            {                                                                 \
+                if (i != count - 1)                                           \
+                    memmove(array + i, array + i + 1, sizeof(TTBIN_RECORD*)); \
+                --count;                                                      \
+                break;                                                        \
+            }                                                                 \
+        }                                                                     \
+    } while (0)
+
+void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
+{
+    switch (record->tag)
+    {
+    case TAG_GPS: remove_array(record, ttbin->gps_records, ttbin->gps_record_count); break;
+    case TAG_LAP: remove_array(record, ttbin->lap_records, ttbin->lap_record_count); break;
+    case TAG_HEART_RATE: remove_array(record, ttbin->heart_rate_records, ttbin->heart_rate_record_count); break;
+    case TAG_TREADMILL: remove_array(record, ttbin->treadmill_records, ttbin->treadmill_record_count); break;
+    case TAG_SWIM: remove_array(record, ttbin->swim_records, ttbin->swim_record_count); break;
+    case TAG_STATUS: remove_array(record, ttbin->status_records, ttbin->status_record_count); break;
+    }
+
+    if (record != ttbin->first)
+        record->prev->next = record->next;
+    else
+        ttbin->first = record->next;
+    if (record != ttbin->last)
+        record->next->prev = record->prev;
+    else
+        ttbin->last = record->prev;
+    free(record->lap);
+    free(record);
 }
 
 /*****************************************************************************/
@@ -748,3 +794,133 @@ void free_ttbin(TTBIN_FILE *ttbin)
         free(ttbin);
     }
 }
+
+/*****************************************************************************/
+
+void replace_lap_list(TTBIN_FILE *ttbin, float *distances, unsigned count)
+{
+    float end_of_lap = 0;
+    float last_distance = 0;
+    uint32_t i;
+    unsigned d = 0;
+
+    /* remove the current lap records */
+    if (ttbin->lap_record_count)
+    {
+        for (i = 0; i < ttbin->lap_record_count; ++i)
+            delete_record(ttbin, ttbin->lap_records[i]);
+        free(ttbin->lap_records);
+        ttbin->lap_records = 0;
+        ttbin->lap_record_count = 0;
+    }
+
+    /* do the check here, so that we can just remove all the laps if we want to */
+    if (!distances || (count == 0))
+        return;
+
+    end_of_lap = distances[d];
+    for (i = 0; i < ttbin->gps_record_count; ++i)
+    {
+        TTBIN_RECORD *lap_record;
+        /* skip records until we reach the desired lap distance */
+        if (ttbin->gps_records[i]->gps->cum_distance < end_of_lap)
+            continue;
+
+        /* right, so we need to add a lap marker here */
+        lap_record = insert_before(ttbin, ttbin->gps_records[i]);
+        lap_record->tag = TAG_LAP;
+        lap_record->length = 10;
+        lap_record->lap = (LAP_RECORD*)malloc(sizeof(LAP_RECORD));
+        lap_record->lap->total_time = i;
+        lap_record->lap->total_distance = ttbin->gps_records[i]->gps->cum_distance;
+        lap_record->lap->total_calories = ttbin->gps_records[i]->gps->calories;
+
+        ttbin->lap_records = realloc(ttbin->lap_records, (ttbin->lap_record_count + 1) * sizeof(LAP_RECORD));
+        ttbin->lap_records[ttbin->lap_record_count++] = lap_record;
+
+        /* scan the next lap distance */
+        if (++d >= count)
+        {
+            d = 0;
+            last_distance = end_of_lap;
+        }
+
+        end_of_lap = last_distance + distances[d];
+    }
+}
+
+/*****************************************************************************/
+
+static void update_summary_information(TTBIN_FILE *ttbin)
+{
+    /* update the summary information from the last GPS record */
+    unsigned i = ttbin->gps_record_count;
+    while (i > 0)
+    {
+        TTBIN_RECORD *record = ttbin->gps_records[--i];
+        if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
+            continue;
+
+        ttbin->total_distance = record->gps->cum_distance;
+        ttbin->total_calories = record->gps->calories;
+        ttbin->duration       = record->gps->timestamp - ttbin->timestamp_utc;
+        break;
+    }
+}
+
+/*****************************************************************************/
+
+int truncate_laps(TTBIN_FILE *ttbin)
+{
+    TTBIN_RECORD *record, *end;
+    /* if we have no laps, we can't truncate the file */
+    if (!ttbin->lap_record_count)
+        return 0;
+
+    /* find the GPS record AFTER the final lap record */
+    end = ttbin->lap_records[ttbin->lap_record_count - 1];
+    while (end->next && (end->tag != TAG_GPS))
+        end = end->next;
+
+    /* delete everything after this point */
+    record = ttbin->last;
+    while (record != end)
+    {
+        TTBIN_RECORD *r = record->prev;
+        delete_record(ttbin, record);
+        record = r;
+    }
+
+    update_summary_information(ttbin);
+
+    return 1;
+}
+
+/*****************************************************************************/
+
+int truncate_race(TTBIN_FILE *ttbin)
+{
+    TTBIN_RECORD *record, *end;
+    /* if we have no race, we can't truncate the file */
+    if (!ttbin->race_result)
+        return 0;
+
+    /* find the GPS record AFTER the race result record */
+    end = ttbin->race_result;
+    while (end->next && (end->tag != TAG_GPS))
+        end = end->next;
+
+    /* delete everything after this point */
+    record = ttbin->last;
+    while (record != end)
+    {
+        TTBIN_RECORD *r = record->prev;
+        delete_record(ttbin, record);
+        record = r;
+    }
+
+    update_summary_information(ttbin);
+
+    return 1;
+}
+

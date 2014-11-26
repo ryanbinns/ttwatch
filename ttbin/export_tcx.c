@@ -9,7 +9,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t i;
     char timestr[32];
-    time_t timestamp;
     TTBIN_RECORD *record;
     float max_speed = 0.0f;
     float total_speed = 0.0f;
@@ -18,6 +17,15 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     uint32_t heart_rate_count = 0;
     uint32_t gps_count = 0;
     unsigned heart_rate;
+    int lap_state;
+    float lap_avg_speed;
+    unsigned lap_time;
+    float lap_distance;
+    float lap_max_speed;
+    unsigned lap_calories;
+    unsigned lap_heart_rate_count;
+    unsigned lap_avg_heart_rate;
+    unsigned lap_max_heart_rate;
 
     if (!ttbin->gps_records)
         return;
@@ -46,14 +54,13 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     fputs(timestr, file);
     fputs("</Id>\r\n", file);
 
-    timestamp = ttbin->timestamp_utc;
-    strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&timestamp));
     fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
     fputs(        "                <Intensity>Active</Intensity>\r\n"
                   "                <TriggerMethod>Manual</TriggerMethod>\r\n"
                   "                <Track>\r\n", file);
 
     heart_rate = 0;
+    lap_state = 0;
     for (record = ttbin->first; record; record = record->next)
     {
         switch (record->tag)
@@ -68,8 +75,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             total_speed += record->gps->speed;
             ++gps_count;
 
-            timestamp = record->gps->timestamp;
-            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&timestamp));
+            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps->timestamp));
             fputs(        "                    <Trackpoint>\r\n", file);
             fprintf(file, "                        <Time>%s</Time>\r\n", timestr);
             fputs(        "                        <Position>\r\n", file);
@@ -90,6 +96,39 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             fputs(        "                            </TPX>\r\n"
                           "                        </Extensions>\r\n"
                           "                    </Trackpoint>\r\n", file);
+            if (lap_state == 1)
+            {
+                fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
+                fputs(        "                <Intensity>Active</Intensity>\r\n"
+                              "                <TriggerMethod>Manual</TriggerMethod>\r\n"
+                              "                <Track>\r\n", file);
+                lap_state = 0;
+            }
+            else if (lap_state == 2)
+            {
+                fputs(        "                    <Extensions>\r\n"
+                              "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
+                fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
+                fputs(        "                       </LX>\r\n"
+                              "                    </Extensions>\r\n", file);
+                fputs(        "                </Track>\r\n", file);
+                fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap_time);
+                fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap_distance);
+                fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", lap_max_speed);
+                fprintf(file, "                <Calories>%d</Calories>\r\n", lap_calories);
+                if (heart_rate_count)
+                {
+                    fputs(        "                <AverageHeartRateBpm>\r\n", file);
+                    fprintf(file, "                    <Value>%d</Value>\r\n", lap_avg_heart_rate);
+                    fputs(        "                </AverageHeartRateBpm>\r\n", file);
+                    fputs(        "                <MaximumHeartRateBpm>\r\n", file);
+                    fprintf(file, "                    <Value>%d</Value>\r\n", lap_max_heart_rate);
+                    fputs(        "                </MaximumHeartRateBpm>\r\n", file);
+                }
+                fputs(        "            </Lap>\r\n", file);
+                lap_state = 1;
+            }
+            heart_rate = 0;
             break;
         case TAG_HEART_RATE:
             if (record->heart_rate->heart_rate > max_heart_rate)
@@ -100,63 +139,62 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             heart_rate = record->heart_rate->heart_rate;
             break;
         case TAG_LAP:
-            fputs(        "                    <Extensions>\r\n"
-                          "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
-            fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", total_speed / gps_count);
-            fputs(        "                       </LX>\r\n"
-                          "                    </Extensions>\r\n", file);
-            fputs(        "                </Track>\r\n", file);
-            fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", record->lap->total_time);
-            fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", record->lap->total_distance);
-            fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", max_speed);
-            fprintf(file, "                <Calories>%d</Calories>\r\n", record->lap->total_calories);
-            if (heart_rate_count)
-            {
-                fputs(        "                <AverageHeartRateBpm>\r\n", file);
-                fprintf(file, "                    <Value>%d</Value>\r\n",
-                    (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count);
-                fputs(        "                </AverageHeartRateBpm>\r\n", file);
-                fputs(        "                <MaximumHeartRateBpm>\r\n", file);
-                fprintf(file, "                    <Value>%d</Value>\r\n", max_heart_rate);
-                fputs(        "                </MaximumHeartRateBpm>\r\n", file);
-            }
-            fputs(        "            </Lap>\r\n", file);
-            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&timestamp));
-            fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
-            fputs(        "                <Intensity>Active</Intensity>\r\n"
-                          "                <TriggerMethod>Manual</TriggerMethod>\r\n"
-                          "                <Track>\r\n", file);
+            lap_avg_speed = total_speed / gps_count;
+            lap_time = record->lap->total_time;
+            lap_distance = record->lap->total_distance;
+            lap_max_speed = max_speed;
+            lap_calories = record->lap->total_calories;
+            lap_heart_rate_count = heart_rate_count;
+            if (heart_rate_count > 0)
+                lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
+            lap_max_heart_rate = max_heart_rate;
             gps_count = 0;
             heart_rate_count = 0;
             total_speed = 0;
             max_speed = 0;
             max_heart_rate = 0;
             total_heart_rate = 0;
+            lap_state = 2;
             break;
         }
     }
 
-    fputs(        "                    <Extensions>\r\n"
-                  "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
-    fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", total_speed / gps_count);
-    fputs(        "                       </LX>\r\n"
-                  "                    </Extensions>\r\n", file);
-    fputs(        "                </Track>\r\n", file);
-    fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", ttbin->duration);
-    fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", ttbin->total_distance);
-    fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", max_speed);
-    fprintf(file, "                <Calories>%d</Calories>\r\n", ttbin->total_calories);
-    if (heart_rate_count)
+    if (lap_state != 1)
     {
-        fputs(        "                <AverageHeartRateBpm>\r\n", file);
-        fprintf(file, "                    <Value>%d</Value>\r\n",
-            (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count);
-        fputs(        "                </AverageHeartRateBpm>\r\n", file);
-        fputs(        "                <MaximumHeartRateBpm>\r\n", file);
-        fprintf(file, "                    <Value>%d</Value>\r\n", max_heart_rate);
-        fputs(        "                </MaximumHeartRateBpm>\r\n", file);
+        if (!lap_state)
+        {
+            lap_avg_speed = total_speed / gps_count;
+            lap_time = ttbin->duration;
+            lap_distance = ttbin->total_distance;
+            lap_max_speed = max_speed;
+            lap_calories = ttbin->total_calories;
+            lap_heart_rate_count = heart_rate_count;
+            if (heart_rate_count > 0)
+                lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
+            lap_max_heart_rate = max_heart_rate;
+        }
+
+        fputs(        "                    <Extensions>\r\n"
+                      "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
+        fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
+        fputs(        "                       </LX>\r\n"
+                      "                    </Extensions>\r\n", file);
+        fputs(        "                </Track>\r\n", file);
+        fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap_time);
+        fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap_distance);
+        fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", lap_max_speed);
+        fprintf(file, "                <Calories>%d</Calories>\r\n", lap_calories);
+        if (heart_rate_count)
+        {
+            fputs(        "                <AverageHeartRateBpm>\r\n", file);
+            fprintf(file, "                    <Value>%d</Value>\r\n", lap_avg_heart_rate);
+            fputs(        "                </AverageHeartRateBpm>\r\n", file);
+            fputs(        "                <MaximumHeartRateBpm>\r\n", file);
+            fprintf(file, "                    <Value>%d</Value>\r\n", lap_max_heart_rate);
+            fputs(        "                </MaximumHeartRateBpm>\r\n", file);
+        }
+        fputs(        "            </Lap>\r\n", file);
     }
-    fputs(        "            </Lap>\r\n", file);
 
     fputs(        "            <Creator xsi:type=\"Device_t\">\r\n"
                   "                <Name>TomTom GPS Sport Watch</Name>\r\n"

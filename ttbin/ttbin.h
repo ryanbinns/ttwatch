@@ -149,8 +149,8 @@ typedef struct
     uint32_t duration;          /* seconds */
     uint16_t total_calories;
 
-    RACE_SETUP_RECORD *race_setup;
-    RACE_RESULT_RECORD *race_result;
+    TTBIN_RECORD *race_setup;
+    TTBIN_RECORD *race_result;
 
     uint32_t gps_record_count;
     TTBIN_RECORD **gps_records;
@@ -186,6 +186,8 @@ TTBIN_RECORD *insert_before(TTBIN_FILE *ttbin, TTBIN_RECORD *record);
 
 TTBIN_RECORD *insert_after(TTBIN_FILE *ttbin, TTBIN_RECORD *record);
 
+void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record);
+
 const char *create_filename(TTBIN_FILE *file, const char *ext);
 
 void download_elevation_data(TTBIN_FILE *ttbin);
@@ -201,6 +203,12 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file);
 uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats);
 
 void free_ttbin(TTBIN_FILE *ttbin);
+
+void replace_lap_list(TTBIN_FILE *ttbin, float *distances, unsigned count);
+
+int truncate_laps(TTBIN_FILE *ttbin);
+
+int truncate_race(TTBIN_FILE *ttbin);
 
 /*****************************************************************************/
 
