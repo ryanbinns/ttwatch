@@ -10,6 +10,17 @@
 #include <stdio.h>
 #include <time.h>
 
+#define TAG_FILE_HEADER     (0x20)
+#define TAG_STATUS          (0x21)
+#define TAG_GPS             (0x22)
+#define TAG_HEART_RATE      (0x25)
+#define TAG_SUMMARY         (0x27)
+#define TAG_LAP             (0x2f)
+#define TAG_TREADMILL       (0x32)
+#define TAG_SWIM            (0x34)
+#define TAG_RACE_SETUP      (0x3c)
+#define TAG_RACE_RESULT     (0x3d)
+
 #define ACTIVITY_RUNNING    (0)
 #define ACTIVITY_CYCLING    (1)
 #define ACTIVITY_SWIMMING   (2)
@@ -85,11 +96,44 @@ typedef struct
 
 typedef struct
 {
-    uint8_t  tag;
-    uint16_t length;
+    float    distance;  /* metres */
+    uint32_t duration;  /* seconds */
+    char     name[17];  /* always null-terminated */
+} RACE_SETUP_RECORD;
+
+typedef struct
+{
+    float    distance;  /* metres */
+    uint32_t duration;  /* seconds */
+    uint16_t calories;
+} RACE_RESULT_RECORD;
+
+typedef struct
+{
     time_t   timestamp;     /* utc time */
+    uint16_t length;
     uint8_t  *data;
 } UNKNOWN_RECORD;
+
+typedef struct _TTBIN_RECORD
+{
+    uint16_t length;
+    uint8_t  tag;
+    union
+    {
+        uint8_t            *data;
+        GPS_RECORD         *gps;
+        STATUS_RECORD      *status;
+        TREADMILL_RECORD   *treadmill;
+        SWIM_RECORD        *swim;
+        LAP_RECORD         *lap;
+        HEART_RATE_RECORD  *heart_rate;
+        RACE_SETUP_RECORD  *race_setup;
+        RACE_RESULT_RECORD *race_result;
+    };
+    struct _TTBIN_RECORD *prev;
+    struct _TTBIN_RECORD *next;
+} TTBIN_RECORD;
 
 typedef struct
 {
@@ -105,28 +149,29 @@ typedef struct
     uint32_t duration;          /* seconds */
     uint16_t total_calories;
 
-    RACE_RECORD *race;
+    TTBIN_RECORD *race_setup;
+    TTBIN_RECORD *race_result;
 
     uint32_t gps_record_count;
-    GPS_RECORD *gps_records;
+    TTBIN_RECORD **gps_records;
 
     uint32_t status_record_count;
-    STATUS_RECORD *status_records;
+    TTBIN_RECORD **status_records;
 
     uint32_t treadmill_record_count;
-    TREADMILL_RECORD *treadmill_records;
+    TTBIN_RECORD **treadmill_records;
 
     uint32_t swim_record_count;
-    SWIM_RECORD *swim_records;
+    TTBIN_RECORD **swim_records;
 
     uint32_t lap_record_count;
-    LAP_RECORD *lap_records;
+    TTBIN_RECORD **lap_records;
 
     uint32_t heart_rate_record_count;
-    HEART_RATE_RECORD *heart_rate_records;
+    TTBIN_RECORD **heart_rate_records;
 
-    uint32_t unknown_record_count;
-    UNKNOWN_RECORD *unknown_records;
+    TTBIN_RECORD *first;
+    TTBIN_RECORD *last;
 } TTBIN_FILE;
 
 /*****************************************************************************/
@@ -134,6 +179,14 @@ typedef struct
 TTBIN_FILE *read_ttbin_file(FILE *file);
 
 TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size);
+
+int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file);
+
+TTBIN_RECORD *insert_before(TTBIN_FILE *ttbin, TTBIN_RECORD *record);
+
+TTBIN_RECORD *insert_after(TTBIN_FILE *ttbin, TTBIN_RECORD *record);
+
+void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record);
 
 const char *create_filename(TTBIN_FILE *file, const char *ext);
 
@@ -150,6 +203,12 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file);
 uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats);
 
 void free_ttbin(TTBIN_FILE *ttbin);
+
+void replace_lap_list(TTBIN_FILE *ttbin, float *distances, unsigned count);
+
+int truncate_laps(TTBIN_FILE *ttbin);
+
+int truncate_race(TTBIN_FILE *ttbin);
 
 /*****************************************************************************/
 
