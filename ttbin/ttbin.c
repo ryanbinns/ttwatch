@@ -121,6 +121,19 @@ typedef struct __attribute__((packed))
     uint16_t calories;
 } FILE_RACE_RESULT_RECORD;
 
+typedef struct __attribute__((packed))
+{
+    uint8_t  type;  /* 0 = distance, 1 = time, 2 = calories */
+    float    goal;  /* metres, seconds, calories */
+    uint32_t _unk;
+} FILE_GOAL_SETUP_RECORD;
+
+typedef struct __attribute__((packed))
+{
+    uint8_t  percent;   /* 0 - 100 */
+    uint32_t value;     /* metres, seconds, calories */
+} FILE_GOAL_PROGRESS_RECORD;
+
 /*****************************************************************************/
 
 TTBIN_FILE *read_ttbin_file(FILE *file)
@@ -175,16 +188,18 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     TTBIN_FILE *file;
     unsigned length;
 
-    FILE_HEADER             *file_header = 0;
-    FILE_SUMMARY_RECORD     *summary_record;
-    FILE_GPS_RECORD         *gps_record;
-    FILE_HEART_RATE_RECORD  *heart_rate_record;
-    FILE_STATUS_RECORD      *status_record;
-    FILE_TREADMILL_RECORD   *treadmill_record;
-    FILE_SWIM_RECORD        *swim_record;
-    FILE_LAP_RECORD         *lap_record;
-    FILE_RACE_SETUP_RECORD  *race_setup_record;
-    FILE_RACE_RESULT_RECORD *race_result_record;
+    FILE_HEADER               *file_header = 0;
+    FILE_SUMMARY_RECORD       *summary_record;
+    FILE_GPS_RECORD           *gps_record;
+    FILE_HEART_RATE_RECORD    *heart_rate_record;
+    FILE_STATUS_RECORD        *status_record;
+    FILE_TREADMILL_RECORD     *treadmill_record;
+    FILE_SWIM_RECORD          *swim_record;
+    FILE_LAP_RECORD           *lap_record;
+    FILE_RACE_SETUP_RECORD    *race_setup_record;
+    FILE_RACE_RESULT_RECORD   *race_result_record;
+    FILE_GOAL_SETUP_RECORD    *goal_setup_record;
+    FILE_GOAL_PROGRESS_RECORD *goal_progress_record;
 
     TTBIN_RECORD *record;
 
@@ -321,6 +336,11 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             file->race_setup = record;
             break;
         case TAG_RACE_RESULT:
+            if (!file->race_setup)
+            {
+                free_ttbin(file);
+                return 0;
+            }
             race_result_record = (FILE_RACE_RESULT_RECORD*)data;
 
             record = append_record(file, tag, length);
@@ -329,6 +349,43 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record->race_result->duration = race_result_record->duration;
             record->race_result->calories = race_result_record->calories;
             file->race_result = record;
+            break;
+        case TAG_GOAL_SETUP:
+            goal_setup_record = (FILE_GOAL_SETUP_RECORD*)data;
+
+            record = append_record(file, tag, length);
+            record->goal_setup = (GOAL_SETUP_RECORD*)malloc(sizeof(GOAL_SETUP_RECORD));
+            record->goal_setup->type = goal_setup_record->type;
+            switch (goal_setup_record->type)
+            {
+            case 0: record->goal_setup->distance = goal_setup_record->goal; break;
+            case 1: record->goal_setup->duration = goal_setup_record->goal; break;
+            case 2: record->goal_setup->calories = goal_setup_record->goal; break;
+            default:
+                free_ttbin(file);
+                return 0;
+            }
+            file->goal_setup = record;
+            break;
+        case TAG_GOAL_PROGRESS:
+            if (!file->goal_setup)
+            {
+                free_ttbin(file);
+                return 0;
+            }
+
+            goal_progress_record = (FILE_GOAL_PROGRESS_RECORD*)data;
+
+            record = append_record(file, tag, length);
+            record->goal_progress = (GOAL_PROGRESS_RECORD*)malloc(sizeof(GOAL_PROGRESS_RECORD));
+            record->goal_progress->percent  = goal_progress_record->percent;
+            switch (file->goal_setup->goal_setup->type)
+            {
+            case 0: record->goal_progress->distance = goal_progress_record->value; break;
+            case 1: record->goal_progress->duration = goal_progress_record->value; break;
+            case 2: record->goal_progress->calories = goal_progress_record->value; break;
+            }
+            insert_pointer(file->goal_progress_records, file->goal_progress_record_count, record);
             break;
         default:
             record = append_record(file, tag, length);
@@ -481,6 +538,32 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
             fwrite(&r, 1, sizeof(FILE_RACE_RESULT_RECORD), file);
             break;
         }
+        case TAG_GOAL_SETUP: {
+            FILE_GOAL_SETUP_RECORD r = {
+                record->goal_setup->type, 0
+            };
+            switch (record->goal_setup->type)
+            {
+            case 0: r.goal = record->goal_setup->distance; break;
+            case 1: r.goal = record->goal_setup->duration; break;
+            case 2: r.goal = record->goal_setup->calories; break;
+            }
+            fwrite(&r, 1, sizeof(FILE_GOAL_SETUP_RECORD), file);
+            break;
+        }
+        case TAG_GOAL_PROGRESS: {
+            FILE_GOAL_PROGRESS_RECORD r = {
+                record->goal_progress->percent, 0
+            };
+            switch (ttbin->goal_setup->goal_setup->type)
+            {
+            case 0: r.value = record->goal_progress->distance; break;
+            case 1: r.value = record->goal_progress->duration; break;
+            case 2: r.value = record->goal_progress->calories; break;
+            }
+            fwrite(&r, 1, sizeof(FILE_GOAL_PROGRESS_RECORD), file);
+            break;
+        }
         default: {
             fwrite(record->data, 1, record->length, file);
             break;
@@ -568,6 +651,7 @@ void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
     case TAG_TREADMILL: remove_array(record, ttbin->treadmill_records, ttbin->treadmill_record_count); break;
     case TAG_SWIM: remove_array(record, ttbin->swim_records, ttbin->swim_record_count); break;
     case TAG_STATUS: remove_array(record, ttbin->status_records, ttbin->status_record_count); break;
+    case TAG_GOAL_PROGRESS: remove_array(record, ttbin->goal_progress_records, ttbin->goal_progress_record_count); break;
     }
 
     if (record != ttbin->first)
@@ -853,17 +937,38 @@ void replace_lap_list(TTBIN_FILE *ttbin, float *distances, unsigned count)
 
 static void update_summary_information(TTBIN_FILE *ttbin)
 {
+    unsigned i;
+    TTBIN_RECORD *record;
     /* update the summary information from the last GPS record */
-    unsigned i = ttbin->gps_record_count;
-    while (i > 0)
+    switch (ttbin->activity)
     {
-        TTBIN_RECORD *record = ttbin->gps_records[--i];
-        if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
-            continue;
+    case ACTIVITY_RUNNING:
+    case ACTIVITY_CYCLING:
+    case ACTIVITY_FREESTYLE:
+        i = ttbin->gps_record_count;
+        while (i > 0)
+        {
+            record = ttbin->gps_records[--i];
+            if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
+                continue;
 
-        ttbin->total_distance = record->gps->cum_distance;
-        ttbin->total_calories = record->gps->calories;
-        ttbin->duration       = record->gps->timestamp - ttbin->timestamp_utc;
+            ttbin->total_distance = record->gps->cum_distance;
+            ttbin->total_calories = record->gps->calories;
+            ttbin->duration       = record->gps->timestamp - ttbin->timestamp_utc;
+            break;
+        }
+        break;
+    case ACTIVITY_SWIMMING:
+        record = ttbin->swim_records[ttbin->swim_record_count - 1];
+        ttbin->total_distance = record->swim->total_distance;
+        ttbin->total_calories = record->swim->total_calories;
+        ttbin->duration       = record->swim->timestamp - ttbin->timestamp_utc;
+        break;
+    case ACTIVITY_TREADMILL:
+        record = ttbin->treadmill_records[ttbin->treadmill_record_count - 1];
+        ttbin->total_distance = record->treadmill->distance;
+        ttbin->total_calories = record->treadmill->calories;
+        ttbin->duration       = record->treadmill->timestamp - ttbin->timestamp_utc;
         break;
     }
 }
@@ -877,10 +982,25 @@ int truncate_laps(TTBIN_FILE *ttbin)
     if (!ttbin->lap_record_count)
         return 0;
 
-    /* find the GPS record AFTER the final lap record */
+    /* find the position record AFTER the final lap record */
     end = ttbin->lap_records[ttbin->lap_record_count - 1];
-    while (end->next && (end->tag != TAG_GPS))
-        end = end->next;
+    switch (ttbin->activity)
+    {
+    case ACTIVITY_RUNNING:
+    case ACTIVITY_CYCLING:
+    case ACTIVITY_FREESTYLE:
+        while (end->next && (end->tag != TAG_GPS))
+            end = end->next;
+        break;
+    case ACTIVITY_SWIMMING:
+        while (end->next && (end->tag != TAG_SWIM))
+            end = end->next;
+        break;
+    case ACTIVITY_TREADMILL:
+        while (end->next && (end->tag != TAG_TREADMILL))
+            end = end->next;
+        break;
+    }
 
     /* delete everything after this point */
     record = ttbin->last;
@@ -905,10 +1025,72 @@ int truncate_race(TTBIN_FILE *ttbin)
     if (!ttbin->race_result)
         return 0;
 
-    /* find the GPS record AFTER the race result record */
+    /* find the position record AFTER the race result record */
     end = ttbin->race_result;
-    while (end->next && (end->tag != TAG_GPS))
-        end = end->next;
+    switch (ttbin->activity)
+    {
+    case ACTIVITY_RUNNING:
+    case ACTIVITY_CYCLING:
+    case ACTIVITY_FREESTYLE:
+        while (end->next && (end->tag != TAG_GPS))
+            end = end->next;
+        break;
+    case ACTIVITY_SWIMMING:
+        while (end->next && (end->tag != TAG_SWIM))
+            end = end->next;
+        break;
+    case ACTIVITY_TREADMILL:
+        while (end->next && (end->tag != TAG_TREADMILL))
+            end = end->next;
+        break;
+    }
+
+    /* delete everything after this point */
+    record = ttbin->last;
+    while (record != end)
+    {
+        TTBIN_RECORD *r = record->prev;
+        delete_record(ttbin, record);
+        record = r;
+    }
+
+    update_summary_information(ttbin);
+
+    return 1;
+}
+
+/*****************************************************************************/
+
+int truncate_goal(TTBIN_FILE *ttbin)
+{
+    TTBIN_RECORD *record, *end;
+    /* if we have no race, we can't truncate the file */
+    if (!ttbin->goal_progress_records)
+        return 0;
+
+    /* don't truncate anything if we didn't reach the goal */
+    end = ttbin->goal_progress_records[ttbin->goal_progress_record_count - 1];
+    if (end->goal_progress->percent < 100)
+        return 0;
+
+    /* find the position record AFTER the race result record */
+    switch (ttbin->activity)
+    {
+    case ACTIVITY_RUNNING:
+    case ACTIVITY_CYCLING:
+    case ACTIVITY_FREESTYLE:
+        while (end->next && (end->tag != TAG_GPS))
+            end = end->next;
+        break;
+    case ACTIVITY_SWIMMING:
+        while (end->next && (end->tag != TAG_SWIM))
+            end = end->next;
+        break;
+    case ACTIVITY_TREADMILL:
+        while (end->next && (end->tag != TAG_TREADMILL))
+            end = end->next;
+        break;
+    }
 
     /* delete everything after this point */
     record = ttbin->last;

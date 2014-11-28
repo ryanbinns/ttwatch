@@ -15,9 +15,11 @@
 #define TAG_GPS             (0x22)
 #define TAG_HEART_RATE      (0x25)
 #define TAG_SUMMARY         (0x27)
+#define TAG_GOAL_SETUP      (0x2d)
 #define TAG_LAP             (0x2f)
 #define TAG_TREADMILL       (0x32)
 #define TAG_SWIM            (0x34)
+#define TAG_GOAL_PROGRESS   (0x35)
 #define TAG_RACE_SETUP      (0x3c)
 #define TAG_RACE_RESULT     (0x3d)
 
@@ -110,6 +112,28 @@ typedef struct
 
 typedef struct
 {
+    uint8_t  type;  /* 0 = distance, 1 = time, 2 = calories */
+    union
+    {
+        float    distance;
+        uint32_t duration;
+        uint32_t calories;
+    };
+} GOAL_SETUP_RECORD;
+
+typedef struct
+{
+    uint8_t  percent;
+    union
+    {
+        float    distance;
+        uint32_t duration;
+        uint32_t calories;
+    };
+} GOAL_PROGRESS_RECORD;
+
+typedef struct
+{
     time_t   timestamp;     /* utc time */
     uint16_t length;
     uint8_t  *data;
@@ -121,15 +145,17 @@ typedef struct _TTBIN_RECORD
     uint8_t  tag;
     union
     {
-        uint8_t            *data;
-        GPS_RECORD         *gps;
-        STATUS_RECORD      *status;
-        TREADMILL_RECORD   *treadmill;
-        SWIM_RECORD        *swim;
-        LAP_RECORD         *lap;
-        HEART_RATE_RECORD  *heart_rate;
-        RACE_SETUP_RECORD  *race_setup;
-        RACE_RESULT_RECORD *race_result;
+        uint8_t              *data;
+        GPS_RECORD           *gps;
+        STATUS_RECORD        *status;
+        TREADMILL_RECORD     *treadmill;
+        SWIM_RECORD          *swim;
+        LAP_RECORD           *lap;
+        HEART_RATE_RECORD    *heart_rate;
+        RACE_SETUP_RECORD    *race_setup;
+        RACE_RESULT_RECORD   *race_result;
+        GOAL_SETUP_RECORD    *goal_setup;
+        GOAL_PROGRESS_RECORD *goal_progress;
     };
     struct _TTBIN_RECORD *prev;
     struct _TTBIN_RECORD *next;
@@ -152,6 +178,8 @@ typedef struct
     TTBIN_RECORD *race_setup;
     TTBIN_RECORD *race_result;
 
+    TTBIN_RECORD *goal_setup;
+
     uint32_t gps_record_count;
     TTBIN_RECORD **gps_records;
 
@@ -169,6 +197,9 @@ typedef struct
 
     uint32_t heart_rate_record_count;
     TTBIN_RECORD **heart_rate_records;
+
+    uint32_t goal_progress_record_count;
+    TTBIN_RECORD **goal_progress_records;
 
     TTBIN_RECORD *first;
     TTBIN_RECORD *last;
@@ -209,6 +240,8 @@ void replace_lap_list(TTBIN_FILE *ttbin, float *distances, unsigned count);
 int truncate_laps(TTBIN_FILE *ttbin);
 
 int truncate_race(TTBIN_FILE *ttbin);
+
+int truncate_goal(TTBIN_FILE *ttbin);
 
 /*****************************************************************************/
 
