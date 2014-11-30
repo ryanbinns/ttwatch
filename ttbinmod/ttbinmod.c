@@ -10,10 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TRUNCATE_AUTO   (0)
-#define TRUNCATE_LAPS   (1)
-#define TRUNCATE_RACE   (2)
-#define TRUNCATE_GOAL   (3)
+#define TRUNCATE_AUTO       (0)
+#define TRUNCATE_LAPS       (1)
+#define TRUNCATE_RACE       (2)
+#define TRUNCATE_GOAL       (3)
+#define TRUNCATE_INTERVAL   (4)
 
 void do_replace_lap_list(TTBIN_FILE *ttbin, const char *laps)
 {
@@ -72,9 +73,10 @@ void help(char *argv[])
     printf("If the truncation mode is not specified (-t is specified without a parameter,\n");
     printf("then the file is truncated at one of the following points, in this order:\n");
     printf("  1. last lap (MODE = laps)\n");
+    printf("  2. interval cooldown (MODE = interval)\n");
     printf("  2. race result (MODE = race)\n");
     printf("  3. goal completion (MODE = goal)\n");
-    printf("In other words, the laps take precedence over the race result etc...\n");
+    printf("In other words, the laps take precedence over the interval etc...\n");
     printf("Alternatively, one of the above parameters can be specified to truncate at\n");
     printf("the desired point.\n");
 }
@@ -139,6 +141,8 @@ int main(int argc, char *argv[])
                     truncate_mode = TRUNCATE_RACE;
                 else if (strcasecmp(optarg, "goal") == 0)
                     truncate_mode = TRUNCATE_GOAL;
+                else if (strcasecmp(optarg, "intervals") == 0)
+                    truncate_mode = TRUNCATE_INTERVAL;
                 else
                 {
                     fprintf(stderr, "Invalid truncate mode specified: %s\n", optarg);
@@ -181,10 +185,12 @@ int main(int argc, char *argv[])
     {
         switch (truncate_mode)
         {
-        case TRUNCATE_LAPS: truncate_laps(ttbin); break;
-        case TRUNCATE_RACE: truncate_race(ttbin); break;
-        case TRUNCATE_GOAL: truncate_goal(ttbin); break;
-        default:            truncate_laps(ttbin) || truncate_race(ttbin) || truncate_goal(ttbin); break;
+        case TRUNCATE_LAPS:     truncate_laps(ttbin);      break;
+        case TRUNCATE_RACE:     truncate_race(ttbin);      break;
+        case TRUNCATE_GOAL:     truncate_goal(ttbin);      break;
+        case TRUNCATE_INTERVAL: truncate_intervals(ttbin); break;
+        default:                truncate_laps(ttbin) || truncate_intervals(ttbin) ||
+                                truncate_race(ttbin) || truncate_goal(ttbin); break;
         }
     }
 

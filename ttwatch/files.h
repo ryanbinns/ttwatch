@@ -74,7 +74,8 @@ typedef struct __attribute__((packed))
     uint32_t _unk1;
     uint16_t activity;
     uint16_t entry_length;
-    uint32_t entry_count;
+    uint16_t entry_count;
+    uint16_t _unk2;
     uint8_t  data[0];   // cannot be TT_HISTORY_ENTRY's because they are variable size...
 } TT_HISTORY_FILE;
 
