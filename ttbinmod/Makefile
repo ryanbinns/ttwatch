@@ -20,7 +20,7 @@ $(OUTPUT): $(SRC:.c=.o) ../ttbin/libttbin.a
 	@rm -f $*.d.tmp
 
 clean:
-	@-rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d)
+	@-rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d) >/dev/null 2>&1
 
 install: $(OUTPUT)
 	-install -m0755 $(OUTPUT) $(PREFIX)/bin

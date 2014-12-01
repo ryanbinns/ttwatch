@@ -23,7 +23,7 @@ $(OUTPUT): $(SRC:.c=.o)
 	@rm -f $*.d.tmp
 
 clean:
-	@rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d)
+	@-rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d) >/dev/null 2>&1
 
 install: $(OUTPUT)
 

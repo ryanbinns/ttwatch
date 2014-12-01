@@ -596,6 +596,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
     char filename[256] = {0};
     char **ptr;
     unsigned i;
+    uint32_t fmt1;
 
     /* read the list of all files so we can find the activity files */
     RXFindFilePacket *file;
@@ -670,13 +671,13 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
             write_log(1, "Unable to write file: %s\n", filename);
 
         /* export_formats returns the formats parameter with bits corresponding to failed exports cleared */
-        formats ^= export_formats(ttbin, formats);
-        if (formats)
+        fmt1 = formats ^ export_formats(ttbin, formats);
+        if (fmt1)
         {
             write_log(1, "Unable to write file formats: ");
             for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
             {
-                if (formats & OFFLINE_FORMATS[i].mask)
+                if (fmt1 & OFFLINE_FORMATS[i].mask)
                     write_log(1, "%s ", OFFLINE_FORMATS[i].name);
             }
             write_log(1, "\n");

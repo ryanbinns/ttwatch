@@ -117,7 +117,8 @@ typedef struct
 {
     uint8_t type;       /* 0 = goal distance, 1 = goal time, 2 = goal calories,
                            3 = zones pace, 4 = zones heart, 6 = race,
-                           8 = laps, 11 = zones speed, 12 = intervals */
+                           7 = laps time, 8 = laps distance, 11 = zones speed,
+                           12 = intervals */
     float   value_min;  /* metres, seconds, calories, secs/km, km/h, bpm (min for zones) */
     float   max;        /* secs/km, km/h, bpm (only used for zones) */
 } TRAINING_SETUP_RECORD;

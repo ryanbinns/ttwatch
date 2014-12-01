@@ -27,7 +27,7 @@ manifest_definitions.h: manifest.txt make_manifest.pl
 	@./make_manifest.pl <$< >$@
 
 clean:
-	@rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d)
+	@-rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d) >/dev/null 2>&1
 
 install: $(OUTPUT)
 	-install -m0755 $(OUTPUT) $(PREFIX)/bin
