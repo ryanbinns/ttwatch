@@ -28,22 +28,22 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             {
             case TAG_GPS:
                 /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
-                if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
+                if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
                     continue;
 
-                strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->gps->timestamp));
+                strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->gps.timestamp));
 
                 fprintf(file, "%u,%d,%d,%.5f,%.2f,%d,%.7f,%.7f,%.2f,",
-                    (unsigned)(record->gps->timestamp - ttbin->timestamp_utc), ttbin->activity, current_lap,
-                    record->gps->cum_distance, record->gps->speed, record->gps->calories,
-                    record->gps->latitude, record->gps->longitude, record->gps->elevation);
+                    (unsigned)(record->gps.timestamp - ttbin->timestamp_utc), ttbin->activity, current_lap,
+                    record->gps.cum_distance, record->gps.speed, record->gps.calories,
+                    record->gps.latitude, record->gps.longitude, record->gps.elevation);
                 if (heart_rate > 0)
                     fprintf(file, "%d", heart_rate);
-                fprintf(file, ",%d,%s\r\n", record->gps->cycles, timestr);
+                fprintf(file, ",%d,%s\r\n", record->gps.cycles, timestr);
                 heart_rate = 0;
                 break;
             case TAG_HEART_RATE:
-                heart_rate = record->heart_rate->heart_rate;
+                heart_rate = record->heart_rate.heart_rate;
                 break;
             case TAG_LAP:
                 ++current_lap;
@@ -61,21 +61,21 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             {
             case TAG_TREADMILL:
                 /* this will happen if the activity is paused and then resumed */
-                if (record->treadmill->timestamp == 0)
+                if (record->treadmill.timestamp == 0)
                     continue;
 
-                strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->treadmill->timestamp));
+                strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->treadmill.timestamp));
 
-                fprintf(file, "%u,7,%u,%.2f,,%d,,,,", i, current_lap, record->treadmill->distance,
-                    record->treadmill->calories);
+                fprintf(file, "%u,7,%u,%.2f,,%d,,,,", i, current_lap, record->treadmill.distance,
+                    record->treadmill.calories);
                 if (heart_rate > 0)
                     fprintf(file, "%d", heart_rate);
-                fprintf(file, ",%d,%s\r\n", record->treadmill->steps - steps_prev, timestr);
-                steps_prev = record->treadmill->steps;
+                fprintf(file, ",%d,%s\r\n", record->treadmill.steps - steps_prev, timestr);
+                steps_prev = record->treadmill.steps;
                 heart_rate = 0;
                 break;
             case TAG_HEART_RATE:
-                heart_rate = record->heart_rate->heart_rate;
+                heart_rate = record->heart_rate.heart_rate;
                 break;
             case TAG_LAP:
                 ++current_lap;
@@ -91,14 +91,14 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                 continue;
 
             /* this will happen if the activity is paused and then resumed */
-            if (record->swim->timestamp == 0)
+            if (record->swim.timestamp == 0)
                 continue;
 
-            strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->swim->timestamp));
+            strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->swim.timestamp));
 
             fprintf(file, "%u,2,%d,%.2f,,%d,,,,,%d,%s\r\n",
-                i, record->swim->completed_laps + 1, record->swim->total_distance,
-                record->swim->total_calories, record->swim->strokes * 60, timestr);
+                i, record->swim.completed_laps + 1, record->swim.total_distance,
+                record->swim.total_calories, record->swim.strokes * 60, timestr);
         }
         break;
     }

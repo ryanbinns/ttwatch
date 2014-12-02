@@ -164,28 +164,34 @@ typedef struct
 
 typedef struct _TTBIN_RECORD
 {
+    struct _TTBIN_RECORD *prev;
+    struct _TTBIN_RECORD *next;
     uint16_t length;
     uint8_t  tag;
     union
     {
-        uint8_t                *data;
-        GPS_RECORD             *gps;
-        STATUS_RECORD          *status;
-        TREADMILL_RECORD       *treadmill;
-        SWIM_RECORD            *swim;
-        LAP_RECORD             *lap;
-        HEART_RATE_RECORD      *heart_rate;
-        RACE_SETUP_RECORD      *race_setup;
-        RACE_RESULT_RECORD     *race_result;
-        TRAINING_SETUP_RECORD  *training_setup;
-        GOAL_PROGRESS_RECORD   *goal_progress;
-        INTERVAL_SETUP_RECORD  *interval_setup;
-        INTERVAL_START_RECORD  *interval_start;
-        INTERVAL_FINISH_RECORD *interval_finish;
+        uint8_t                data[1];
+        GPS_RECORD             gps;
+        STATUS_RECORD          status;
+        TREADMILL_RECORD       treadmill;
+        SWIM_RECORD            swim;
+        LAP_RECORD             lap;
+        HEART_RATE_RECORD      heart_rate;
+        RACE_SETUP_RECORD      race_setup;
+        RACE_RESULT_RECORD     race_result;
+        TRAINING_SETUP_RECORD  training_setup;
+        GOAL_PROGRESS_RECORD   goal_progress;
+        INTERVAL_SETUP_RECORD  interval_setup;
+        INTERVAL_START_RECORD  interval_start;
+        INTERVAL_FINISH_RECORD interval_finish;
     };
-    struct _TTBIN_RECORD *prev;
-    struct _TTBIN_RECORD *next;
 } TTBIN_RECORD;
+
+typedef struct
+{
+    unsigned count;
+    TTBIN_RECORD **records;
+} RECORD_ARRAY;
 
 typedef struct
 {
@@ -203,37 +209,18 @@ typedef struct
 
     TTBIN_RECORD *race_setup;
     TTBIN_RECORD *race_result;
-
     TTBIN_RECORD *training_setup;
-
     TTBIN_RECORD *interval_setup;
 
-    uint32_t gps_record_count;
-    TTBIN_RECORD **gps_records;
-
-    uint32_t status_record_count;
-    TTBIN_RECORD **status_records;
-
-    uint32_t treadmill_record_count;
-    TTBIN_RECORD **treadmill_records;
-
-    uint32_t swim_record_count;
-    TTBIN_RECORD **swim_records;
-
-    uint32_t lap_record_count;
-    TTBIN_RECORD **lap_records;
-
-    uint32_t heart_rate_record_count;
-    TTBIN_RECORD **heart_rate_records;
-
-    uint32_t goal_progress_record_count;
-    TTBIN_RECORD **goal_progress_records;
-
-    uint32_t interval_start_record_count;
-    TTBIN_RECORD **interval_start_records;
-
-    uint32_t interval_finish_record_count;
-    TTBIN_RECORD **interval_finish_records;
+    RECORD_ARRAY gps_records;
+    RECORD_ARRAY status_records;
+    RECORD_ARRAY treadmill_records;
+    RECORD_ARRAY swim_records;
+    RECORD_ARRAY lap_records;
+    RECORD_ARRAY heart_rate_records;
+    RECORD_ARRAY goal_progress_records;
+    RECORD_ARRAY interval_start_records;
+    RECORD_ARRAY interval_finish_records;
 
     TTBIN_RECORD *first;
     TTBIN_RECORD *last;

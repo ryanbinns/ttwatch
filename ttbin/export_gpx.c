@@ -12,7 +12,7 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
     TTBIN_RECORD *record;
     int heart_rate;
 
-    if (!ttbin->gps_records)
+    if (!ttbin->gps_records.count)
         return;
 
     fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
@@ -41,30 +41,6 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
     }
     fputs("</name>\r\n        <trkseg>\r\n", file);
 
-    /*for (i = 0; i < ttbin->gps_record_count; ++i)
-    {
-        if ((ttbin->gps_records[i].timestamp != 0) &&
-            !((ttbin->gps_records[i].latitude == 0) && (ttbin->gps_records[i].longitude == 0)))
-        {
-            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&ttbin->gps_records[i].timestamp));
-            fprintf(file, "            <trkpt lon=\"%.6f\" lat=\"%.6f\">\r\n",
-                ttbin->gps_records[i].longitude, ttbin->gps_records[i].latitude);
-            fprintf(file, "                <ele>%d</ele>\r\n", (int)ttbin->gps_records[i].elevation);
-            fputs(        "                <time>", file);
-            fputs(timestr, file);
-            fputs("</time>\r\n", file);
-            if ((i < ttbin->heart_rate_record_count) && (ttbin->heart_rate_records[i].heart_rate > 0))
-            {
-                fputs("                <extensions>\r\n"
-                      "                    <gpxtpx:TrackPointExtension>\r\n", file);
-                fprintf(file, "                        <gpxtpx:hr>%d</gpxtpx:hr>\r\n",
-                    ttbin->heart_rate_records[i].heart_rate);
-                fputs("                    </gpxtpx:TrackPointExtension>\r\n"
-                      "                </extensions>\r\n", file);
-            }
-            fputs(        "            </trkpt>\r\n", file);
-        }
-    }*/
     heart_rate = 0;
     for (record = ttbin->first; record; record = record->next)
     {
@@ -72,12 +48,12 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
         {
         case TAG_GPS:
             /* this will happen if the GPS signal is lost or the activity is paused */
-            if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
+            if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
                 continue;
-            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps->timestamp));
+            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps.timestamp));
             fprintf(file, "            <trkpt lon=\"%.6f\" lat=\"%.6f\">\r\n",
-                record->gps->longitude, record->gps->latitude);
-            fprintf(file, "                <ele>%d</ele>\r\n", (int)record->gps->elevation);
+                record->gps.longitude, record->gps.latitude);
+            fprintf(file, "                <ele>%d</ele>\r\n", (int)record->gps.elevation);
             fputs(        "                <time>", file);
             fputs(timestr, file);
             fputs("</time>\r\n", file);
@@ -92,7 +68,7 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             fputs(        "            </trkpt>\r\n", file);
             break;
         case TAG_HEART_RATE:
-            heart_rate = record->heart_rate->heart_rate;
+            heart_rate = record->heart_rate.heart_rate;
             break;
         }
     }

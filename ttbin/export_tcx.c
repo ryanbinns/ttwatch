@@ -27,7 +27,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_avg_heart_rate;
     unsigned lap_max_heart_rate;
 
-    if (!ttbin->gps_records)
+    if (!ttbin->gps_records.count)
         return;
 
     fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
@@ -67,35 +67,14 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         {
         case TAG_GPS:
             /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
-            if ((record->gps->timestamp == 0) || ((record->gps->latitude == 0) && (record->gps->longitude == 0)))
+            if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
                 break;
 
-            if (record->gps->speed > max_speed)
-                max_speed = record->gps->speed;
-            total_speed += record->gps->speed;
+            if (record->gps.speed > max_speed)
+                max_speed = record->gps.speed;
+            total_speed += record->gps.speed;
             ++gps_count;
 
-            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps->timestamp));
-            fputs(        "                    <Trackpoint>\r\n", file);
-            fprintf(file, "                        <Time>%s</Time>\r\n", timestr);
-            fputs(        "                        <Position>\r\n", file);
-            fprintf(file, "                            <LatitudeDegrees>%.7f</LatitudeDegrees>\r\n", record->gps->latitude);
-            fprintf(file, "                            <LongitudeDegrees>%.7f</LongitudeDegrees>\r\n", record->gps->longitude);
-            fputs(        "                        </Position>\r\n", file);
-            fprintf(file, "                        <AltitudeMeters>%.0f</AltitudeMeters>\r\n", record->gps->elevation);
-            fprintf(file, "                        <DistanceMeters>%.5f</DistanceMeters>\r\n", record->gps->cum_distance);
-            if (heart_rate > 0)
-            {
-                fputs(        "                        <HeartRateBpm>\r\n", file);
-                fprintf(file, "                            <Value>%d</Value>\r\n", heart_rate);
-                fputs(        "                        </HeartRateBpm>\r\n", file);
-            }
-            fputs(        "                        <Extensions>\r\n"
-                          "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
-            fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps->speed);
-            fputs(        "                            </TPX>\r\n"
-                          "                        </Extensions>\r\n"
-                          "                    </Trackpoint>\r\n", file);
             if (lap_state == 1)
             {
                 fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
@@ -104,7 +83,29 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                               "                <Track>\r\n", file);
                 lap_state = 0;
             }
-            else if (lap_state == 2)
+
+            strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps.timestamp));
+            fputs(        "                    <Trackpoint>\r\n", file);
+            fprintf(file, "                        <Time>%s</Time>\r\n", timestr);
+            fputs(        "                        <Position>\r\n", file);
+            fprintf(file, "                            <LatitudeDegrees>%.7f</LatitudeDegrees>\r\n", record->gps.latitude);
+            fprintf(file, "                            <LongitudeDegrees>%.7f</LongitudeDegrees>\r\n", record->gps.longitude);
+            fputs(        "                        </Position>\r\n", file);
+            fprintf(file, "                        <AltitudeMeters>%.0f</AltitudeMeters>\r\n", record->gps.elevation);
+            fprintf(file, "                        <DistanceMeters>%.5f</DistanceMeters>\r\n", record->gps.cum_distance);
+            if (heart_rate > 0)
+            {
+                fputs(        "                        <HeartRateBpm>\r\n", file);
+                fprintf(file, "                            <Value>%d</Value>\r\n", heart_rate);
+                fputs(        "                        </HeartRateBpm>\r\n", file);
+            }
+            fputs(        "                        <Extensions>\r\n"
+                          "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
+            fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps.speed);
+            fputs(        "                            </TPX>\r\n"
+                          "                        </Extensions>\r\n"
+                          "                    </Trackpoint>\r\n", file);
+            if (lap_state == 2)
             {
                 fputs(        "                    <Extensions>\r\n"
                               "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
@@ -131,19 +132,19 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             heart_rate = 0;
             break;
         case TAG_HEART_RATE:
-            if (record->heart_rate->heart_rate > max_heart_rate)
-                max_heart_rate = record->heart_rate->heart_rate;
-            total_heart_rate += record->heart_rate->heart_rate;
+            if (record->heart_rate.heart_rate > max_heart_rate)
+                max_heart_rate = record->heart_rate.heart_rate;
+            total_heart_rate += record->heart_rate.heart_rate;
             ++heart_rate_count;
 
-            heart_rate = record->heart_rate->heart_rate;
+            heart_rate = record->heart_rate.heart_rate;
             break;
         case TAG_LAP:
             lap_avg_speed = total_speed / gps_count;
-            lap_time = record->lap->total_time;
-            lap_distance = record->lap->total_distance;
+            lap_time = record->lap.total_time;
+            lap_distance = record->lap.total_distance;
             lap_max_speed = max_speed;
-            lap_calories = record->lap->total_calories;
+            lap_calories = record->lap.total_calories;
             lap_heart_rate_count = heart_rate_count;
             if (heart_rate_count > 0)
                 lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;

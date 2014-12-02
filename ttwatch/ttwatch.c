@@ -623,7 +623,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
 
         /* parse the activity file */
         ttbin = parse_ttbin_data(data, size);
-        if (formats && ttbin->gps_record_count)
+        if (formats && ttbin->gps_records.count)
         {
             write_log(0, "Downloading elevation data\n");
             download_elevation_data(ttbin);

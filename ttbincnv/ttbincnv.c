@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
     }
 
     /* if we have gps data, download the elevation data */
-    if (ttbin->gps_record_count)
+    if (ttbin->gps_records.count)
         download_elevation_data(ttbin);
 
     /* set the list of laps if we have been asked to */
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
     {
         if ((formats & OFFLINE_FORMATS[i].mask) && OFFLINE_FORMATS[i].producer)
         {
-            if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_record_count)
+            if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_records.count)
             {
                 FILE *output_file = stdout;
                 if (!pipe_mode)
