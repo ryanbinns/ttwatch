@@ -7,7 +7,7 @@
 
 void export_csv(TTBIN_FILE *ttbin, FILE *file)
 {
-    uint32_t i, steps_prev = 0;
+    uint32_t steps_prev = 0;
     uint32_t current_lap = 1;
     char timestr[32];
     TTBIN_RECORD *record;
@@ -73,8 +73,8 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 
                 strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->treadmill->timestamp));
 
-                fprintf(file, "%u,7,%u,%.2f,,%d,,,,", i, current_lap,
-                    record->treadmill->distance * distance_factor, record->treadmill->calories);
+                fprintf(file, "%u,7,%u,%.2f,,%d,,,,", (unsigned)(record->treadmill->timestamp - ttbin->timestamp_utc),
+                    current_lap, record->treadmill->distance * distance_factor, record->treadmill->calories);
                 if (heart_rate > 0)
                     fprintf(file, "%d", heart_rate);
                 fprintf(file, ",%d,%s\r\n", record->treadmill->steps - steps_prev, timestr);
@@ -104,7 +104,8 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->swim->timestamp));
 
             fprintf(file, "%u,2,%d,%.2f,,%d,,,,,%d,%s\r\n",
-                i, record->swim->completed_laps + 1, record->swim->total_distance,
+                (unsigned)(record->swim->timestamp - ttbin->timestamp_utc),
+                record->swim->completed_laps + 1, record->swim->total_distance,
                 record->swim->total_calories, record->swim->strokes * 60, timestr);
         }
         break;
