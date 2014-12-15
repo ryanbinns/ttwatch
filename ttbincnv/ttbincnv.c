@@ -192,15 +192,6 @@ int main(int argc, char *argv[])
     if (set_laps)
         do_replace_lap_list(ttbin, lap_definitions);
 
-    {
-        FILE *f = fopen("test.ttbin", "w");
-        if (f)
-        {
-            write_ttbin_file(ttbin, f);
-            fclose(f);
-        }
-    }
-
     /* write the output files */
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
