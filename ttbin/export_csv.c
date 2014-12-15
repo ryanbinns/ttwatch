@@ -12,6 +12,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
     char timestr[32];
     TTBIN_RECORD *record;
     unsigned heart_rate;
+    double distance_factor = 1;
 
     fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles,localtime\r\n", file);
 
@@ -55,6 +56,12 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
     case ACTIVITY_TREADMILL:
         heart_rate = 0;
         current_lap = 1;
+        for (record = ttbin->last; record; record = record->prev) {
+            if (record->tag == TAG_TREADMILL && record->treadmill->distance) {
+                distance_factor = ttbin->total_distance / record->treadmill->distance;
+                break;
+            }
+        }
         for (record = ttbin->first; record; record = record->next)
         {
             switch (record->tag)
@@ -66,8 +73,8 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 
                 strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->treadmill->timestamp));
 
-                fprintf(file, "%u,7,%u,%.2f,,%d,,,,", i, current_lap, record->treadmill->distance,
-                    record->treadmill->calories);
+                fprintf(file, "%u,7,%u,%.2f,,%d,,,,", i, current_lap,
+                    record->treadmill->distance * distance_factor, record->treadmill->calories);
                 if (heart_rate > 0)
                     fprintf(file, "%d", heart_rate);
                 fprintf(file, ",%d,%s\r\n", record->treadmill->steps - steps_prev, timestr);
