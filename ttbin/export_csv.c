@@ -36,7 +36,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 
                 fprintf(file, "%u,%d,%d,%.5f,%.2f,%d,%.7f,%.7f,%.2f,",
                     (unsigned)(record->gps.timestamp - ttbin->timestamp_utc), ttbin->activity, current_lap,
-                    record->gps.cum_distance, record->gps.speed, record->gps.calories,
+                    record->gps.cum_distance, record->gps.instant_speed, record->gps.calories,
                     record->gps.latitude, record->gps.longitude, record->gps.elevation);
                 if (heart_rate > 0)
                     fprintf(file, "%d", heart_rate);
@@ -56,8 +56,10 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
     case ACTIVITY_TREADMILL:
         heart_rate = 0;
         current_lap = 1;
-        for (record = ttbin->last; record; record = record->prev) {
-            if (record->tag == TAG_TREADMILL && record->treadmill.distance) {
+        for (record = ttbin->last; record; record = record->prev)
+        {
+            if ((record->tag == TAG_TREADMILL) && record->treadmill.distance)
+            {
                 distance_factor = ttbin->total_distance / record->treadmill.distance;
                 break;
             }

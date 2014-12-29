@@ -70,9 +70,9 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
                 break;
 
-            if (record->gps.speed > max_speed)
-                max_speed = record->gps.speed;
-            total_speed += record->gps.speed;
+            if (record->gps.instant_speed > max_speed)
+                max_speed = record->gps.instant_speed;
+            total_speed += record->gps.instant_speed;
             ++gps_count;
 
             if (lap_state == 1)
@@ -101,7 +101,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             }
             fputs(        "                        <Extensions>\r\n"
                           "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
-            fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps.speed);
+            fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps.instant_speed);
             fputs(        "                            </TPX>\r\n"
                           "                        </Extensions>\r\n"
                           "                    </Trackpoint>\r\n", file);

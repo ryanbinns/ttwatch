@@ -10,25 +10,30 @@
 #include <stdio.h>
 #include <time.h>
 
-#define TAG_FILE_HEADER     (0x20)
-#define TAG_STATUS          (0x21)
-#define TAG_GPS             (0x22)
-#define TAG_HEART_RATE      (0x25)
-#define TAG_SUMMARY         (0x27)
-#define TAG_TRAINING_SETUP  (0x2d)
-#define TAG_LAP             (0x2f)
-#define TAG_TREADMILL       (0x32)
-#define TAG_SWIM            (0x34)
-#define TAG_GOAL_PROGRESS   (0x35)
-#define TAG_INTERVAL_SETUP  (0x39)
-#define TAG_INTERVAL_START  (0x3a)
-#define TAG_INTERVAL_FINISH (0x3b)
-#define TAG_RACE_SETUP      (0x3c)
-#define TAG_RACE_RESULT     (0x3d)
+#define TAG_FILE_HEADER         (0x20)
+#define TAG_STATUS              (0x21)
+#define TAG_GPS                 (0x22)
+#define TAG_HEART_RATE          (0x25)
+#define TAG_SUMMARY             (0x27)
+#define TAG_POOL_SIZE           (0x2a)
+#define TAG_WHEEL_SIZE          (0x2b)
+#define TAG_TRAINING_SETUP      (0x2d)
+#define TAG_LAP                 (0x2f)
+#define TAG_TREADMILL           (0x32)
+#define TAG_SWIM                (0x34)
+#define TAG_GOAL_PROGRESS       (0x35)
+#define TAG_INTERVAL_SETUP      (0x39)
+#define TAG_INTERVAL_START      (0x3a)
+#define TAG_INTERVAL_FINISH     (0x3b)
+#define TAG_RACE_SETUP          (0x3c)
+#define TAG_RACE_RESULT         (0x3d)
+#define TAG_ALTITUDE_UPDATE     (0x3e)
+#define TAG_HEART_RATE_RECOVERY (0x3f)
 
 #define ACTIVITY_RUNNING    (0)
 #define ACTIVITY_CYCLING    (1)
 #define ACTIVITY_SWIMMING   (2)
+#define ACTIVITY_STOPWATCH  (6) /* doesn't actually log any data */
 #define ACTIVITY_TREADMILL  (7)
 #define ACTIVITY_FREESTYLE  (8)
 
@@ -38,10 +43,10 @@ typedef struct
     double   longitude;     /* degrees */
     float    elevation;     /* metres, initialised to 0 */
     float    heading;       /* degrees, N = 0, E = 90.00 */
-    float    speed;         /* m/s */
+    uint16_t gps_speed;         /* m/s */
     time_t   timestamp;     /* gps time (utc) */
     uint16_t calories;
-    float    inc_distance;  /* metres */
+    float    instant_speed; /* m/s */
     float    cum_distance;  /* metres */
     uint8_t  cycles;        /* steps/strokes/cycles etc. */
 } GPS_RECORD;
@@ -59,12 +64,15 @@ typedef struct
     float    distance;      /* metres */
     uint16_t calories;
     uint32_t steps;
+    uint16_t step_length;   /* centimetres */
 } TREADMILL_RECORD;
 
 typedef struct
 {
     time_t   timestamp;         /* utc time */
     float    total_distance;    /* metres */
+    uint8_t  frequency;
+    uint8_t  stroke_type;
     uint32_t strokes;           /* since the last report */
     uint32_t completed_laps;
     uint16_t total_calories;
@@ -85,25 +93,10 @@ typedef struct
 
 typedef struct
 {
-    struct
-    {
-        float    distance;  /* metres */
-        uint32_t duration;  /* seconds */
-        char     name[17];  /* always null-terminated */
-    } setup;
-    struct
-    {
-        float    distance;  /* metres */
-        uint32_t duration;  /* seconds */
-        uint16_t calories;
-    } result;
-} RACE_RECORD;
-
-typedef struct
-{
+    uint8_t  race_id[16];   /* only used for a web services race, 0 otherwise */
     float    distance;  /* metres */
     uint32_t duration;  /* seconds */
-    char     name[17];  /* always null-terminated */
+    char     name[16];  /* always null-terminated */
 } RACE_SETUP_RECORD;
 
 typedef struct
@@ -115,13 +108,27 @@ typedef struct
 
 typedef struct
 {
-    uint8_t type;       /* 0 = goal distance, 1 = goal time, 2 = goal calories,
-                           3 = zones pace, 4 = zones heart, 6 = race,
-                           7 = laps time, 8 = laps distance, 9 = laps manual,
-                           11 = zones speed, 12 = intervals */
+    uint8_t type;   /* 0 = goal distance, 1 = goal time, 2 = goal calories,
+                       3 = zones pace, 4 = zones heart, 5 = zones cadence,
+                       6 = race, 7 = laps time, 8 = laps distance, 9 = laps manual,
+                       10 = stroke rate, 11 = zones speed, 12 = intervals */
     float   value_min;  /* metres, seconds, calories, secs/km, km/h, bpm (min for zones) */
     float   max;        /* secs/km, km/h, bpm (only used for zones) */
 } TRAINING_SETUP_RECORD;
+
+#define TRAINING_GOAL_DISTANCE  (0)
+#define TRAINING_GOAL_TIME      (1)
+#define TRAINING_GOAL_CALORIES  (2)
+#define TRAINING_ZONES_PACE     (3)
+#define TRAINING_ZONES_HEART    (4)
+#define TRAINING_ZONES_CADENCE  (5)
+#define TRAINING_RACE           (6)
+#define TRAINING_LAPS_TIME      (7)
+#define TRAINING_LAPS_DISTANCE  (8)
+#define TRAINING_LAPS_MANUAL    (9)
+#define TRAINING_STROKE_RATE    (10)
+#define TRAINING_ZONES_SPEED    (11)
+#define TRAINING_INTERVALS      (12)
 
 typedef struct
 {
@@ -157,6 +164,29 @@ typedef struct
 
 typedef struct
 {
+    uint32_t status;            /* 3 = good, 4 = excellent */
+    uint32_t heart_rate;        /* heart rate recovery in bpm */
+} HEART_RATE_RECOVERY_RECORD;
+
+typedef struct
+{
+    int16_t rel_altitude;   /* altitude change from workout start */
+    float   total_climb;    /* metres, descents are ignored */
+    uint8_t qualifier;      /* not defined yet */
+} ALTITUDE_RECORD;
+
+typedef struct
+{
+    int32_t pool_size;      /* centimeters */
+} POOL_SIZE_RECORD;
+
+typedef struct
+{
+    uint32_t wheel_size;    /* millimetres */
+} WHEEL_SIZE_RECORD;
+
+typedef struct
+{
     time_t   timestamp;     /* utc time */
     uint16_t length;
     uint8_t  *data;
@@ -170,20 +200,24 @@ typedef struct _TTBIN_RECORD
     uint8_t  tag;
     union
     {
-        uint8_t                data[1];
-        GPS_RECORD             gps;
-        STATUS_RECORD          status;
-        TREADMILL_RECORD       treadmill;
-        SWIM_RECORD            swim;
-        LAP_RECORD             lap;
-        HEART_RATE_RECORD      heart_rate;
-        RACE_SETUP_RECORD      race_setup;
-        RACE_RESULT_RECORD     race_result;
-        TRAINING_SETUP_RECORD  training_setup;
-        GOAL_PROGRESS_RECORD   goal_progress;
-        INTERVAL_SETUP_RECORD  interval_setup;
-        INTERVAL_START_RECORD  interval_start;
-        INTERVAL_FINISH_RECORD interval_finish;
+        uint8_t                    data[1];
+        GPS_RECORD                 gps;
+        STATUS_RECORD              status;
+        TREADMILL_RECORD           treadmill;
+        SWIM_RECORD                swim;
+        LAP_RECORD                 lap;
+        HEART_RATE_RECORD          heart_rate;
+        RACE_SETUP_RECORD          race_setup;
+        RACE_RESULT_RECORD         race_result;
+        TRAINING_SETUP_RECORD      training_setup;
+        GOAL_PROGRESS_RECORD       goal_progress;
+        INTERVAL_SETUP_RECORD      interval_setup;
+        INTERVAL_START_RECORD      interval_start;
+        INTERVAL_FINISH_RECORD     interval_finish;
+        HEART_RATE_RECOVERY_RECORD heart_rate_recovery;
+        ALTITUDE_RECORD            altitude;
+        POOL_SIZE_RECORD           pool_size;
+        WHEEL_SIZE_RECORD          wheel_size;
     };
 } TTBIN_RECORD;
 
@@ -211,6 +245,9 @@ typedef struct
     TTBIN_RECORD *race_result;
     TTBIN_RECORD *training_setup;
     TTBIN_RECORD *interval_setup;
+    TTBIN_RECORD *pool_size;
+    TTBIN_RECORD *wheel_size;
+    TTBIN_RECORD *heart_rate_recovery;
 
     RECORD_ARRAY gps_records;
     RECORD_ARRAY status_records;
@@ -221,6 +258,7 @@ typedef struct
     RECORD_ARRAY goal_progress_records;
     RECORD_ARRAY interval_start_records;
     RECORD_ARRAY interval_finish_records;
+    RECORD_ARRAY altitude_records;
 
     TTBIN_RECORD *first;
     TTBIN_RECORD *last;

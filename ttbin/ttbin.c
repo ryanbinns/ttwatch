@@ -35,14 +35,15 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
-    uint8_t  file_version;
-    uint8_t  firmware_version[4];
+    uint16_t file_version;
+    uint8_t  firmware_version[3];
     uint16_t product_id;
-    uint32_t timestamp;     /* local time */
-    uint8_t  _unk[96];
-    uint32_t timestamp2;    /* local time, duplicate */
+    uint32_t start_time;    /* local time */
+    uint8_t  software_version[16];
+    uint8_t  gps_firmware_version[80];
+    uint32_t watch_time;    /* local time */
     int32_t local_time_offset;  /* seconds from UTC */
-    uint8_t  _unk2;
+    uint8_t  _reserved;
     uint8_t  length_count;  /* number of RECORD_LENGTH objects to follow */
     RECORD_LENGTH lengths[1];
 } FILE_HEADER;
@@ -60,18 +61,18 @@ typedef struct __attribute__((packed))
     int32_t  latitude;      /* degrees * 1e7 */
     int32_t  longitude;     /* degrees * 1e7 */
     uint16_t heading;       /* degrees * 100, N = 0, E = 9000 */
-    uint16_t speed;         /* m/s * 100 */
+    uint16_t gps_speed;     /* cm/s */
     uint32_t timestamp;     /* gps time (utc) */
     uint16_t calories;
-    float    inc_distance;  /* metres */
+    float    instant_speed; /* m/s */
     float    cum_distance;  /* metres */
-    uint8_t  cycles;        /* steps/strokes/cycles etc. */
+    uint8_t  cycles;        /* running = steps/sec, cycling = crank rpm */
 } FILE_GPS_RECORD;
 
 typedef struct __attribute__((packed))
 {
     uint8_t  heart_rate;    /* bpm */
-    uint8_t  _unk;
+    uint8_t  _reserved;
     uint32_t timestamp;     /* local time */
 } FILE_HEART_RATE_RECORD;
 
@@ -88,15 +89,15 @@ typedef struct __attribute__((packed))
     float    distance;      /* metres */
     uint16_t calories;
     uint32_t steps;
-    uint16_t _unk;
+    uint16_t step_length;   /* cm, not implemented yet */
 } FILE_TREADMILL_RECORD;
 
 typedef struct __attribute__((packed))
 {
     uint32_t timestamp;         /* local time */
     float    total_distance;    /* metres */
-    uint8_t  _unk1;             /* always 0xff */
-    uint8_t  _unk2;
+    uint8_t  frequency;
+    uint8_t  stroke_type;
     uint32_t strokes;           /* since the last report */
     uint32_t completed_laps;
     uint16_t total_calories;
@@ -111,7 +112,7 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
-    uint32_t _unk[4];
+    uint8_t  race_id[16];   /* only used for a web services race, 0 otherwise */
     float    distance;  /* metres */
     uint32_t duration;  /* seconds */
     char     name[16];  /* unused characters are zero */
@@ -127,9 +128,9 @@ typedef struct __attribute__((packed))
 typedef struct __attribute__((packed))
 {
     uint8_t type;   /* 0 = goal distance, 1 = goal time, 2 = goal calories,
-                       3 = zones pace, 4 = zones heart, 6 = race,
-                       7 = laps time, 8 = laps distance, 11 = zones speed,
-                       12 = intervals */
+                       3 = zones pace, 4 = zones heart, 5 = zones cadence,
+                       6 = race, 7 = laps time, 8 = laps distance, 9 = laps manual,
+                       10 = stroke rate, 11 = zones speed, 12 = intervals */
     float   min;    /* metres, seconds, calories, secs/km, km/h, bpm */
     float   max;    /* secs/km, km/h, bpm (only used for zones) */
 } FILE_TRAINING_SETUP_RECORD;
@@ -165,6 +166,29 @@ typedef struct __attribute__((packed))
     float    total_distance;    /* metres */
     uint16_t total_calories;
 } FILE_INTERVAL_FINISH_RECORD;
+
+typedef struct __attribute__((packed))
+{
+    uint32_t status;        /* 3 = good, 4 = excellent */
+    uint32_t heart_rate;    /* bpm */
+} FILE_HEART_RATE_RECOVERY_RECORD;
+
+typedef struct __attribute__((packed))
+{
+    int16_t rel_altitude;   /* altitude change from workout start */
+    float   total_climb;    /* metres, descents are ignored */
+    uint8_t qualifier;      /* not defined yet */
+} FILE_ALTITUDE_RECORD;
+
+typedef struct __attribute__((packed))
+{
+    int32_t pool_size;      /* centimeters */
+} FILE_POOL_SIZE_RECORD;
+
+typedef struct __attribute__((packed))
+{
+    uint32_t wheel_size;    /* millimetres */
+} FILE_WHEEL_SIZE_RECORD;
 
 /*****************************************************************************/
 
@@ -251,20 +275,24 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             uint8_t tag;
             union
             {
-                FILE_SUMMARY_RECORD         summary;
-                FILE_GPS_RECORD             gps;
-                FILE_HEART_RATE_RECORD      heart_rate;
-                FILE_STATUS_RECORD          status;
-                FILE_TREADMILL_RECORD       treadmill;
-                FILE_SWIM_RECORD            swim;
-                FILE_LAP_RECORD             lap;
-                FILE_RACE_SETUP_RECORD      race_setup;
-                FILE_RACE_RESULT_RECORD     race_result;
-                FILE_TRAINING_SETUP_RECORD  training_setup;
-                FILE_GOAL_PROGRESS_RECORD   goal_progress;
-                FILE_INTERVAL_SETUP_RECORD  interval_setup;
-                FILE_INTERVAL_START_RECORD  interval_start;
-                FILE_INTERVAL_FINISH_RECORD interval_finish;
+                FILE_SUMMARY_RECORD             summary;
+                FILE_GPS_RECORD                 gps;
+                FILE_HEART_RATE_RECORD          heart_rate;
+                FILE_STATUS_RECORD              status;
+                FILE_TREADMILL_RECORD           treadmill;
+                FILE_SWIM_RECORD                swim;
+                FILE_LAP_RECORD                 lap;
+                FILE_RACE_SETUP_RECORD          race_setup;
+                FILE_RACE_RESULT_RECORD         race_result;
+                FILE_TRAINING_SETUP_RECORD      training_setup;
+                FILE_GOAL_PROGRESS_RECORD       goal_progress;
+                FILE_INTERVAL_SETUP_RECORD      interval_setup;
+                FILE_INTERVAL_START_RECORD      interval_start;
+                FILE_INTERVAL_FINISH_RECORD     interval_finish;
+                FILE_ALTITUDE_RECORD            altitude;
+                FILE_POOL_SIZE_RECORD           pool_size;
+                FILE_WHEEL_SIZE_RECORD          wheel_size;
+                FILE_HEART_RATE_RECOVERY_RECORD heart_rate_recovery;
             };
         } *record;
     } p;
@@ -286,8 +314,8 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     file->file_version    = file_header->file_version;
     memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
     file->product_id      = file_header->product_id;
-    file->timestamp_local = file_header->timestamp;
-    file->timestamp_utc   = file_header->timestamp - file_header->local_time_offset;
+    file->timestamp_local = file_header->start_time;
+    file->timestamp_utc   = file_header->start_time - file_header->local_time_offset;
     file->utc_offset      = file_header->local_time_offset;
 
     for (p.data = data; p.data < end; p.data += length)
@@ -328,16 +356,16 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
                 break;
 
             record = append_record(file, p.record->tag, length);
-            record->gps.latitude     = p.record->gps.latitude / 1e7;
-            record->gps.longitude    = p.record->gps.longitude / 1e7;
-            record->gps.elevation    = 0.0f;
-            record->gps.heading      = p.record->gps.heading / 100.0f;
-            record->gps.speed        = p.record->gps.speed / 100.0f;
-            record->gps.timestamp    = p.record->gps.timestamp;
-            record->gps.calories     = p.record->gps.calories;
-            record->gps.inc_distance = p.record->gps.inc_distance;
-            record->gps.cum_distance = p.record->gps.cum_distance;
-            record->gps.cycles       = p.record->gps.cycles;
+            record->gps.latitude      = p.record->gps.latitude / 1e7;
+            record->gps.longitude     = p.record->gps.longitude / 1e7;
+            record->gps.elevation     = 0.0f;
+            record->gps.heading       = p.record->gps.heading / 100.0f;
+            record->gps.gps_speed     = p.record->gps.gps_speed;
+            record->gps.timestamp     = p.record->gps.timestamp;
+            record->gps.calories      = p.record->gps.calories;
+            record->gps.instant_speed = p.record->gps.instant_speed;
+            record->gps.cum_distance  = p.record->gps.cum_distance;
+            record->gps.cycles        = p.record->gps.cycles;
             append_array(&file->gps_records, record);
             break;
         case TAG_HEART_RATE:
@@ -434,6 +462,29 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record->interval_finish.total_calories = p.record->interval_finish.total_calories;
             append_array(&file->interval_finish_records, record);
             break;
+        case TAG_ALTITUDE_UPDATE:
+            record = append_record(file, p.record->tag, length);
+            record->altitude.rel_altitude = p.record->altitude.rel_altitude;
+            record->altitude.total_climb  = p.record->altitude.total_climb;
+            record->altitude.qualifier    = p.record->altitude.qualifier;
+            append_array(&file->altitude_records, record);
+            break;
+        case TAG_POOL_SIZE:
+            record = append_record(file, p.record->tag, length);
+            record->pool_size.pool_size = p.record->pool_size.pool_size;
+            file->pool_size = record;
+            break;
+        case TAG_WHEEL_SIZE:
+            record = append_record(file, p.record->tag, length);
+            record->wheel_size.wheel_size = p.record->wheel_size.wheel_size;
+            file->wheel_size = record;
+            break;
+        case TAG_HEART_RATE_RECOVERY:
+            record = append_record(file, p.record->tag, length);
+            record->heart_rate_recovery.status     = p.record->heart_rate_recovery.status;
+            record->heart_rate_recovery.heart_rate = p.record->heart_rate_recovery.heart_rate;
+            file->heart_rate_recovery = record;
+            break;
         default:
             record = append_record(file, p.record->tag, length);
             memcpy(record->data, p.data + 1, length - 1);
@@ -483,8 +534,8 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     header->file_version = ttbin->file_version;
     memcpy(header->firmware_version, ttbin->firmware_version, sizeof(header->firmware_version));
     header->product_id = ttbin->product_id;
-    header->timestamp = ttbin->timestamp_local;
-    header->timestamp2 = ttbin->timestamp_local;
+    header->start_time = ttbin->timestamp_local;
+    header->watch_time = ttbin->timestamp_local;
     header->local_time_offset = ttbin->utc_offset;
     insert_length_record(header, TAG_FILE_HEADER, sizeof(FILE_HEADER) - sizeof(RECORD_LENGTH));
     insert_length_record(header, TAG_SUMMARY, sizeof(FILE_SUMMARY_RECORD) + 1);
@@ -512,10 +563,10 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
                 (int32_t)(record->gps.latitude * 1e7),
                 (int32_t)(record->gps.longitude * 1e7),
                 (uint16_t)(record->gps.heading * 100.0f + 0.5f),
-                (uint16_t)(record->gps.speed * 100.0f + 0.5f),
+                record->gps.gps_speed,
                 record->gps.timestamp,
                 record->gps.calories,
-                record->gps.inc_distance,
+                record->gps.instant_speed,
                 record->gps.cum_distance,
                 record->gps.cycles
             };
@@ -525,7 +576,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
         case TAG_HEART_RATE: {
             FILE_HEART_RATE_RECORD r = {
                 record->heart_rate.heart_rate,
-                0,  /* unknown */
+                0,  /* reserved */
                 record->heart_rate.timestamp + ttbin->utc_offset
             };
             fwrite(&r, 1, sizeof(FILE_HEART_RATE_RECORD), file);
@@ -546,7 +597,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
                 record->treadmill.distance,
                 record->treadmill.calories,
                 record->treadmill.steps,
-                0
+                record->treadmill.step_length
             };
             fwrite(&r, 1, sizeof(FILE_TREADMILL_RECORD), file);
             break;
@@ -555,8 +606,8 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
             FILE_SWIM_RECORD r = {
                 record->swim.timestamp + ttbin->utc_offset,
                 record->swim.total_distance,
-                0xff,   /* unknown, always 0xff */
-                0x00,   /* unknown */
+                record->swim.frequency,
+                record->swim.stroke_type,
                 record->swim.strokes,
                 record->swim.completed_laps,
                 record->swim.total_calories
@@ -566,11 +617,12 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
         }
         case TAG_RACE_SETUP: {
             FILE_RACE_SETUP_RECORD r = {
-                { 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff },
+                {0},
                 record->race_setup.distance,
                 record->race_setup.duration,
-                {0}
+                {0},
             };
+            memcpy(r.race_id, record->race_setup.race_id, sizeof(r.race_id));
             memcpy(r.name, record->race_setup.name, sizeof(r.name));
             fwrite(&r, 1, sizeof(FILE_RACE_SETUP_RECORD), file);
             break;
@@ -631,6 +683,37 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
                 record->interval_finish.total_calories
             };
             fwrite(&r, 1, sizeof(FILE_INTERVAL_FINISH_RECORD), file);
+            break;
+        }
+        case TAG_ALTITUDE_UPDATE: {
+            FILE_ALTITUDE_RECORD r = {
+                record->altitude.rel_altitude,
+                record->altitude.total_climb,
+                record->altitude.qualifier
+            };
+            fwrite(&r, 1, sizeof(FILE_ALTITUDE_RECORD), file);
+            break;
+        }
+        case TAG_POOL_SIZE: {
+            FILE_POOL_SIZE_RECORD r = {
+                record->pool_size.pool_size
+            };
+            fwrite(&r, 1, sizeof(FILE_POOL_SIZE_RECORD), file);
+            break;
+        }
+        case TAG_WHEEL_SIZE: {
+            FILE_WHEEL_SIZE_RECORD r = {
+                record->wheel_size.wheel_size
+            };
+            fwrite(&r, 1, sizeof(FILE_WHEEL_SIZE_RECORD), file);
+            break;
+        }
+        case TAG_HEART_RATE_RECOVERY: {
+            FILE_HEART_RATE_RECOVERY_RECORD r = {
+                record->heart_rate_recovery.status,
+                record->heart_rate_recovery.heart_rate
+            };
+            fwrite(&r, 1, sizeof(FILE_HEART_RATE_RECOVERY_RECORD), file);
             break;
         }
         default: {
@@ -709,6 +792,7 @@ void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
     case TAG_GOAL_PROGRESS: remove_array(&ttbin->goal_progress_records, record); break;
     case TAG_INTERVAL_START: remove_array(&ttbin->interval_start_records, record); break;
     case TAG_INTERVAL_FINISH: remove_array(&ttbin->interval_finish_records, record); break;
+    case TAG_ALTITUDE_UPDATE: remove_array(&ttbin->altitude_records, record); break;
     }
 
     if (record != ttbin->first)
@@ -924,6 +1008,7 @@ void free_ttbin(TTBIN_FILE *ttbin)
     if (ttbin->goal_progress_records.records)   free(ttbin->goal_progress_records.records);
     if (ttbin->interval_start_records.records)  free(ttbin->interval_start_records.records);
     if (ttbin->interval_finish_records.records) free(ttbin->interval_finish_records.records);
+    if (ttbin->altitude_records.records)        free(ttbin->altitude_records.records);
     free(ttbin);
 }
 

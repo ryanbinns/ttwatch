@@ -219,7 +219,7 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
         if ((ttbin->gps_records.records[i]->gps.timestamp != 0) &&
             !((ttbin->gps_records.records[i]->gps.latitude == 0) && (ttbin->gps_records.records[i]->gps.longitude == 0)))
         {
-            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", ttbin->gps_records.records[i]->gps.speed);
+            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", ttbin->gps_records.records[i]->gps.instant_speed);
         }
     }
     fputs(        "                        </gx:SimpleArrayData>\r\n"
@@ -229,7 +229,7 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
         if ((ttbin->gps_records.records[i]->gps.timestamp != 0) &&
             !((ttbin->gps_records.records[i]->gps.latitude == 0) && (ttbin->gps_records.records[i]->gps.longitude == 0)))
         {
-            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", 1000.0f / (60.0f * ttbin->gps_records.records[i]->gps.speed));
+            fprintf(file, "                            <gx:value>%.2f</gx:value>\r\n", 1000.0f / (60.0f * ttbin->gps_records.records[i]->gps.instant_speed));
         }
     }
     fputs(        "                        </gx:SimpleArrayData>\r\n", file);
