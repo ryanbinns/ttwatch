@@ -18,6 +18,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     uint32_t gps_count = 0;
     unsigned heart_rate;
     int lap_state;
+    int insert_pause;
     float lap_avg_speed;
     unsigned lap_time;
     float lap_distance;
@@ -61,10 +62,16 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
     heart_rate = 0;
     lap_state = 0;
+    insert_pause = 0;
     for (record = ttbin->first; record; record = record->next)
     {
         switch (record->tag)
         {
+        case TAG_STATUS:
+            if ((record->status.status == 2) && (lap_state == 0))
+                insert_pause = 1;
+            break;
+
         case TAG_GPS:
             /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
             if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
@@ -74,6 +81,14 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 max_speed = record->gps.instant_speed;
             total_speed += record->gps.instant_speed;
             ++gps_count;
+
+            if (lap_state == 0 && insert_pause)
+            {
+                /* Garmin's tools use multiple tracks within a lap to signal a pause */
+                insert_pause = 0;
+                fputs("                </Track>\r\n"
+                      "                <Track>\r\n", file);
+            }
 
             if (lap_state == 1)
             {
