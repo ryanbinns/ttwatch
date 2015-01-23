@@ -22,10 +22,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     int lap_state;
     int insert_pause;
     float lap_avg_speed;
-    unsigned lap_time;
-    float lap_distance;
+    unsigned lap_time, lap_start_time = 0;
+    float lap_distance, lap_start_distance = 0.0f;
     float lap_max_speed;
-    unsigned lap_calories;
+    unsigned lap_calories, lap_start_calories = 0;
     unsigned lap_heart_rate_count;
     unsigned lap_avg_heart_rate;
     unsigned lap_max_heart_rate;
@@ -159,10 +159,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             break;
         case TAG_LAP:
             lap_avg_speed = total_speed / gps_count;
-            lap_time = record->lap.total_time;
-            lap_distance = record->lap.total_distance;
+            lap_time = record->lap.total_time - lap_start_time;
+            lap_distance = record->lap.total_distance - lap_start_distance;
             lap_max_speed = max_speed;
-            lap_calories = record->lap.total_calories;
+            lap_calories = record->lap.total_calories - lap_start_calories;
             lap_heart_rate_count = heart_rate_count;
             if (heart_rate_count > 0)
                 lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
@@ -174,6 +174,9 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             max_heart_rate = 0;
             total_heart_rate = 0;
             lap_state = 2;
+            lap_start_time = record->lap.total_time;
+            lap_start_distance = record->lap.total_distance;
+            lap_start_calories = record->lap.total_calories;
             break;
         }
     }
@@ -183,10 +186,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         if (!lap_state)
         {
             lap_avg_speed = total_speed / gps_count;
-            lap_time = ttbin->duration;
-            lap_distance = ttbin->total_distance;
+            lap_time = ttbin->duration - lap_start_time;
+            lap_distance = ttbin->total_distance - lap_start_distance;
             lap_max_speed = max_speed;
-            lap_calories = ttbin->total_calories;
+            lap_calories = ttbin->total_calories - lap_start_calories;
             lap_heart_rate_count = heart_rate_count;
             if (heart_rate_count > 0)
                 lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
