@@ -5,6 +5,8 @@
 
 #include "ttbin.h"
 
+#include <math.h>
+
 void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t i;
@@ -106,7 +108,8 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             fprintf(file, "                            <LatitudeDegrees>%.7f</LatitudeDegrees>\r\n", record->gps.latitude);
             fprintf(file, "                            <LongitudeDegrees>%.7f</LongitudeDegrees>\r\n", record->gps.longitude);
             fputs(        "                        </Position>\r\n", file);
-            fprintf(file, "                        <AltitudeMeters>%.0f</AltitudeMeters>\r\n", record->gps.elevation);
+            if (!isnan(record->gps.elevation))
+                fprintf(file, "                        <AltitudeMeters>%.0f</AltitudeMeters>\r\n", record->gps.elevation);
             fprintf(file, "                        <DistanceMeters>%.5f</DistanceMeters>\r\n", record->gps.cum_distance);
             if (heart_rate > 0)
             {

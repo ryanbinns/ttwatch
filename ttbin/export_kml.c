@@ -186,7 +186,7 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
             fputs(        "</when>\r\n", file);
             fprintf(file, "                <gx:coord>%.6f %.6f %d</gx:coord>\r\n",
                 ttbin->gps_records.records[i]->gps.longitude, ttbin->gps_records.records[i]->gps.latitude,
-                (int)ttbin->gps_records.records[i]->gps.elevation);
+                isnan(ttbin->gps_records.records[i]->gps.elevation) ? 0 : (int)ttbin->gps_records.records[i]->gps.elevation);
         }
     }
     fputs(        "                <ExtendedData>\r\n"

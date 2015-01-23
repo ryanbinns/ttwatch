@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <curl/curl.h>
 
@@ -358,7 +359,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record = append_record(file, p.record->tag, length);
             record->gps.latitude      = p.record->gps.latitude / 1e7;
             record->gps.longitude     = p.record->gps.longitude / 1e7;
-            record->gps.elevation     = 0.0f;
+            record->gps.elevation     = NAN; /* was 0.0f */
             record->gps.heading       = p.record->gps.heading / 100.0f;
             record->gps.gps_speed     = p.record->gps.gps_speed;
             record->gps.timestamp     = p.record->gps.timestamp;
