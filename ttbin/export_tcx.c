@@ -217,9 +217,9 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                   "                <UnitId>0</UnitId>\r\n"
                   "                <ProductID>0</ProductID>\r\n"
                   "                <Version>\r\n", file);
-    fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[1]);
-    fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[2]);
-    fprintf(file, "                    <BuildMajor>%d</BuildMajor>\r\n", ttbin->firmware_version[3]);
+    fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[0]);
+    fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[1]);
+    fprintf(file, "                    <BuildMajor>%d</BuildMajor>\r\n", ttbin->firmware_version[2]);
     fputs(        "                    <BuildMinor>0</BuildMinor>\r\n"
                   "                </Version>\r\n"
                   "            </Creator>\r\n"
