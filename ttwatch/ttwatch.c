@@ -516,9 +516,9 @@ void do_get_time(libusb_device_handle *device)
             time += offset;
             strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
             if (offset % 3600)
-                write_log(0, "Local time: %s (UTC+%.1f)\n", timestr, offset / 3600.0);
+                write_log(0, "Local time: %s (UTC%+.1f)\n", timestr, offset / 3600.0);
             else
-                write_log(0, "Local time: %s (UTC+%d)\n", timestr, offset / 3600);
+                write_log(0, "Local time: %s (UTC%+d)\n", timestr, offset / 3600);
             break;
         }
     }
