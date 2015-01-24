@@ -512,12 +512,13 @@ void do_get_time(libusb_device_handle *device)
         if (manifest->entries[i].entry == TT_MANIFEST_ENTRY_UTC_OFFSET)
         {
             /* generate, format and display the local time value */
-            time += manifest->entries[i].value;
+            int32_t offset = (int32_t) manifest->entries[i].value;
+            time += offset;
             strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
-            if (manifest->entries[i].value % 3600)
-                write_log(0, "Local time: %s (UTC+%.1f)\n", timestr, manifest->entries[i].value / 3600.0);
+            if (offset % 3600)
+                write_log(0, "Local time: %s (UTC+%.1f)\n", timestr, offset / 3600.0);
             else
-                write_log(0, "Local time: %s (UTC+%d)\n", timestr, manifest->entries[i].value / 3600);
+                write_log(0, "Local time: %s (UTC+%d)\n", timestr, offset / 3600);
             break;
         }
     }
