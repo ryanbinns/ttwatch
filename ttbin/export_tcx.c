@@ -126,7 +126,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             if (lap_state == 2)
             {
                 fputs(        "                    <Extensions>\r\n"
-                              "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
+                              "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
                 fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
                 fputs(        "                       </LX>\r\n"
                               "                    </Extensions>\r\n", file);
@@ -194,7 +194,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         }
 
         fputs(        "                    <Extensions>\r\n"
-                      "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
+                      "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
         fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
         fputs(        "                       </LX>\r\n"
                       "                    </Extensions>\r\n", file);
