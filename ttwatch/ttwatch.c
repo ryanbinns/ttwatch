@@ -1450,7 +1450,7 @@ void do_list_history(libusb_device_handle *device)
 
         switch (history->activity)
         {
-        case ACTIVITY_RUNNING:   write_log(0, "Runnning:\n");  break;
+        case ACTIVITY_RUNNING:   write_log(0, "Running:\n");  break;
         case ACTIVITY_CYCLING:   write_log(0, "Cycling:\n");   break;
         case ACTIVITY_SWIMMING:  write_log(0, "Swimming:\n");  break;
         case ACTIVITY_TREADMILL: write_log(0, "Treadmill:\n"); break;
