@@ -5,6 +5,8 @@
 
 #include "ttbin.h"
 
+#include <math.h>
+
 void export_gpx(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t i;
@@ -53,7 +55,8 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps.timestamp));
             fprintf(file, "            <trkpt lon=\"%.6f\" lat=\"%.6f\">\r\n",
                 record->gps.longitude, record->gps.latitude);
-            fprintf(file, "                <ele>%d</ele>\r\n", (int)record->gps.elevation);
+            if (!isnan(record->gps.elevation))
+                fprintf(file, "                <ele>%d</ele>\r\n", (int)record->gps.elevation);
             fputs(        "                <time>", file);
             fputs(timestr, file);
             fputs("</time>\r\n", file);

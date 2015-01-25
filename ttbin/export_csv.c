@@ -5,6 +5,8 @@
 
 #include "ttbin.h"
 
+#include <math.h>
+
 void export_csv(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t steps_prev = 0;
@@ -34,10 +36,13 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 
                 strftime(timestr, sizeof(timestr), "%FT%X", localtime(&record->gps.timestamp));
 
-                fprintf(file, "%u,%d,%d,%.5f,%.2f,%d,%.7f,%.7f,%.2f,",
+                fprintf(file, "%u,%d,%d,%.5f,%.2f,%d,%.7f,%.7f,",
                     (unsigned)(record->gps.timestamp - ttbin->timestamp_utc), ttbin->activity, current_lap,
                     record->gps.cum_distance, record->gps.instant_speed, record->gps.calories,
-                    record->gps.latitude, record->gps.longitude, record->gps.elevation);
+                    record->gps.latitude, record->gps.longitude);
+                if (!isnan(record->gps.elevation))
+                    fprintf(file, "%.2f", record->gps.elevation);
+                fputs(",", file);
                 if (heart_rate > 0)
                     fprintf(file, "%d", heart_rate);
                 fprintf(file, ",%d,%s\r\n", record->gps.cycles, timestr);

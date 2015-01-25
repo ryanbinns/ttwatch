@@ -50,10 +50,11 @@ void help(char *argv[])
     printf("Converts TomTom TTBIN files to other file formats.\n");
     printf("\n");
     printf("Mandatory arguments to long options are mandatory for short options too.\n");
-    printf("  -h, --help         Print this help.\n");
-    printf("  -l, --laps=[list]  Replace the laps recorded on the watch with a list of\n");
-    printf("                       alternative laps.\n");
-    printf("  -a, --all          Output all supported file formats.\n");
+    printf("  -h, --help          Print this help.\n");
+    printf("  -l, --laps=[list]   Replace the laps recorded on the watch with a list of\n");
+    printf("                        alternative laps.\n");
+    printf("  -E, --no-elevation  Do not download elevation data.\n");
+    printf("  -a, --all           Output all supported file formats.\n");
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (OFFLINE_FORMATS[i].producer)
@@ -80,6 +81,7 @@ int main(int argc, char *argv[])
     uint32_t formats = 0;
     int pipe_mode = 0;
     int set_laps = 0;
+    int download_elevation = 1;
     char *lap_definitions = 0;
     FILE *input_file = 0;
     TTBIN_FILE *ttbin = 0;
@@ -89,16 +91,17 @@ int main(int argc, char *argv[])
     int option_index = 0;
 
     /* create the options lists */
-    #define OPTION_COUNT    (OFFLINE_FORMAT_COUNT + 4)
+    #define OPTION_COUNT    (OFFLINE_FORMAT_COUNT + 5)
     struct option long_options[OPTION_COUNT] =
     {
         { "help", no_argument, 0, 'h' },
         { "all",  no_argument, 0, 'a' },
         { "laps", required_argument, 0, 'l' },
+        { "no-elevation", no_argument, 0, 'E' },
     };
-    char short_options[OPTION_COUNT + 1] = "hl:a";
+    char short_options[OPTION_COUNT + 1] = "hl:aE";
 
-    opt = 3;
+    opt = 4;
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (OFFLINE_FORMATS[i].producer)
@@ -131,6 +134,9 @@ int main(int argc, char *argv[])
             break;
         case 'a':   /* all supported formats */
             formats = 0xffffffff;
+            break;
+        case 'E':   /* no elevation */
+            download_elevation = 0;
             break;
         default:
             for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
@@ -185,7 +191,7 @@ int main(int argc, char *argv[])
     }
 
     /* if we have gps data, download the elevation data */
-    if (ttbin->gps_records.count)
+    if (ttbin->gps_records.count && download_elevation)
         download_elevation_data(ttbin);
 
     /* set the list of laps if we have been asked to */

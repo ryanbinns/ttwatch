@@ -5,6 +5,8 @@
 
 #include "ttbin.h"
 
+#include <math.h>
+
 void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 {
     uint32_t i;
@@ -18,6 +20,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     uint32_t gps_count = 0;
     unsigned heart_rate;
     int lap_state;
+    int insert_pause;
     float lap_avg_speed;
     unsigned lap_time;
     float lap_distance;
@@ -61,10 +64,16 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
     heart_rate = 0;
     lap_state = 0;
+    insert_pause = 0;
     for (record = ttbin->first; record; record = record->next)
     {
         switch (record->tag)
         {
+        case TAG_STATUS:
+            if ((record->status.status == 2) && (lap_state == 0))
+                insert_pause = 1;
+            break;
+
         case TAG_GPS:
             /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
             if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
@@ -74,6 +83,14 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 max_speed = record->gps.instant_speed;
             total_speed += record->gps.instant_speed;
             ++gps_count;
+
+            if (lap_state == 0 && insert_pause)
+            {
+                /* Garmin's tools use multiple tracks within a lap to signal a pause */
+                insert_pause = 0;
+                fputs("                </Track>\r\n"
+                      "                <Track>\r\n", file);
+            }
 
             if (lap_state == 1)
             {
@@ -91,7 +108,8 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             fprintf(file, "                            <LatitudeDegrees>%.7f</LatitudeDegrees>\r\n", record->gps.latitude);
             fprintf(file, "                            <LongitudeDegrees>%.7f</LongitudeDegrees>\r\n", record->gps.longitude);
             fputs(        "                        </Position>\r\n", file);
-            fprintf(file, "                        <AltitudeMeters>%.0f</AltitudeMeters>\r\n", record->gps.elevation);
+            if (!isnan(record->gps.elevation))
+                fprintf(file, "                        <AltitudeMeters>%.0f</AltitudeMeters>\r\n", record->gps.elevation);
             fprintf(file, "                        <DistanceMeters>%.5f</DistanceMeters>\r\n", record->gps.cum_distance);
             if (heart_rate > 0)
             {
@@ -108,7 +126,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             if (lap_state == 2)
             {
                 fputs(        "                    <Extensions>\r\n"
-                              "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
+                              "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
                 fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
                 fputs(        "                       </LX>\r\n"
                               "                    </Extensions>\r\n", file);
@@ -176,7 +194,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         }
 
         fputs(        "                    <Extensions>\r\n"
-                      "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/vs\">\r\n", file);
+                      "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
         fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
         fputs(        "                       </LX>\r\n"
                       "                    </Extensions>\r\n", file);
@@ -202,9 +220,9 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                   "                <UnitId>0</UnitId>\r\n"
                   "                <ProductID>0</ProductID>\r\n"
                   "                <Version>\r\n", file);
-    fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[1]);
-    fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[2]);
-    fprintf(file, "                    <BuildMajor>%d</BuildMajor>\r\n", ttbin->firmware_version[3]);
+    fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[0]);
+    fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[1]);
+    fprintf(file, "                    <BuildMajor>%d</BuildMajor>\r\n", ttbin->firmware_version[2]);
     fputs(        "                    <BuildMinor>0</BuildMinor>\r\n"
                   "                </Version>\r\n"
                   "            </Creator>\r\n"
