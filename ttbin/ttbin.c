@@ -46,7 +46,7 @@ typedef struct __attribute__((packed))
     int32_t local_time_offset;  /* seconds from UTC */
     uint8_t  _reserved;
     uint8_t  length_count;  /* number of RECORD_LENGTH objects to follow */
-    RECORD_LENGTH lengths[1];
+    RECORD_LENGTH lengths[];
 } FILE_HEADER;
 
 typedef struct __attribute__((packed))
@@ -301,7 +301,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     TTBIN_RECORD *record;
 
     /* check that the file is long enough */
-    if (size < (sizeof(FILE_HEADER) - sizeof(RECORD_LENGTH)))
+    if (size < sizeof(FILE_HEADER))
         return 0;
 
     if (*data++ != TAG_FILE_HEADER)
@@ -311,7 +311,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     memset(file, 0, sizeof(TTBIN_FILE));
 
     file_header = (FILE_HEADER*)data;
-    data += sizeof(FILE_HEADER) + (file_header->length_count - 1) * sizeof(RECORD_LENGTH);
+    data += sizeof(FILE_HEADER) + (file_header->length_count) * sizeof(RECORD_LENGTH);
     file->file_version    = file_header->file_version;
     memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
     file->product_id      = file_header->product_id;
@@ -529,7 +529,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     FILE_SUMMARY_RECORD summary;
 
     /* create and write the file header */
-    size = sizeof(FILE_HEADER) + 29 * sizeof(RECORD_LENGTH);
+    size = sizeof(FILE_HEADER) + 30 * sizeof(RECORD_LENGTH);
     header = (FILE_HEADER*)malloc(size);
     memset(header, 0, size);
     header->file_version = ttbin->file_version;
@@ -538,12 +538,12 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     header->start_time = ttbin->timestamp_local;
     header->watch_time = ttbin->timestamp_local;
     header->local_time_offset = ttbin->utc_offset;
-    insert_length_record(header, TAG_FILE_HEADER, sizeof(FILE_HEADER) - sizeof(RECORD_LENGTH));
+    insert_length_record(header, TAG_FILE_HEADER, sizeof(FILE_HEADER));
     insert_length_record(header, TAG_SUMMARY, sizeof(FILE_SUMMARY_RECORD) + 1);
     for (record = ttbin->first; record; record = record->next)
         insert_length_record(header, record->tag, record->length);
     fwrite(&tag, 1, 1, file);
-    fwrite(header, 1, sizeof(FILE_HEADER) + (header->length_count - 1) * sizeof(RECORD_LENGTH), file);
+    fwrite(header, 1, sizeof(FILE_HEADER) + (header->length_count) * sizeof(RECORD_LENGTH), file);
 
     for (record = ttbin->first; record; record = record->next)
     {
