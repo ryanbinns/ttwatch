@@ -61,6 +61,7 @@ typedef struct
     int get_time;
     int set_time;
     int get_activities;
+    int no_elevation;
     int get_name;
     int set_name;
     char *watch_name;
@@ -592,7 +593,7 @@ static void _mkdir(const char *dir)
     mkdir(tmp, 0755);
 }
 
-void do_get_activities(libusb_device_handle *device, const char *store, uint32_t formats)
+void do_get_activities(libusb_device_handle *device, const char *store, uint32_t formats, int elevation)
 {
     char filename[256] = {0};
     char **ptr;
@@ -624,7 +625,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
 
         /* parse the activity file */
         ttbin = parse_ttbin_data(data, size);
-        if (formats && ttbin->gps_records.count)
+        if (formats && ttbin->gps_records.count && elevation)
         {
             write_log(0, "Downloading elevation data\n");
             download_elevation_data(ttbin);
@@ -2001,7 +2002,7 @@ void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
     if (options->get_activities)
     {
         uint32_t formats = get_configured_formats(device);
-        do_get_activities(device, options->activity_store, formats);
+        do_get_activities(device, options->activity_store, formats, 1);
     }
 
     if (options->update_gps)
@@ -2154,6 +2155,7 @@ void help(char *argv[])
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
     write_log(0, "                               currently stored on the watch\n");
+    write_log(0, "      --no-elevation         Do not download elevation data.\n");
     write_log(0, "      --get-formats          Displays the list of file formats that are\n");
     write_log(0, "                               saved when the watch is automatically processed\n");
     write_log(0, "      --get-name             Displays the current watch name\n");
@@ -2271,6 +2273,7 @@ int main(int argc, char *argv[])
         { "get-time",       no_argument,       &options.get_time,        1 },
         { "set-time",       no_argument,       &options.set_time,        1 },
         { "get-activities", no_argument,       &options.get_activities,  1 },
+        { "no-elevation",   no_argument,       &options.no_elevation,    1 },
         { "packets",        no_argument,       &show_packets,            1 },
         { "devices",        no_argument,       &options.list_devices,    1 },
         { "get-formats",    no_argument,       &options.list_formats,    1 },
@@ -2575,7 +2578,7 @@ int main(int argc, char *argv[])
         do_set_time(device);
 
     if (options.get_activities)
-        do_get_activities(device, options.activity_store, 0);
+        do_get_activities(device, options.activity_store, 0, !options.no_elevation);
 
     if (options.update_gps)
         do_update_gps(device);
