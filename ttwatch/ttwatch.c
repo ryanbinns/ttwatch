@@ -7,6 +7,7 @@
 #include "ttbin.h"
 #include "log.h"
 #include "files.h"
+#include "options.h"
 
 #include <getopt.h>
 #include <stdlib.h>
@@ -43,49 +44,6 @@ typedef struct
     uint32_t id;
     DOWNLOAD download;
 } FIRMWARE_FILE;
-
-typedef struct
-{
-    int update_firmware;
-    int update_gps;
-#ifdef UNSAFE
-    int list_files;
-    int read_file;
-    int write_file;
-    uint32_t file_id;
-#endif
-    int select_device;
-    char *device;
-    int show_versions;
-    int list_devices;
-    int get_time;
-    int set_time;
-    int get_activities;
-    int get_name;
-    int set_name;
-    char *watch_name;
-    int list_formats;
-    int set_formats;
-    char *formats;
-    int daemon_mode;
-    int run_as;
-    char *run_as_user;
-#ifdef UNSAFE
-    char *file;
-#endif
-    char *activity_store;
-    int list_races;
-    int update_race;
-    char *race;
-    int list_history;
-    int delete_history;
-    char *history_entry;
-    int clear_data;
-    int display_settings;
-    int setting;
-    char *setting_spec;
-    int list_settings;
-} OPTIONS;
 
 /*************************************************************************************************/
 
@@ -592,7 +550,7 @@ static void _mkdir(const char *dir)
     mkdir(tmp, 0755);
 }
 
-void do_get_activities(libusb_device_handle *device, const char *store, uint32_t formats)
+void do_get_activities(libusb_device_handle *device, OPTIONS *options, uint32_t formats)
 {
     char filename[256] = {0};
     char **ptr;
@@ -624,7 +582,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
 
         /* parse the activity file */
         ttbin = parse_ttbin_data(data, size);
-        if (formats && ttbin->gps_records.count)
+        if (formats && ttbin->gps_records.count && !options->skip_elevation)
         {
             write_log(0, "Downloading elevation data\n");
             download_elevation_data(ttbin);
@@ -633,7 +591,7 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
         gmtime_r(&ttbin->timestamp_local, &timestamp);
 
         /* create the directory name: [store]/[watch name]/[date] */
-        strcpy(filename, store);
+        strcpy(filename, options->activity_store);
         strcat(filename, "/");
         if (!get_watch_name(device, filename + strlen(filename), sizeof(filename) - strlen(filename)))
             strcat(filename, "/");
@@ -682,6 +640,16 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
                     write_log(1, "%s ", OFFLINE_FORMATS[i].name);
             }
             write_log(1, "\n");
+        }
+
+        /* don't run the post-processor as root */
+        if (options->post_processor && (getuid() != 0))
+        {
+            if (fork() == 0)
+            {
+                /* execute the post-processor */
+                execl(options->post_processor, options->post_processor, filename, (char*)0);
+            }
         }
 
         free_ttbin(ttbin);
@@ -1995,22 +1963,36 @@ void do_list_settings(libusb_device_handle *device)
 
 void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
 {
+    OPTIONS new_options = {0};
+    char name[32];
+
     send_startup_message_group(device);
 
-    /* perform the activities the user has requested */
-    if (options->get_activities)
+    /* make a copy of the options, and load any overriding
+       ones from the watch-specific conf file */
+    memcpy(&new_options, options, sizeof(OPTIONS));
+    if (!get_watch_name(device, name, sizeof(name)))
     {
-        uint32_t formats = get_configured_formats(device);
-        do_get_activities(device, options->activity_store, formats);
+        char *filename = malloc(strlen(new_options.activity_store) + 1 + strlen(name) + 1 + 12 + 1);
+        sprintf(filename, "%s/%s/ttwatch.conf", new_options.activity_store, name);
+        load_conf_file(filename, &new_options, LoadDaemonOperations);
+        free(filename);
     }
 
-    if (options->update_gps)
+    /* perform the activities the user has requested */
+    if (new_options.get_activities)
+    {
+        uint32_t formats = get_configured_formats(device);
+        do_get_activities(device, &new_options, formats);
+    }
+
+    if (new_options.update_gps)
         do_update_gps(device);
 
-    if (options->update_firmware)
+    if (new_options.update_firmware)
         do_update_firmware(device);
 
-    if (options->set_time)
+    if (new_options.set_time)
         do_set_time(device);
 }
 
@@ -2263,6 +2245,28 @@ int main(int argc, char *argv[])
 
     OPTIONS options = {0};
 
+    /* load the system-wide options */
+    load_conf_file("/etc/ttwatch.conf", &options, LoadSettingsOnly);
+    /* load the user-specific options */
+    if (getuid() != 0)
+    {
+        /* find the user's home directory, either from $HOME or from
+           looking at the system password database */
+        char *home = getenv("HOME");
+        if (!home)
+        {
+            struct passwd *pwd = getpwuid(getuid());
+            home = pwd->pw_dir;
+        }
+        if (home)
+        {
+            char *filename = malloc(strlen(home) + 10);
+            sprintf(filename, "%s/.ttwatch", home);
+            load_conf_file(filename, &options, LoadSettingsOnly);
+            free(filename);
+        }
+    }
+
     libusb_device_handle *device;
 
     struct option long_options[] = {
@@ -2410,23 +2414,6 @@ int main(int argc, char *argv[])
             sprintf(options.activity_store, "%s/ttwatch", home);
     }
 
-    /* we need to do something, otherwise just show the help */
-    if (
-#ifdef UNSAFE
-        !options.read_file && !options.write_file && !options.list_files &&
-#endif
-        !options.update_firmware && !options.update_gps && !options.show_versions &&
-        !options.get_activities && !options.get_time && !options.set_time &&
-        !options.list_devices && !options.get_name && !options.set_name &&
-        !options.list_formats && !options.set_formats && !options.list_races &&
-        !options.list_history && !options.delete_history && !options.update_race &&
-        !options.clear_data && !options.display_settings && !options.setting &&
-        !options.list_settings)
-    {
-        help(argv);
-        return 0;
-    }
-
     /* if daemon mode is requested ...*/
     if (options.daemon_mode)
     {
@@ -2439,6 +2426,9 @@ int main(int argc, char *argv[])
                 return 1;
             }
         }
+
+        /* reload the daemon operations from the config file. We don't load a per-user file */
+        load_conf_file("/etc/ttwatch", &options, LoadDaemonOperations);
 
         /* we have to include some useful functions, otherwise there's no point... */
         if (!options.update_firmware && !options.update_gps && !options.get_activities && !options.set_time)
@@ -2484,6 +2474,23 @@ int main(int argc, char *argv[])
             write_log(0, "System does not support hotplug notification\n");
 
         _exit(0);
+    }
+
+    /* we need to do something, otherwise just show the help */
+    if (
+#ifdef UNSAFE
+        !options.read_file && !options.write_file && !options.list_files &&
+#endif
+        !options.update_firmware && !options.update_gps && !options.show_versions &&
+        !options.get_activities && !options.get_time && !options.set_time &&
+        !options.list_devices && !options.get_name && !options.set_name &&
+        !options.list_formats && !options.set_formats && !options.list_races &&
+        !options.list_history && !options.delete_history && !options.update_race &&
+        !options.clear_data && !options.display_settings && !options.setting &&
+        !options.list_settings)
+    {
+        help(argv);
+        return 0;
     }
 
     libusb_init(NULL);
@@ -2575,7 +2582,17 @@ int main(int argc, char *argv[])
         do_set_time(device);
 
     if (options.get_activities)
-        do_get_activities(device, options.activity_store, 0);
+    {
+        char name[32];
+        if (!get_watch_name(device, name, sizeof(name)))
+        {
+            char *filename = malloc(strlen(options.activity_store) + 1 + strlen(name) + 1 + 12 + 1);
+            sprintf(filename, "%s/%s/ttwatch.conf", options.activity_store, name);
+            load_conf_file(filename, &options, LoadDaemonOperations);
+            free(filename);
+        }
+        do_get_activities(device, &options, 0);
+    }
 
     if (options.update_gps)
         do_update_gps(device);

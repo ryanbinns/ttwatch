@@ -76,18 +76,18 @@ to be connected, then automatically perform whichever operations are specified
 on the command line. The following four operations are supported, and at least
 one of them must be specified to start the daemon:
 
-1. --get-activities: Download the activity files and store them, including
+1. `--get-activities`: Download the activity files and store them, including
    converting them to other file formats as specified in the watch preferences
    downloaded from the watch.
-2. --update-gps: Updates the GPSQuickFix information in the watch from the
+2. `--update-gps`: Updates the GPSQuickFix information in the watch from the
    internet.
-3. --update-fw: Checks for firmware updates, and updates the firmware in the
+3. `--update-fw`: Checks for firmware updates, and updates the firmware in the
    watch if newer firmware is found.
-4. --set-time: Sets the time on the watch to match the local system time.
+4. `--set-time`: Sets the time on the watch to match the local system time.
 
-All four options can be specified with the -a (or --auto) option
+All four options can be specified with the `-a` (or `--auto`) option
 
-The daemon must be started as root (run by init or sudo), but the --runas
+The daemon must be started as root (run by init or sudo), but the `--runas`
 parameter can be specified to provide an alternative user (and optionally
 a group - such as the usb group mentioned above) to run as.
 
@@ -95,8 +95,8 @@ Multiple Watches
 ================
 
 The ttwatch program has support for multiple watches. When running from the
-command line a list of available watches can be displayed using the --devices
-option. A particular watch can be selected using the -d option with three
+command line a list of available watches can be displayed using the `--devices`
+option. A particular watch can be selected using the `-d` option with three
 different parameters possible:
 
 1. a 0-based index into the device list
@@ -104,7 +104,7 @@ different parameters possible:
 3. a string that matches the watch name
 
 All three pieces of information are displayed when listing available watches
-with the --devices option.
+with the `--devices` option.
 
 When running as a daemon the device cannot be specifed by index, as the list
 of devices will change over time, so this index is meaningless. However, if
@@ -119,7 +119,66 @@ Unsafe Functions
 There are various options that can be given to the ttwatch program that read
 and write raw data to/from the watch. Used incorrectly, these could destroy
 the contents of the watch. For this reason, they are disabled by default. To
-enable these options, run configure with the --with-unsafe option. Note that
+enable these options, run `configure` with the `--with-unsafe` option. Note that
 I don't guarantee what will happen if you use these options without really
 knowing what you are doing.
+
+Config Files
+============
+
+The `ttwatch` program supports loading some settings from config files. Three
+config files can be used: global, per-user, and per-watch. They are located
+in the following locations:
+
+1. `/etc/ttwatch.conf`
+2. `~/.ttwatch`
+3. `[activity-store-location]/[watch-name]/ttwatch.conf`
+
+This means that some settings can be overridden by specific users or by which
+watch is being used. Note that the per-watch settings are used either by the
+daemon (when a watch is connected), or when downloading activities from the
+command-line, not for any other operations. The per-user config file is not
+used when being run as root.
+
+The config files are very simple, and are just lines in a "option = value"
+format. '#' is used to denote a comment; anything after a '#' is ignored.
+Applicable options (*not* case sensitive) and their values are as follows:
+
+1. ActivityStore: specifies an absolute path to the place where activities
+                  are stored. Relative paths (and paths such as ~) cannot be
+                  used. This is a string value.
+2. PostProcessor: specifies a script or executable that is executed for every
+                  activity that is downloaded from the watch, with the
+                  filename of the ttbin file as the only argument. The
+                  executable is run from the directory that the ttbin file is
+                  stored in. Note that for security reasons, this executable
+                  is *not* called if the program is running as root. This is
+                  a string value.
+3. RunAsUser: this can only be specified in the global `/etc/ttwatch.conf`
+              file, and indicates which user (and optionally which group) the
+              daemon runs as, similarly to the command-line argument. An
+              error is shown if this option is specified in a non-global
+              config file. This is a string value.
+4. SkipElevation: tells the program to skip downloaded elevation data from
+                  the internet for each downloaded activity. This is a
+                  boolean value.
+5. Device: specifies which device to use, as per the `-d` (`--device`)
+           command-line parameter. Note that only one device can be specified
+           at the moment (if anyone wants to modify the code to work with
+           multiple device names here, feel free to send me a patch). This is
+           a string value.
+
+The following options only take effect when running as a daemon:
+
+1. UpdateFirmware: tells the daemon to check and update the firmware of any
+                   watch that is connected. This is a boolean value.
+2. UpdateGPS: tells the daemon to update the QuickGPSFix data of any watch
+              that is connected. This is a boolean value.
+3. SetTime: tells the daemon to update the time of any watch that is
+            connected. This is a boolean value.
+4. GetActivities: tells the daemon to download any activities from any watch
+                  that is connected. This is a boolean value.
+
+Boolean values can have a value of ('y', 'yes', 'true', 'n', 'no' or 'false').
+These values are *not* case-sensitive.
 
