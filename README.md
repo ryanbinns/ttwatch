@@ -3,7 +3,7 @@ ttwatch
 
 Linux TomTom GPS Watch Utilities
 
-Provides two programs for communicating with TomTom GPS watches and processing
+Provides programs for communicating with TomTom GPS watches and processing
 the data they collect.
 
 1. ttwatch - USB communications program for performing various operations
@@ -12,6 +12,13 @@ the data they collect.
 2. ttbincnv - Post-processor allowing conversion of the ttbin file formats
               to either (currently) csv, gpx, kml or tcx  files, using broadly
               similar formats to the official TomTom file formats.
+3. ttbinmod - Post-processor allowing modifications to be made to the ttbin
+              file. Currently, adding/modifying lap markers and truncating the
+              file at the end of the workout (last lap, goal completion etc)
+              are supported.
+4. ttbin2mysports.sh - script that enabled uploading to a MapMyFitness account
+                       that is linked to a MySports account. Automatically
+                       converts the ttbin file to a TCX file before uploading.
 
 System Requirements
 ===================
