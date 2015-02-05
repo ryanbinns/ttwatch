@@ -15,7 +15,7 @@ clean:
 	$(MAKE) -C ttbin clean
 	$(MAKE) -C ttwatch clean
 	$(MAKE) -C ttbincnv clean
-	$(MAKE) -c ttbinmod clean
+	$(MAKE) -C ttbinmod clean
 
 install:
 	$(MAKE) -C ttwatch install
