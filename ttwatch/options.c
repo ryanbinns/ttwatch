@@ -4,6 +4,7 @@
 \******************************************************************************/
 
 #include "options.h"
+#include "../ttbin/ttbin.h"
 
 #include <memory.h>
 #include <stdio.h>
@@ -82,8 +83,6 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
     if (!file)
         return;
 
-    write_log(0, "Loading %s\n", filename);
-
     while (!feof(file))
     {
         char *option, *value;
@@ -125,32 +124,22 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
         }
         else if (!strcasecmp(option, "Formats"))
         {
-            if (load_type != LoadDaemonOperations)
-            {
-                options->formats = value;
-                value = 0;
-            }
+            options->formats = parse_format_list(value);
             result = 1;
         }
         else if (!strcasecmp(option, "PostProcessor"))
         {
-            if (load_type != LoadDaemonOperations)
-            {
-                options->post_processor = value;
-                value = 0;
-            }
+            options->post_processor = value;
+            value = 0;
             result = 1;
         }
         else if (!strcasecmp(option, "RunAsUser"))
         {
             result = global;
-            if (load_type != LoadDaemonOperations)
+            if (global)
             {
-                if (global)
-                {
-                    options->run_as = 1;
-                    options->run_as_user = value;
-                }
+                options->run_as = 1;
+                options->run_as_user = value;
             }
         }
         else if (!strcasecmp(option, "Device"))
@@ -187,7 +176,7 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
             if (load_type != LoadSettingsOnly)
                 result = get_bool(value, &options->get_activities);
         }
-        if (!strcasecmp(option, "SkipElevation"))
+        else if (!strcasecmp(option, "SkipElevation"))
             result = get_bool(value, &options->skip_elevation);
 
         if (!result)
@@ -203,5 +192,59 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
     }
 
     fclose(file);
+}
+
+/*****************************************************************************/
+OPTIONS *alloc_options()
+{
+    OPTIONS *o = malloc(sizeof(OPTIONS));
+    memset(o, 0, sizeof(OPTIONS));
+}
+
+/*****************************************************************************/
+OPTIONS *copy_options(const OPTIONS *o)
+{
+    OPTIONS *op = malloc(sizeof(OPTIONS));
+    memcpy(op, o, sizeof(OPTIONS));
+
+#define COPY_STRING(n) if (o->n) op->n = strdup(o->n)
+
+    COPY_STRING(device);
+    COPY_STRING(watch_name);
+    COPY_STRING(run_as_user);
+#ifdef UNSAFE
+    COPY_STRING(file);
+#endif
+    COPY_STRING(activity_store);
+    COPY_STRING(race);
+    COPY_STRING(history_entry);
+    COPY_STRING(setting_spec);
+    COPY_STRING(post_processor);
+
+#undef COPY_STRING
+}
+
+/*****************************************************************************/
+void free_options(OPTIONS *o)
+{
+    if (!o)
+        return;
+
+#define FREE_STRING(n) if (o->n) free(o->n)
+
+    FREE_STRING(device);
+    FREE_STRING(watch_name);
+    FREE_STRING(run_as_user);
+#ifdef UNSAFE
+    FREE_STRING(file);
+#endif
+    FREE_STRING(activity_store);
+    FREE_STRING(race);
+    FREE_STRING(history_entry);
+    FREE_STRING(setting_spec);
+    FREE_STRING(post_processor);
+
+#undef FREE_STRING
+    free(o);
 }
 

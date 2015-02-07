@@ -27,7 +27,7 @@ typedef struct
     char *watch_name;
     int list_formats;
     int set_formats;
-    char *formats;
+    uint32_t formats;
     int daemon_mode;
     int run_as;
     char *run_as_user;
@@ -59,4 +59,8 @@ typedef enum
 } ConfLoadType;
 
 void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType type);
+
+OPTIONS *alloc_options();
+OPTIONS *copy_options(const OPTIONS *o);
+void free_options(OPTIONS *o);
 

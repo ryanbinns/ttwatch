@@ -1243,3 +1243,29 @@ int truncate_intervals(TTBIN_FILE *ttbin)
     return 1;
 }
 
+/*****************************************************************************/
+uint32_t parse_format_list(const char *formats)
+{
+    uint32_t fmts = 0;
+    int i;
+    char *str, *ptr;
+
+    str = strdup(formats);
+    ptr = strtok(str, " ,");
+    while (ptr)
+    {
+        for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
+        {
+            if (!strcasecmp(ptr, OFFLINE_FORMATS[i].name))
+            {
+                fmts |= OFFLINE_FORMATS[i].mask;
+                break;
+            }
+        }
+        /* ignore any unknown formats... */
+        ptr = strtok(NULL, " ,");
+    }
+    free(str);
+    return fmts;
+}
+

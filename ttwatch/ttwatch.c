@@ -1066,52 +1066,29 @@ void do_list_formats(libusb_device_handle *device)
     write_log(0, "\n");
 }
 
-void do_set_formats(libusb_device_handle *device, char *formats)
+void do_set_formats(libusb_device_handle *device, uint32_t formats)
 {
     uint32_t size = 0;
     char *data = 0, *new_data;
     char *ptr, *str;
     char *start, *end;
-    const char *fmts[OFFLINE_FORMAT_COUNT];
-    int fmt_count = 0;
     int i, len, diff;
 
-    /* scan the formats list to find the recognised formats */
-    str = formats;
-    do
-    {
-        ptr = strchr(str, ',');
-        if (ptr)
-            *ptr = 0;
-        for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
-        {
-            if (!strcasecmp(str, OFFLINE_FORMATS[i].name))
-            {
-                fmts[fmt_count++] = OFFLINE_FORMATS[i].name;
-                break;
-            }
-        }
-        if (i >= OFFLINE_FORMAT_COUNT)
-        {
-            write_log(1, "Unknown file format encountered: %s\n", str);
-            return;
-        }
-        str = ptr + 1;
-    }
-    while (ptr);
-
-    /* make sure we've got some... */
-    if (fmt_count == 0)
+    /* make sure we've got some formats... */
+    if (!formats)
     {
         write_log(1, "No valid file formats found\n");
         return;
     }
 
     /* create the string for the new file formats */
-    ptr = str = malloc(45 * fmt_count + 40);
+    ptr = str = malloc(45 * OFFLINE_FORMAT_COUNT + 40);
     ptr += sprintf(ptr, "        <offline>\n");
-    for (i = 0; i < fmt_count; ++i)
-        ptr += sprintf(ptr, "            <export id=\"%s\" autoOpen=\"0\"/>\n", fmts[i]);
+    for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
+    {
+        if (formats & (1 << i))
+            ptr += sprintf(ptr, "            <export id=\"%s\" autoOpen=\"0\"/>\n", OFFLINE_FORMATS[i].name);
+    }
     ptr += sprintf(ptr, "        </offline>\n");
 
     /* read the current preferences file */
@@ -1119,6 +1096,7 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     if (!data)
     {
         write_log(1, "Unable to determine current format list\n");
+        free(str);
         return;
     }
 
@@ -1134,6 +1112,7 @@ void do_set_formats(libusb_device_handle *device, char *formats)
             /* oh dear, no exporters section either; give up */
             write_log(1, "Unable to set new format list\n");
             free(data);
+            free(str);
             return;
         }
         else
@@ -1156,6 +1135,7 @@ void do_set_formats(libusb_device_handle *device, char *formats)
         {
             write_log(1, "Unable to set new format list\n");
             free(data);
+            free(str);
             return;
         }
         /* skip to the end of the line */
@@ -1176,6 +1156,7 @@ void do_set_formats(libusb_device_handle *device, char *formats)
     size += diff;
 
     free(data);
+    free(str);
 
     data = update_preferences_modified_time(new_data, &size);
 
@@ -1963,37 +1944,40 @@ void do_list_settings(libusb_device_handle *device)
 
 void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
 {
-    OPTIONS new_options = {0};
     char name[32];
+    OPTIONS *new_options = copy_options(options);
 
     send_startup_message_group(device);
 
     /* make a copy of the options, and load any overriding
        ones from the watch-specific conf file */
-    memcpy(&new_options, options, sizeof(OPTIONS));
     if (!get_watch_name(device, name, sizeof(name)))
     {
-        char *filename = malloc(strlen(new_options.activity_store) + 1 + strlen(name) + 1 + 12 + 1);
-        sprintf(filename, "%s/%s/ttwatch.conf", new_options.activity_store, name);
-        load_conf_file(filename, &new_options, LoadDaemonOperations);
+        char *filename = malloc(strlen(new_options->activity_store) + 1 + strlen(name) + 1 + 12 + 1);
+        sprintf(filename, "%s/%s/ttwatch.conf", new_options->activity_store, name);
+        load_conf_file(filename, new_options, LoadDaemonOperations);
         free(filename);
     }
 
     /* perform the activities the user has requested */
-    if (new_options.get_activities)
+    if (new_options->get_activities)
     {
         uint32_t formats = get_configured_formats(device);
-        do_get_activities(device, &new_options, formats);
+        if (!new_options->set_formats)
+            formats |= new_options->formats;
+        do_get_activities(device, new_options, formats);
     }
 
-    if (new_options.update_gps)
+    if (new_options->update_gps)
         do_update_gps(device);
 
-    if (new_options.update_firmware)
+    if (new_options->update_firmware)
         do_update_firmware(device);
 
-    if (new_options.set_time)
+    if (new_options->set_time)
         do_set_time(device);
+
+    free_options(new_options);
 }
 
 int hotplug_attach_callback(struct libusb_context *ctx, struct libusb_device *dev,
@@ -2115,6 +2099,7 @@ void daemonise(const char *user)
 
 void help(char *argv[])
 {
+    int i;
 #ifdef UNSAFE
     write_log(0, "Usage: %s [OPTION]... [FILE]\n", argv[0]);
 #else
@@ -2206,7 +2191,15 @@ void help(char *argv[])
     write_log(0, "activity date, as per the official TomTom software.\n");
     write_log(0, "\n");
     write_log(0, "LIST is a comma-separated list of file formats. Valid formats are:\n");
-    write_log(0, "    kml, csv, gpx, tcx and fit.\n");
+    write_log(0, "    ");
+    for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
+    {
+        write_log(0, OFFLINE_FORMATS[i].name);
+        if (i < (OFFLINE_FORMAT_COUNT - 1))
+            write_log(0, ", ");
+        else
+            write_log(0, ".\n");
+    }
     write_log(0, "Case is not important, but there must be no spaces or other characters\n");
     write_log(0, "in the list.\n");
     write_log(0, "\n");
@@ -2243,10 +2236,10 @@ int main(int argc, char *argv[])
     int option_index = 0;
     int attach_kernel_driver = 0;
 
-    OPTIONS options = {0};
+    OPTIONS *options = alloc_options();
 
     /* load the system-wide options */
-    load_conf_file("/etc/ttwatch.conf", &options, LoadSettingsOnly);
+    load_conf_file("/etc/ttwatch.conf", options, LoadSettingsOnly);
     /* load the user-specific options */
     if (getuid() != 0)
     {
@@ -2262,7 +2255,7 @@ int main(int argc, char *argv[])
         {
             char *filename = malloc(strlen(home) + 10);
             sprintf(filename, "%s/.ttwatch", home);
-            load_conf_file(filename, &options, LoadSettingsOnly);
+            load_conf_file(filename, options, LoadSettingsOnly);
             free(filename);
         }
     }
@@ -2270,21 +2263,21 @@ int main(int argc, char *argv[])
     libusb_device_handle *device;
 
     struct option long_options[] = {
-        { "update-fw",      no_argument,       &options.update_firmware, 1 },
-        { "update-gps",     no_argument,       &options.update_gps,      1 },
-        { "get-time",       no_argument,       &options.get_time,        1 },
-        { "set-time",       no_argument,       &options.set_time,        1 },
-        { "get-activities", no_argument,       &options.get_activities,  1 },
-        { "packets",        no_argument,       &show_packets,            1 },
-        { "devices",        no_argument,       &options.list_devices,    1 },
-        { "get-formats",    no_argument,       &options.list_formats,    1 },
-        { "get-name",       no_argument,       &options.get_name,        1 },
-        { "daemon",         no_argument,       &options.daemon_mode,     1 },
-        { "list-races",     no_argument,       &options.list_races,      1 },
-        { "list-history",   no_argument,       &options.list_history,    1 },
-        { "clear-data",     no_argument,       &options.clear_data,      1 },
-        { "all-settings",   no_argument,       &options.display_settings,1 },
-        { "settings",       no_argument,       &options.list_settings,   1 },
+        { "update-fw",      no_argument,       &options->update_firmware, 1 },
+        { "update-gps",     no_argument,       &options->update_gps,      1 },
+        { "get-time",       no_argument,       &options->get_time,        1 },
+        { "set-time",       no_argument,       &options->set_time,        1 },
+        { "get-activities", no_argument,       &options->get_activities,  1 },
+        { "packets",        no_argument,       &show_packets,             1 },
+        { "devices",        no_argument,       &options->list_devices,    1 },
+        { "get-formats",    no_argument,       &options->list_formats,    1 },
+        { "get-name",       no_argument,       &options->get_name,        1 },
+        { "daemon",         no_argument,       &options->daemon_mode,     1 },
+        { "list-races",     no_argument,       &options->list_races,      1 },
+        { "list-history",   no_argument,       &options->list_history,    1 },
+        { "clear-data",     no_argument,       &options->clear_data,      1 },
+        { "all-settings",   no_argument,       &options->display_settings,1 },
+        { "settings",       no_argument,       &options->list_settings,   1 },
         { "auto",           no_argument,       0, 'a' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
@@ -2313,64 +2306,65 @@ int main(int argc, char *argv[])
         switch (opt)
         {
         case 1:     /* list formats */
-            options.set_name = 1;
-            options.watch_name = optarg;
+            options->set_name = 1;
+            options->watch_name = optarg;
             break;
         case 2:     /* set formats */
-            options.set_formats = 1;
-            options.formats = optarg;
+            options->set_formats = 1;
+            options->formats = parse_format_list(optarg);
             break;
         case 3:     /* set daemon user */
-            options.run_as = 1;
-            options.run_as_user = optarg;
+            options->run_as = 1;
+            options->run_as_user = optarg;
             break;
         case 4:     /* delete history entry */
-            options.delete_history = 1;
-            options.history_entry = optarg;
+            options->delete_history = 1;
+            options->history_entry = optarg;
             break;
         case 5:     /* redefine a race mysports entry */
-            options.update_race = 1;
-            options.race = optarg;
+            options->update_race = 1;
+            options->race = optarg;
             break;
         case 6:     /* get or set a setting on the watch */
-            options.setting = 1;
-            options.setting_spec = optarg;
+            options->setting = 1;
+            options->setting_spec = optarg;
             break;
         case 'a':   /* auto mode */
-            options.update_firmware = 1;
-            options.update_gps      = 1;
-            options.get_activities  = 1;
-            options.set_time        = 1;
+            options->update_firmware = 1;
+            options->update_gps      = 1;
+            options->get_activities  = 1;
+            options->set_time        = 1;
             break;
 #ifdef UNSAFE
         case 'l':   /* list files */
-            options.list_files = 1;
+            options->list_files = 1;
             break;
         case 'r':   /* read file */
-            options.read_file = 1;
+            options->read_file = 1;
             if (optarg)
-                options.file_id = strtoul(optarg, NULL, 0);
+                options->file_id = strtoul(optarg, NULL, 0);
             break;
         case 'w':   /* write file */
-            options.write_file = 1;
+            options->write_file = 1;
             if (optarg)
-                options.file_id = strtoul(optarg, NULL, 0);
+                options->file_id = strtoul(optarg, NULL, 0);
             break;
 #endif
         case 'd':   /* select device */
-            options.select_device = 1;
+            options->select_device = 1;
             if (optarg)
-                options.device = optarg;
+                options->device = optarg;
             break;
         case 'v':   /* report version information */
-            options.show_versions = 1;
+            options->show_versions = 1;
             break;
         case 's':   /* activity store */
             if (optarg)
-                options.activity_store = optarg;
+                options->activity_store = optarg;
             break;
         case 'h': /* help */
             help(argv);
+            free_options(options);
             return;
         }
     }
@@ -2378,28 +2372,31 @@ int main(int argc, char *argv[])
 #ifdef UNSAFE
     /* keep track of the file argument if one was provided */
     if (optind < argc)
-        options.file = argv[optind];
+        options->file = argv[optind];
 
     /* make sure we've got compatible command-line options */
-    if (options.read_file && options.write_file)
+    if (options->read_file && options->write_file)
     {
         write_log(1, "Cannot read and write a file at the same time\n");
+        free_options(options);
         return 1;
     }
-    if (options.file && !(options.read_file || options.write_file))
+    if (options->file && !(options->read_file || options->write_file))
     {
         write_log(1, "File argument is only used to read/write files\n");
+        free_options(options);
         return 1;
     }
 #else
     if (optind < argc)
     {
         write_log(0, "Invalid parameter specified: %s", argv[optind]);
+        free_options(options);
         return 1;
     }
 #endif
 
-    if (!options.activity_store)
+    if (!options->activity_store)
     {
         /* find the user's home directory, either from $HOME or from
            looking at the system password database */
@@ -2409,29 +2406,30 @@ int main(int argc, char *argv[])
             struct passwd *pwd = getpwuid(getuid());
             home = pwd->pw_dir;
         }
-        options.activity_store = (char*)malloc(strlen(home) + 9);
-        if (options.activity_store)
-            sprintf(options.activity_store, "%s/ttwatch", home);
+        options->activity_store = (char*)malloc(strlen(home) + 9);
+        if (options->activity_store)
+            sprintf(options->activity_store, "%s/ttwatch", home);
     }
 
     /* if daemon mode is requested ...*/
-    if (options.daemon_mode)
+    if (options->daemon_mode)
     {
         /* if the user has selected a device, make sure it's by name or serial number */
-        if (options.select_device)
+        if (options->select_device)
         {
-            if (isdigit(options.device[0]))
+            if (isdigit(options->device[0]))
             {
                 write_log(1, "Device selection in daemon mode must be by name or serial number\n");
+                free_options(options);
                 return 1;
             }
         }
 
         /* reload the daemon operations from the config file. We don't load a per-user file */
-        load_conf_file("/etc/ttwatch", &options, LoadDaemonOperations);
+        load_conf_file("/etc/ttwatch", options, LoadDaemonOperations);
 
         /* we have to include some useful functions, otherwise there's no point... */
-        if (!options.update_firmware && !options.update_gps && !options.get_activities && !options.set_time)
+        if (!options->update_firmware && !options->update_gps && !options->get_activities && !options->set_time)
         {
             write_log(1, "To run as a daemon, you must include one or more of:\n");
             write_log(1, "    --update-fw\n");
@@ -2439,11 +2437,12 @@ int main(int argc, char *argv[])
             write_log(1, "    --get-activities\n");
             write_log(1, "    --set-time\n");
             write_log(1, "    --auto (OR -a)\n");
+            free_options(options);
             return 1;
         }
 
         /* become a daemon */
-        daemonise(options.run_as ? options.run_as_user : NULL);
+        daemonise(options->run_as ? options->run_as_user : NULL);
 
         /* we're not a daemon, so open the log file and report that we have started */
         set_log_location(LOG_VAR_LOG);
@@ -2473,39 +2472,45 @@ int main(int argc, char *argv[])
         else
             write_log(0, "System does not support hotplug notification\n");
 
+        free_options(options);
         _exit(0);
     }
 
     /* we need to do something, otherwise just show the help */
     if (
 #ifdef UNSAFE
-        !options.read_file && !options.write_file && !options.list_files &&
+        !options->read_file && !options->write_file && !options->list_files &&
 #endif
-        !options.update_firmware && !options.update_gps && !options.show_versions &&
-        !options.get_activities && !options.get_time && !options.set_time &&
-        !options.list_devices && !options.get_name && !options.set_name &&
-        !options.list_formats && !options.set_formats && !options.list_races &&
-        !options.list_history && !options.delete_history && !options.update_race &&
-        !options.clear_data && !options.display_settings && !options.setting &&
-        !options.list_settings)
+        !options->update_firmware && !options->update_gps && !options->show_versions &&
+        !options->get_activities && !options->get_time && !options->set_time &&
+        !options->list_devices && !options->get_name && !options->set_name &&
+        !options->list_formats && !options->set_formats && !options->list_races &&
+        !options->list_history && !options->delete_history && !options->update_race &&
+        !options->clear_data && !options->display_settings && !options->setting &&
+        !options->list_settings)
     {
         help(argv);
+        free_options(options);
         return 0;
     }
 
     libusb_init(NULL);
 
     /* look for compatible USB devices */
-    device = open_usb_device(options.list_devices, options.select_device, options.device);
+    device = open_usb_device(options->list_devices, options->select_device, options->device);
     if (!device)
     {
-        if (!options.list_devices)
+        if (!options->list_devices)
             write_log(1, "Unable to open USB device\n");
+        free_options(options);
         return 1;
     }
     /* if the device list was requested, exit here */
-    if (options.list_devices)
+    if (options->list_devices)
+    {
+        free_options(options);
         return 0;
+    }
 
     /* detach the kernel HID driver, otherwise we can't do anything */
     if (libusb_kernel_driver_active(device, 0))
@@ -2517,57 +2522,58 @@ int main(int argc, char *argv[])
     if(libusb_claim_interface(device, 0))
     {
         write_log(1, "Unable to claim device interface\n");
+        free_options(options);
         return 1;
     }
 
     /* this group of messages is always sent at startup */
     send_startup_message_group(device);
 
-    if (options.show_versions)
+    if (options->show_versions)
         show_device_versions(device);
 
 #ifdef UNSAFE
-    if (options.list_files)
+    if (options->list_files)
         show_file_list(device);
 
-    if (options.read_file)
+    if (options->read_file)
     {
-        if (options.file_id == 0)
+        if (options->file_id == 0)
             read_all_files(device);
         else
         {
             FILE *f;
-            if (!options.file)
+            if (!options->file)
                 f = stdout;
             else
-                f = fopen(options.file, "w");
+                f = fopen(options->file, "w");
             if (!f)
-                write_log(1, "Unable to open file: %s\n", options.file);
+                write_log(1, "Unable to open file: %s\n", options->file);
             else
             {
-                do_read_file(device, options.file_id, f);
+                do_read_file(device, options->file_id, f);
                 if (f != stdout)
                     fclose(f);
             }
         }
     }
 
-    if (options.write_file)
+    if (options->write_file)
     {
-        if (options.file_id == 0)
+        if (options->file_id == 0)
             write_log(1, "File ID must be non-zero when writing a file\n");
         else
         {
             FILE *f;
-            if (!options.file)
+            if (!options->file)
                 f = stdin;
             else
-                f = fopen(options.file, "r");
+                f = fopen(options->file, "r");
             if (!f)
-                write_log(1, "Unable to open file: %s\n", options.file);
+                write_log(1, "Unable to open file: %s\n", options->file);
             else
             {
-                do_write_file(device, options.file_id, f);
+                do_write_file(device, options->file_id, f);
                 if (f != stdin)
                     fclose(f);
             }
@@ -2575,74 +2581,74 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    if (options.get_time)
+    if (options->get_time)
         do_get_time(device);
 
-    if (options.set_time)
+    if (options->set_time)
         do_set_time(device);
 
-    if (options.get_activities)
+    if (options->get_activities)
     {
         char name[32];
         if (!get_watch_name(device, name, sizeof(name)))
         {
-            char *filename = malloc(strlen(options.activity_store) + 1 + strlen(name) + 1 + 12 + 1);
-            sprintf(filename, "%s/%s/ttwatch.conf", options.activity_store, name);
-            load_conf_file(filename, &options, LoadDaemonOperations);
+            char *filename = malloc(strlen(options->activity_store) + 1 + strlen(name) + 1 + 12 + 1);
+            sprintf(filename, "%s/%s/ttwatch.conf", options->activity_store, name);
+            load_conf_file(filename, options, LoadDaemonOperations);
             free(filename);
         }
-        do_get_activities(device, &options, 0);
+        do_get_activities(device, options, 0);
     }
 
-    if (options.update_gps)
+    if (options->update_gps)
         do_update_gps(device);
 
-    if (options.update_firmware)
+    if (options->update_firmware)
         do_update_firmware(device);
 
-    if (options.get_name)
+    if (options->get_name)
         do_get_watch_name(device);
 
-    if (options.set_name)
-        do_set_watch_name(device, options.watch_name);
+    if (options->set_name)
+        do_set_watch_name(device, options->watch_name);
 
-    if (options.list_formats)
+    if (options->list_formats)
         do_list_formats(device);
 
-    if (options.set_formats)
-        do_set_formats(device, options.formats);
+    if (options->set_formats)
+        do_set_formats(device, options->formats);
 
-    if (options.list_races)
+    if (options->list_races)
         do_list_races(device);
 
-    if (options.update_race)
-        do_update_race(device, options.race);
+    if (options->update_race)
+        do_update_race(device, options->race);
 
-    if (options.list_history)
+    if (options->list_history)
         do_list_history(device);
 
-    if (options.delete_history)
-        do_delete_history_item(device, options.history_entry);
+    if (options->delete_history)
+        do_delete_history_item(device, options->history_entry);
 
-    if (options.clear_data)
+    if (options->clear_data)
         do_clear_data(device);
 
-    if (options.display_settings)
+    if (options->display_settings)
         do_display_settings(device);
 
-    if (options.setting)
+    if (options->setting)
     {
-        char *str = strchr(options.setting_spec, '=');
+        char *str = strchr(options->setting_spec, '=');
         if (str)
         {
             *str = 0;
-            do_set_setting(device, options.setting_spec, ++str);
+            do_set_setting(device, options->setting_spec, ++str);
         }
         else
-            do_get_setting(device, options.setting_spec);
+            do_get_setting(device, options->setting_spec);
     }
 
-    if (options.list_settings)
+    if (options->list_settings)
         do_list_settings(device);
 
     libusb_release_interface(device, 0);
@@ -2653,6 +2659,7 @@ int main(int argc, char *argv[])
 
     libusb_exit(NULL);
 
+    free_options(options);
     return 0;
 }
 
