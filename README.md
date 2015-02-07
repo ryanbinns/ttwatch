@@ -167,6 +167,11 @@ Applicable options (*not* case sensitive) and their values are as follows:
            at the moment (if anyone wants to modify the code to work with
            multiple device names here, feel free to send me a patch). This is
            a string value.
+6. Formats: specifies a list of file formats that should be created when an
+            activity file is downloaded. The supported file formats are listed
+            by the help command (`-h` or `--help` command line options). This
+            list can be either space- or comma-separated, or a combination
+            of the two. This is a string value.
 
 The following options only take effect when running as a daemon:
 
