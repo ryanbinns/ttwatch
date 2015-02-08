@@ -633,15 +633,9 @@ void do_get_activities(libusb_device_handle *device, const char *store, uint32_t
 
         gmtime_r(&ttbin->timestamp_local, &timestamp);
 
-        /* create the directory name: [store]/[watch name]/[date] */
-        strcpy(filename, store);
-        strcat(filename, "/");
-        if (!get_watch_name(device, filename + strlen(filename), sizeof(filename) - strlen(filename)))
-            strcat(filename, "/");
-        sprintf(filename + strlen(filename), "%04d-%02d-%02d",
-            timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday);
-        _mkdir(filename);
-        chdir(filename);
+        /* place output files directly in directory */
+        _mkdir(store);
+        chdir(store);
 
         /* create the file name */
         sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
