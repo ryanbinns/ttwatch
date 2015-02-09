@@ -6,12 +6,12 @@ Linux TomTom GPS Watch Utilities
 Provides two programs for communicating with TomTom GPS watches and processing
 the data they collect.
 
-1. ttwatch - USB communications program for performing various operations
-             with the watch, including downloading activity data, updating
-             GPS data, and updating firmware.
-2. ttbincnv - Post-processor allowing conversion of the ttbin file formats
-              to either (currently) csv, gpx, kml or tcx  files, using broadly
-              similar formats to the official TomTom file formats.
+1. `ttwatch` - USB communications program for performing various operations
+               with the watch, including downloading activity data, updating
+               GPS data, and updating firmware.
+2. `ttbincnv` - Post-processor allowing conversion of the ttbin file formats
+                to either (currently) csv, gpx, kml or tcx  files, using broadly
+                similar formats to the official TomTom file formats.
 
 System Requirements
 ===================
@@ -19,11 +19,11 @@ System Requirements
 This program requires the following libraries to be compiled and installed
 before attempting to build it.
 
-1. openssl (tested against version 1.0.1f, other versions may work).
+1. `openssl` (tested against version 1.0.1f, other versions may work).
    Available from http://www.openssl.org, or with your linux distribution
-1. curl (tested against version 7.38.0, other versions may work).
+1. `curl` (tested against version 7.38.0, other versions may work).
    Available from http://curl.haxx.se/download.html
-2. libusb 1.0.16 or later (tested against version 1.0.19).
+2. `libusb` 1.0.16 or later (tested against version 1.0.19).
    Available from http://sourceforge.net/projects/libusb/
 
 Build Instructions
@@ -69,18 +69,18 @@ to be connected, then automatically perform whichever operations are specified
 on the command line. The following four operations are supported, and at least
 one of them must be specified to start the daemon:
 
-1. --get-activities: Download the activity files and store them, including
+1. `--get-activities`: Download the activity files and store them, including
    converting them to other file formats as specified in the watch preferences
    downloaded from the watch.
-2. --update-gps: Updates the GPSQuickFix information in the watch from the
+2. `--update-gps`: Updates the GPSQuickFix information in the watch from the
    internet.
-3. --update-fw: Checks for firmware updates, and updates the firmware in the
+3. `--update-fw`: Checks for firmware updates, and updates the firmware in the
    watch if newer firmware is found.
-4. --set-time: Sets the time on the watch to match the local system time.
+4. `--set-time`: Sets the time on the watch to match the local system time.
 
-All four options can be specified with the -a (or --auto) option
+All four options can be specified with the `-a` (or `--auto`) option
 
-The daemon must be started as root (run by init or sudo), but the --runas
+The daemon must be started as root (run by `init` or `sudo`), but the `--runas`
 parameter can be specified to provide an alternative user (and optionally
 a group - such as the usb group mentioned above) to run as.
 
@@ -88,8 +88,8 @@ Multiple Watches
 ================
 
 The ttwatch program has support for multiple watches. When running from the
-command line a list of available watches can be displayed using the --devices
-option. A particular watch can be selected using the -d option with three
+command line a list of available watches can be displayed using the `--devices`
+option. A particular watch can be selected using the `-d` option with three
 different parameters possible:
 
 1. a 0-based index into the device list
@@ -97,7 +97,7 @@ different parameters possible:
 3. a string that matches the watch name
 
 All three pieces of information are displayed when listing available watches
-with the --devices option.
+with the `--devices` option.
 
 When running as a daemon the device cannot be specifed by index, as the list
 of devices will change over time, so this index is meaningless. However, if
@@ -112,7 +112,11 @@ Unsafe Functions
 There are various options that can be given to the ttwatch program that read
 and write raw data to/from the watch. Used incorrectly, these could destroy
 the contents of the watch. For this reason, they are disabled by default. To
-enable these options, run configure with the --with-unsafe option. Note that
+enable these options, run configure with the `--with-unsafe` option. Note that
 I don't guarantee what will happen if you use these options without really
 knowing what you are doing.
 
+It is likely possible to reset a watch with damaged firmware or file structure
+using the Recovery Mode, which requires TomTom's official MySports Connect\
+software (Windows or Mac): [information from TomTom support]
+(http://us.support.tomtom.com/app/answers/detail/a_id/17394/~/how-do-i-perform-a-reset-on-my-gps-sport-watch%3F).
