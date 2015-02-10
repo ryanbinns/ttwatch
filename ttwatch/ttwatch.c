@@ -45,6 +45,7 @@ typedef struct
     DOWNLOAD download;
 } FIRMWARE_FILE;
 
+    int no_elevation;
 /*************************************************************************************************/
 
 int show_packets = 0;
@@ -590,15 +591,9 @@ void do_get_activities(libusb_device_handle *device, OPTIONS *options, uint32_t 
 
         gmtime_r(&ttbin->timestamp_local, &timestamp);
 
-        /* create the directory name: [store]/[watch name]/[date] */
-        strcpy(filename, options->activity_store);
-        strcat(filename, "/");
-        if (!get_watch_name(device, filename + strlen(filename), sizeof(filename) - strlen(filename)))
-            strcat(filename, "/");
-        sprintf(filename + strlen(filename), "%04d-%02d-%02d",
-            timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday);
-        _mkdir(filename);
-        chdir(filename);
+        /* place output files directly in directory */
+        _mkdir(options->activity_store);
+        chdir(options->activity_store);
 
         /* create the file name */
         sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
@@ -2121,6 +2116,7 @@ void help(char *argv[])
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
     write_log(0, "                               currently stored on the watch\n");
+    write_log(0, "      --no-elevation         Do not download elevation data.\n");
     write_log(0, "      --get-formats          Displays the list of file formats that are\n");
     write_log(0, "                               saved when the watch is automatically processed\n");
     write_log(0, "      --get-name             Displays the current watch name\n");
@@ -2268,6 +2264,7 @@ int main(int argc, char *argv[])
         { "get-time",       no_argument,       &options->get_time,        1 },
         { "set-time",       no_argument,       &options->set_time,        1 },
         { "get-activities", no_argument,       &options->get_activities,  1 },
+        { "no-elevation",   no_argument,       &options.no_elevation,    1 },
         { "packets",        no_argument,       &show_packets,             1 },
         { "devices",        no_argument,       &options->list_devices,    1 },
         { "get-formats",    no_argument,       &options->list_formats,    1 },

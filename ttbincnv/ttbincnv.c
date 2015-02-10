@@ -5,10 +5,26 @@
 
 #include "ttbin.h"
 
+#include <stdio.h>
 #include <getopt.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
+#include <errno.h>
+
+char *change_extension(const char *path, const char *ext)
+{
+    char *d=strdup(path), *f=strdup(path);
+    char *dir=dirname(d), *fn=basename(f);
+    char *endfn=strrchr(fn, '.');
+    char *newpath;
+
+    asprintf(&newpath, "%s/%.*s.%s", dir, endfn ? endfn-fn : strlen(fn), fn, ext);
+    free(d);
+    free(f);
+    return newpath;
+}
 
 void do_replace_lap_list(TTBIN_FILE *ttbin, const char *laps)
 {
@@ -46,15 +62,16 @@ char *toupper_s(const char *str)
 void help(char *argv[])
 {
     unsigned i;
-    printf("Usage: %s [OPTION]... [FILE]\n", argv[0]);
+    printf("Usage: %s 'OPTION]... [FILE]\n", argv[0]);
     printf("Converts TomTom TTBIN files to other file formats.\n");
     printf("\n");
     printf("Mandatory arguments to long options are mandatory for short options too.\n");
-    printf("  -h, --help          Print this help.\n");
-    printf("  -l, --laps=[list]   Replace the laps recorded on the watch with a list of\n");
-    printf("                        alternative laps.\n");
-    printf("  -E, --no-elevation  Do not download elevation data.\n");
-    printf("  -a, --all           Output all supported file formats.\n");
+    printf("  -h, --help         Print this help.\n");
+    printf("  -l, --laps=[list]  Replace the laps recorded on the watch with a list of\n");
+    printf("                       alternative laps.\n");
+    printf("  -E, --elevation    Download elevation data.\n");
+    printf("  -f, --force        Overwrite existing output filenames.\n\n");
+    printf("  -a, --all          Output all supported file formats.\n");
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (OFFLINE_FORMATS[i].producer)
@@ -65,6 +82,9 @@ void help(char *argv[])
             free(str);
         }
     }
+    printf("\n");
+    printf("If input file is specified, the program will create output files with the\n");
+    printf("same name but changed file extensions.\n");
     printf("\n");
     printf("If the input file is not specified, the program will operate in pipe mode,\n");
     printf("taking input from stdin, and writing the output to stdout. Only one output\n");
@@ -81,7 +101,8 @@ int main(int argc, char *argv[])
     uint32_t formats = 0;
     int pipe_mode = 0;
     int set_laps = 0;
-    int download_elevation = 1;
+    int download_elevation = 0;
+    int force = 0;
     char *lap_definitions = 0;
     FILE *input_file = 0;
     TTBIN_FILE *ttbin = 0;
@@ -91,17 +112,18 @@ int main(int argc, char *argv[])
     int option_index = 0;
 
     /* create the options lists */
-    #define OPTION_COUNT    (OFFLINE_FORMAT_COUNT + 5)
+    #define OPTION_COUNT    (OFFLINE_FORMAT_COUNT + 6)
     struct option long_options[OPTION_COUNT] =
     {
         { "help", no_argument, 0, 'h' },
         { "all",  no_argument, 0, 'a' },
         { "laps", required_argument, 0, 'l' },
-        { "no-elevation", no_argument, 0, 'E' },
+        { "elevation", no_argument, 0, 'E' },
+        { "force", no_argument, 0, 'f' }
     };
-    char short_options[OPTION_COUNT + 1] = "hl:aE";
+    char short_options[OPTION_COUNT + 1] = "hl:aEf";
 
-    opt = 4;
+    opt = 5;
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (OFFLINE_FORMATS[i].producer)
@@ -135,8 +157,11 @@ int main(int argc, char *argv[])
         case 'a':   /* all supported formats */
             formats = 0xffffffff;
             break;
-        case 'E':   /* no elevation */
-            download_elevation = 0;
+        case 'E':   /* download elevation */
+            download_elevation = 1;
+            break;
+        case 'f':   /* force overwrite output files */
+            force = 1;
             break;
         default:
             for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
@@ -192,7 +217,10 @@ int main(int argc, char *argv[])
 
     /* if we have gps data, download the elevation data */
     if (ttbin->gps_records.count && download_elevation)
+    {
+        fprintf(stderr, "Downloading elevation data\n");
         download_elevation_data(ttbin);
+    }
 
     /* set the list of laps if we have been asked to */
     if (set_laps)
@@ -208,10 +236,11 @@ int main(int argc, char *argv[])
                 FILE *output_file = stdout;
                 if (!pipe_mode)
                 {
-                    const char *filename = create_filename(ttbin, OFFLINE_FORMATS[i].name);
-                    output_file = fopen(filename, "w");
+                    char *filename = change_extension(argv[optind], OFFLINE_FORMATS[i].name);
+                    output_file = fopen(filename, force ? "w" : "wx");
                     if (!output_file)
-                        fprintf(stderr, "Unable to create output file: %s\n", filename);
+                        fprintf(stderr, "Unable to create output file: %s: %s\n", filename, strerror(errno));
+                    free(filename);
                 }
                 if (output_file)
                 {

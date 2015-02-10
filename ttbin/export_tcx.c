@@ -18,20 +18,31 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     uint32_t max_heart_rate = 0;
     uint32_t heart_rate_count = 0;
     uint32_t gps_count = 0;
+    uint32_t total_step_count = 0;
     unsigned heart_rate;
     int lap_state;
     int insert_pause;
     float lap_avg_speed;
-    unsigned lap_time;
-    float lap_distance;
+    unsigned lap_time, lap_start_time = 0;
+    float lap_distance, lap_start_distance = 0.0f;
     float lap_max_speed;
-    unsigned lap_calories;
+    unsigned lap_calories, lap_start_calories = 0;
     unsigned lap_heart_rate_count;
     unsigned lap_avg_heart_rate;
     unsigned lap_max_heart_rate;
+    unsigned lap_step_count;
+    const char *trigger_method = "Manual";
+    const char *model;
 
     if (!ttbin->gps_records.count)
         return;
+
+    switch(ttbin->product_id)
+    {
+    case 0x03e9: model="Runner GPS Sport Watch"; break;
+    case 0x03ea: model="Multi-Sport GPS Sport Watch"; break;
+    default:     model="GPS Sport Watch"; break;
+    }
 
     fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
           "<TrainingCenterDatabase xsi:schemaLocation=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
@@ -59,7 +70,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
     fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
     fputs(        "                <Intensity>Active</Intensity>\r\n"
-                  "                <TriggerMethod>Manual</TriggerMethod>\r\n"
                   "                <Track>\r\n", file);
 
     heart_rate = 0;
@@ -69,6 +79,14 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     {
         switch (record->tag)
         {
+        case TAG_TRAINING_SETUP:
+            switch (record->training_setup.type)
+            {
+            case 7: trigger_method="Time";     break;
+            case 8: trigger_method="Distance"; break;
+            }
+            break;
+
         case TAG_STATUS:
             if ((record->status.status == 2) && (lap_state == 0))
                 insert_pause = 1;
@@ -96,7 +114,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             {
                 fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
                 fputs(        "                <Intensity>Active</Intensity>\r\n"
-                              "                <TriggerMethod>Manual</TriggerMethod>\r\n"
                               "                <Track>\r\n", file);
                 lap_state = 0;
             }
@@ -120,6 +137,11 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             fputs(        "                        <Extensions>\r\n"
                           "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
             fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps.instant_speed);
+            if (ttbin->activity==ACTIVITY_RUNNING)
+            {
+                fprintf(file, "                                <RunCadence>%d</RunCadence>\r\n", 30*(int)record->gps.cycles);
+                total_step_count += record->gps.cycles;
+            }
             fputs(        "                            </TPX>\r\n"
                           "                        </Extensions>\r\n"
                           "                    </Trackpoint>\r\n", file);
@@ -128,9 +150,13 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 fputs(        "                    <Extensions>\r\n"
                               "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
                 fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
+                if (lap_step_count)
+                    fprintf(file, "                           <Steps>%d</Steps>\r\n"
+                              "                           <AvgRunCadence>%d</AvgRunCadence>\r\n", lap_step_count, 30*lap_step_count/lap_time);
                 fputs(        "                       </LX>\r\n"
                               "                    </Extensions>\r\n", file);
                 fputs(        "                </Track>\r\n", file);
+                fprintf(file, "                <TriggerMethod>%s</TriggerMethod>\r\n", trigger_method);
                 fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap_time);
                 fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap_distance);
                 fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", lap_max_speed);
@@ -159,21 +185,26 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             break;
         case TAG_LAP:
             lap_avg_speed = total_speed / gps_count;
-            lap_time = record->lap.total_time;
-            lap_distance = record->lap.total_distance;
+            lap_time = record->lap.total_time - lap_start_time;
+            lap_distance = record->lap.total_distance - lap_start_distance;
             lap_max_speed = max_speed;
-            lap_calories = record->lap.total_calories;
+            lap_calories = record->lap.total_calories - lap_start_calories;
             lap_heart_rate_count = heart_rate_count;
             if (heart_rate_count > 0)
                 lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
             lap_max_heart_rate = max_heart_rate;
+            lap_step_count = total_step_count;
             gps_count = 0;
             heart_rate_count = 0;
             total_speed = 0;
             max_speed = 0;
             max_heart_rate = 0;
             total_heart_rate = 0;
+            total_step_count = 0;
             lap_state = 2;
+            lap_start_time = record->lap.total_time;
+            lap_start_distance = record->lap.total_distance;
+            lap_start_calories = record->lap.total_calories;
             break;
         }
     }
@@ -183,22 +214,27 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         if (!lap_state)
         {
             lap_avg_speed = total_speed / gps_count;
-            lap_time = ttbin->duration;
-            lap_distance = ttbin->total_distance;
+            lap_time = ttbin->duration - lap_start_time;
+            lap_distance = ttbin->total_distance - lap_start_distance;
             lap_max_speed = max_speed;
-            lap_calories = ttbin->total_calories;
+            lap_calories = ttbin->total_calories - lap_start_calories;
             lap_heart_rate_count = heart_rate_count;
             if (heart_rate_count > 0)
                 lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
             lap_max_heart_rate = max_heart_rate;
+            lap_step_count = total_step_count;
         }
 
         fputs(        "                    <Extensions>\r\n"
                       "                       <LX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
         fprintf(file, "                           <AvgSpeed>%.5f</AvgSpeed>\r\n", lap_avg_speed);
+        if (lap_step_count)
+            fprintf(file, "                           <Steps>%d</Steps>\r\n"
+                      "                           <AvgRunCadence>%d</AvgRunCadence>\r\n", lap_step_count, 30*lap_step_count/lap_time);
         fputs(        "                       </LX>\r\n"
                       "                    </Extensions>\r\n", file);
         fputs(        "                </Track>\r\n", file);
+        fprintf(file, "                <TriggerMethod>%s</TriggerMethod>\r\n", trigger_method);
         fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap_time);
         fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap_distance);
         fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", lap_max_speed);
@@ -215,10 +251,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         fputs(        "            </Lap>\r\n", file);
     }
 
-    fputs(        "            <Creator xsi:type=\"Device_t\">\r\n"
-                  "                <Name>TomTom GPS Sport Watch</Name>\r\n"
-                  "                <UnitId>0</UnitId>\r\n"
-                  "                <ProductID>0</ProductID>\r\n"
+    fputs(        "            <Creator xsi:type=\"Device_t\">\r\n", file);
+    fprintf(file, "                <Name>TomTom %s</Name>\r\n", model);
+    fprintf(file, "                <ProductID>%d</ProductID>\r\n", ttbin->product_id);
+    fputs(        "                <UnitId>0</UnitId>\r\n"
                   "                <Version>\r\n", file);
     fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[0]);
     fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[1]);
