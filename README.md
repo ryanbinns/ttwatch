@@ -3,7 +3,7 @@ ttwatch
 
 Linux TomTom GPS Watch Utilities
 
-Provides two programs for communicating with TomTom GPS watches and processing
+Provides programs for communicating with TomTom GPS watches and processing
 the data they collect.
 
 1. `ttwatch` - USB communications program for performing various operations
@@ -12,6 +12,13 @@ the data they collect.
 2. `ttbincnv` - Post-processor allowing conversion of the ttbin file formats
                 to either (currently) csv, gpx, kml or tcx  files, using broadly
                 similar formats to the official TomTom file formats.
+3. ttbinmod - Post-processor allowing modifications to be made to the ttbin
+              file. Currently, adding/modifying lap markers and truncating the
+              file at the end of the workout (last lap, goal completion etc)
+              are supported.
+4. ttbin2mysports.sh - script that enabled uploading to a MapMyFitness account
+                       that is linked to a MySports account. Automatically
+                       converts the ttbin file to a TCX file before uploading.
 
 System Requirements
 ===================
@@ -112,9 +119,73 @@ Unsafe Functions
 There are various options that can be given to the ttwatch program that read
 and write raw data to/from the watch. Used incorrectly, these could destroy
 the contents of the watch. For this reason, they are disabled by default. To
-enable these options, run configure with the `--with-unsafe` option. Note that
+enable these options, run `configure` with the `--with-unsafe` option. Note that
 I don't guarantee what will happen if you use these options without really
 knowing what you are doing.
+
+Config Files
+============
+
+The `ttwatch` program supports loading some settings from config files. Three
+config files can be used: global, per-user, and per-watch. They are located
+in the following locations:
+
+1. `/etc/ttwatch.conf`
+2. `~/.ttwatch`
+3. `[activity-store-location]/[watch-name]/ttwatch.conf`
+
+This means that some settings can be overridden by specific users or by which
+watch is being used. Note that the per-watch settings are used either by the
+daemon (when a watch is connected), or when downloading activities from the
+command-line, not for any other operations. The per-user config file is not
+used when being run as root.
+
+The config files are very simple, and are just lines in a "option = value"
+format. '#' is used to denote a comment; anything after a '#' is ignored.
+Applicable options (*not* case sensitive) and their values are as follows:
+
+1. ActivityStore: specifies an absolute path to the place where activities
+                  are stored. Relative paths (and paths such as ~) cannot be
+                  used. This is a string value.
+2. PostProcessor: specifies a script or executable that is executed for every
+                  activity that is downloaded from the watch, with the
+                  filename of the ttbin file as the only argument. The
+                  executable is run from the directory that the ttbin file is
+                  stored in. Note that for security reasons, this executable
+                  is *not* called if the program is running as root. This is
+                  a string value.
+3. RunAsUser: this can only be specified in the global `/etc/ttwatch.conf`
+              file, and indicates which user (and optionally which group) the
+              daemon runs as, similarly to the command-line argument. An
+              error is shown if this option is specified in a non-global
+              config file. This is a string value.
+4. SkipElevation: tells the program to skip downloaded elevation data from
+                  the internet for each downloaded activity. This is a
+                  boolean value.
+5. Device: specifies which device to use, as per the `-d` (`--device`)
+           command-line parameter. Note that only one device can be specified
+           at the moment (if anyone wants to modify the code to work with
+           multiple device names here, feel free to send me a patch). This is
+           a string value.
+6. Formats: specifies a list of file formats that should be created when an
+            activity file is downloaded. The supported file formats are listed
+            by the help command (`-h` or `--help` command line options). This
+            list can be either space- or comma-separated, or a combination
+            of the two. This is a string value.
+
+The following options only take effect when running as a daemon:
+
+1. UpdateFirmware: tells the daemon to check and update the firmware of any
+                   watch that is connected. This is a boolean value.
+2. UpdateGPS: tells the daemon to update the QuickGPSFix data of any watch
+              that is connected. This is a boolean value.
+3. SetTime: tells the daemon to update the time of any watch that is
+            connected. This is a boolean value.
+4. GetActivities: tells the daemon to download any activities from any watch
+                  that is connected. This is a boolean value.
+
+Boolean values can have a value of ('y', 'yes', 'true', 'n', 'no' or 'false').
+These values are *not* case-sensitive.
 
 It is likely possible to reset a watch with damaged firmware or file structure
 using the Recovery Mode, which requires TomTom's official MySports Connect\
