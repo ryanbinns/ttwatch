@@ -4,6 +4,7 @@ LDFLAGS += -L../ttbin -lttbin -lusb-1.0 -lcurl -lc -lgcc -lm
 SRC = ttwatch.c \
       messages.c \
       log.c \
+      options.c \
 
 OUTPUT = ttwatch
 

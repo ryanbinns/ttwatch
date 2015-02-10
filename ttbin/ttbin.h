@@ -324,5 +324,7 @@ typedef struct
 #define OFFLINE_FORMAT_COUNT    (6)
 extern const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT];
 
+uint32_t parse_format_list(const char *formats);
+
 #endif  /* __TTBIN_H__ */
 
