@@ -32,9 +32,17 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_max_heart_rate;
     unsigned lap_step_count;
     const char *trigger_method = "Manual";
+    const char *model;
 
     if (!ttbin->gps_records.count)
         return;
+
+    switch(ttbin->product_id)
+    {
+    case 0x03e9: model="Runner GPS Sport Watch"; break;
+    case 0x03ea: model="Multi-Sport GPS Sport Watch"; break;
+    default:     model="GPS Sport Watch"; break;
+    }
 
     fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
           "<TrainingCenterDatabase xsi:schemaLocation=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
@@ -243,10 +251,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         fputs(        "            </Lap>\r\n", file);
     }
 
-    fputs(        "            <Creator xsi:type=\"Device_t\">\r\n"
-                  "                <Name>TomTom GPS Sport Watch</Name>\r\n"
-                  "                <UnitId>0</UnitId>\r\n"
-                  "                <ProductID>0</ProductID>\r\n"
+    fputs(        "            <Creator xsi:type=\"Device_t\">\r\n", file);
+    fprintf(file, "                <Name>TomTom %s</Name>\r\n", model);
+    fprintf(file, "                <ProductID>%d</ProductID>\r\n", ttbin->product_id);
+    fputs(        "                <UnitId>0</UnitId>\r\n"
                   "                <Version>\r\n", file);
     fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[0]);
     fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[1]);
