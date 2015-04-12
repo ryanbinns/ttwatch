@@ -2462,7 +2462,7 @@ int main(int argc, char *argv[])
         /* become a daemon */
         daemonise(options->run_as ? options->run_as_user : NULL);
 
-        /* we're not a daemon, so open the log file and report that we have started */
+        /* we're a daemon, so open the log file and report that we have started */
         set_log_location(LOG_VAR_LOG);
         write_log(0, "Starting daemon.\n");
 
@@ -2474,7 +2474,7 @@ int main(int argc, char *argv[])
             int result;
             if (result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
                 LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_PRODUCT_ID,
-                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, &options, NULL))
+                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL))
             {
                 write_log(1, "Unable to register hotplug callback: %d\n", result);
                 _exit(1);

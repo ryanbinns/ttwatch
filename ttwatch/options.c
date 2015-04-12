@@ -222,6 +222,7 @@ OPTIONS *copy_options(const OPTIONS *o)
     COPY_STRING(post_processor);
 
 #undef COPY_STRING
+    return op;
 }
 
 /*****************************************************************************/
