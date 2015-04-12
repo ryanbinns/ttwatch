@@ -1016,7 +1016,6 @@ uint32_t get_configured_formats(libusb_device_handle *device)
     start = strstr(data, "<offline>");
     if (!start)
     {
-        write_log(1, "Unable to read watch preferences\n");
         free(data);
         return 0;
     }
@@ -2294,6 +2293,7 @@ int main(int argc, char *argv[])
         { "read",           required_argument, 0, 'r' },
         { "write",          required_argument, 0, 'w' },
 #endif
+        {0}
     };
 
     /* check the command-line options */
@@ -2307,7 +2307,9 @@ int main(int argc, char *argv[])
         {
         case 1:     /* list formats */
             options->set_name = 1;
-            options->watch_name = optarg;
+            if (options->watch_name)
+                free(options->watch_name);
+            options->watch_name = strdup(optarg);
             break;
         case 2:     /* set formats */
             options->set_formats = 1;
@@ -2315,19 +2317,27 @@ int main(int argc, char *argv[])
             break;
         case 3:     /* set daemon user */
             options->run_as = 1;
-            options->run_as_user = optarg;
+            if (options->run_as_user)
+                free(options->run_as_user);
+            options->run_as_user = strdup(optarg);
             break;
         case 4:     /* delete history entry */
             options->delete_history = 1;
-            options->history_entry = optarg;
+            if (options->history_entry)
+                free(options->history_entry);
+            options->history_entry = strdup(optarg);
             break;
         case 5:     /* redefine a race mysports entry */
             options->update_race = 1;
-            options->race = optarg;
+            if (options->race)
+                free(options->race);
+            options->race = strdup(optarg);
             break;
         case 6:     /* get or set a setting on the watch */
             options->setting = 1;
-            options->setting_spec = optarg;
+            if (options->setting_spec)
+                free(options->setting_spec);
+            options->setting_spec = strdup(optarg);
             break;
         case 'a':   /* auto mode */
             options->update_firmware = 1;
@@ -2353,14 +2363,22 @@ int main(int argc, char *argv[])
         case 'd':   /* select device */
             options->select_device = 1;
             if (optarg)
-                options->device = optarg;
+            {
+                if (options->device)
+                    free(options->device);
+                options->device = strdup(optarg);
+            }
             break;
         case 'v':   /* report version information */
             options->show_versions = 1;
             break;
         case 's':   /* activity store */
             if (optarg)
-                options->activity_store = optarg;
+            {
+                if (options->activity_store)
+                    free(options->activity_store);
+                options->activity_store = strdup(optarg);
+            }
             break;
         case 'h': /* help */
             help(argv);
