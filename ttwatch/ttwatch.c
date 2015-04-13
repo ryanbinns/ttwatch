@@ -2615,7 +2615,7 @@ int main(int argc, char *argv[])
             load_conf_file(filename, options, LoadDaemonOperations);
             free(filename);
         }
-        do_get_activities(device, options, 0);
+        do_get_activities(device, options, get_configured_formats(device));
     }
 
     if (options->update_gps)
