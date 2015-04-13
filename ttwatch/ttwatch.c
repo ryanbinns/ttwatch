@@ -396,7 +396,7 @@ void do_update_gps(libusb_device_handle *device)
 uint8_t *update_preferences_modified_time(uint8_t *data, uint32_t *size)
 {
     static const char *const DAYNAMES[]   = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-    static const char *const MONTHNAMES[] = { "Jan", "Feb", "Mar", "May", "Apr", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    static const char *const MONTHNAMES[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
     char timestr[64];
     time_t rawtime;
     struct tm *timeinfo;
