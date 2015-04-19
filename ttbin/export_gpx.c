@@ -9,7 +9,6 @@
 
 void export_gpx(TTBIN_FILE *ttbin, FILE *file)
 {
-    uint32_t i;
     char timestr[32];
     TTBIN_RECORD *record;
     int heart_rate;

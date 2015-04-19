@@ -5,6 +5,7 @@
 
 #include "ttbin.h"
 
+#include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -517,11 +518,6 @@ void insert_length_record(FILE_HEADER *header, uint8_t tag, uint16_t length)
 
 int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
 {
-    time_t current_time;
-    unsigned status_index, gps_index, treadmill_index;
-    unsigned swim_index, heart_rate_index, lap_index, unknown_index;
-    int more;
-    unsigned i;
     TTBIN_RECORD *record;
     uint8_t tag = TAG_FILE_HEADER;
     unsigned size;
@@ -732,6 +728,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     tag = TAG_SUMMARY;
     fwrite(&tag, 1, 1, file);
     fwrite(&summary, 1, sizeof(FILE_SUMMARY_RECORD), file);
+    return 0;
 }
 
 /*****************************************************************************/
@@ -885,7 +882,6 @@ void download_elevation_data(TTBIN_FILE *ttbin)
     CURL *curl;
     struct curl_slist *headers;
     char *post_data;
-    char *response_data;
     char *str;
     uint32_t i;
     ELEV_DATA_INFO info = {0};

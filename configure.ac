@@ -4,6 +4,7 @@ AC_ARG_WITH(unsafe, [  --with-unsafe           enable unsafe functions])
 
 AC_PROG_CC
 AC_LANG(C)
+AC_LANG(C++)
 
 AN_MAKEVAR([AR], [AC_PROG_AR])
 AN_PROGRAM([ar], [AC_PROG_AR])
@@ -12,18 +13,25 @@ AC_PROG_AR
 
 ok=1
 
+AC_CHECK_HEADERS(ctype.h, [], [ok=0])
+AC_CHECK_HEADERS(errno.h, [], [ok=0])
 AC_CHECK_HEADERS(getopt.h, [], [ok=0])
+AC_CHECK_HEADERS(math.h, [], [ok=0])
 AC_CHECK_HEADERS(memory.h, [], [ok=0])
 AC_CHECK_HEADERS(stdarg.h, [], [ok=0])
+AC_CHECK_HEADERS(stddef.h, [], [ok=0])
 AC_CHECK_HEADERS(stdio.h, [], [ok=0])
 AC_CHECK_HEADERS(stdlib.h, [], [ok=0])
 AC_CHECK_HEADERS(string.h, [], [ok=0])
 AC_CHECK_HEADERS(time.h, [], [ok=0])
 AC_CHECK_HEADERS(unistd.h, [], [ok=0])
 AC_CHECK_HEADERS(pwd.h, [], [ok=0])
+AC_CHECK_HEADERS(grp.h, [], [ok=0])
 AC_CHECK_HEADERS(fcntl.h, [], [ok=0])
 AC_CHECK_HEADERS(sys/types.h, [], [ok=0])
 AC_CHECK_HEADERS(sys/stat.h, [], [ok=0])
+AC_CHECK_HEADERS(string, [], [ok=0])
+AC_CHECK_HEADERS(vector, [], [ok=0])
 
 AC_CHECK_HEADERS(libusb-1.0/libusb.h, [], [ok=0])
 AC_CHECK_LIB(usb-1.0, libusb_init, [], [ok=0])

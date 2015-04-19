@@ -7,6 +7,7 @@
 
 typedef struct
 {
+    int show_packets;
     int update_firmware;
     int update_gps;
 #ifdef UNSAFE

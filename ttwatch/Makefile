@@ -1,14 +1,13 @@
-CFLAGS += -g -O0 -I../ttbin
-LDFLAGS += -L../ttbin -lttbin -lusb-1.0 -lcurl -lc -lgcc -lm
+CFLAGS += -g -O0 -I../ttbin -I../libttwatch
+LDFLAGS += -L../ttbin -L../libttwatch -lttbin -lttwatch -lusb-1.0 -lcurl -lstdc++ -lc -lgcc -lm
 
 SRC = ttwatch.c \
-      messages.c \
       log.c \
       options.c \
 
 OUTPUT = ttwatch
 
-$(OUTPUT): $(SRC:.c=.o) ../ttbin/libttbin.a
+$(OUTPUT): $(SRC:.c=.o) ../ttbin/libttbin.a ../libttwatch/libttwatch.a
 	@echo Linking $(OUTPUT)...
 	@$(CC) -o $(OUTPUT) $(SRC:.c=.o) $(LDFLAGS)
 

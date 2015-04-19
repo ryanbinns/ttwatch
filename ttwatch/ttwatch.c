@@ -3,12 +3,13 @@
 ** Main implementation file for the TomTom watch linux driver                 **
 \******************************************************************************/
 
-#include "messages.h"
 #include "ttbin.h"
 #include "log.h"
-#include "files.h"
 #include "options.h"
 
+#include "libttwatch.h"
+
+#include <ctype.h>
 #include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,6 +32,23 @@
 #define TOMTOM_VENDOR_ID    (0x1390)
 #define TOMTOM_PRODUCT_ID   (0x7474)
 
+#define TT_MANIFEST_ENTRY_UTC_OFFSET    (169)
+
+#include "manifest_definitions.h"
+
+struct
+{
+    uint32_t version;
+    uint32_t count;
+    struct MANIFEST_DEFINITION **definitions;
+} MANIFEST_DEFINITIONS[] =
+{
+    { 0x00010819, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
+    { 0x00010822, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
+};
+
+#define MANIFEST_DEFINITION_COUNT (2)
+
 /*************************************************************************************************/
 
 typedef struct
@@ -45,232 +63,57 @@ typedef struct
     DOWNLOAD download;
 } FIRMWARE_FILE;
 
-/*************************************************************************************************/
-
-int show_packets = 0;
 
 /*************************************************************************************************/
 
-libusb_device_handle *open_selected_device(libusb_device *device, int *index, int print_info, int select_device, char *selection)
+void show_device_versions(TTWATCH *watch)
 {
-    struct libusb_device_descriptor desc;
-    int result;
-    libusb_device_handle *handle;
-    char serial[64];
     char name[64];
-    int count;
-    int attach_kernel_driver = 0;
-    int device_number = -1;
-    int attempts = 0;
 
-    /* get the selected device number */
-    if (select_device && isdigit(*selection))
-    {
-        if (sscanf(selection, "%d", &device_number) != 1)
-            device_number = -1;
-    }
+    write_log(0, "Product ID:       0x%08x\n", watch->product_id);
+    write_log(0, "BLE Version:      %u\n", watch->ble_version);
+    write_log(0, "Firmware Version: %d.%d.%d\n", (watch->firmware_version >> 16) & 0xff,
+        (watch->firmware_version >> 8) & 0xff, watch->firmware_version & 0xff);
 
-    /* get the device descriptor */
-    libusb_get_device_descriptor(device, &desc);
-
-    /* ignore any non-TomTom devices */
-    /* PID 0x7474 is Multisport and Multisport Cardio */
-    if ((desc.idVendor  != TOMTOM_VENDOR_ID) ||
-        (desc.idProduct != TOMTOM_PRODUCT_ID))
-    {
-        return NULL;
-    }
-
-    /* open the device so we can read the serial number */
-    if (libusb_open(device, &handle))
-        return NULL;
-
-    /* Claim the device interface. If the device is busy (such as opened
-       by a daemon), wait up to 60 seconds for it to become available */
-    while (attempts++ < 60)
-    {
-        /* detach the kernel HID driver, otherwise we can't do anything */
-        libusb_detach_kernel_driver(handle, 0);
-        if (result = libusb_claim_interface(handle, 0))
-        {
-            if (result == LIBUSB_ERROR_BUSY)
-            {
-                if (attempts == 1)
-                    write_log(1, "Watch busy... waiting\n");
-                sleep(1);
-            }
-            else
-            {
-                libusb_attach_kernel_driver(handle, 0);
-                libusb_close(handle);
-                return NULL;
-            }
-        }
-        else
-            break;
-    }
-    /* if we have finished the attempts and it's still busy, abort */
-    if (result)
-    {
-        write_log(1, "Watch busy... aborted\n");
-        libusb_attach_kernel_driver(handle, 0);
-        libusb_close(handle);
-        return NULL;
-    }
-
-    /* get the watch serial number */
-    count = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, serial, sizeof(serial));
-    serial[count] = 0;
-
-    /* get the watch name */
-    if (get_watch_name(handle, name, sizeof(name)))
-        name[0] = 0;
-
-    /* print the device info if requested */
-    if (print_info)
-        write_log(0, "Device %u: %s (%s)\n", *index, serial, name);
-    *index += 1;
-
-    if (!select_device)
-        return handle;
-
-    /* see if we can match the device serial number, name or index */
-    if (strcasecmp(selection, serial) == 0)
-        return handle;
-    else if (strcasecmp(selection, name) == 0)
-        return handle;
-    else if ((device_number >= 0) && (device_number == (*index - 1)))
-        return handle;
-    else
-    {
-        libusb_close(handle);
-        return NULL;
-    }
-}
-
-libusb_device_handle *open_usb_device(int list_devices, int select_device, char *device)
-{
-    libusb_device **list = 0;
-    libusb_device_handle *handle, *selected_handle = 0;
-    ssize_t count = 0;
-    ssize_t i;
-    unsigned index = 0;
-
-    count = libusb_get_device_list(NULL, &list);
-    for (i = 0; i < count; ++i)
-    {
-        handle = open_selected_device(list[i], &index, list_devices, select_device, device);
-        if (handle)
-        {
-            if (!selected_handle)
-                selected_handle = handle;
-            else
-            {
-                libusb_release_interface(handle, 0);
-                libusb_attach_kernel_driver(handle, 0);
-                libusb_close(handle);
-            }
-        }
-    }
-
-    libusb_free_device_list(list, 1);
-    return selected_handle;
-}
-
-void show_device_versions(libusb_device_handle *device)
-{
-    uint32_t product_id, ble_version;
-    RXGetFirmwareVersionPacket response = {0};
-    char buf[128];
-
-    product_id = get_product_id(device);
-    if (!product_id)
-    {
-        write_log(1, "Unable to read product ID\n");
-        return;
-    }
-    write_log(0, "Product ID: 0x%08x\n", product_id);
-
-    ble_version = get_ble_version(device);
-    if (!ble_version)
-    {
-        write_log(1, "Unable to read BLE version\n");
-        return;
-    }
-    write_log(0, "BLE Version: %u\n", ble_version);
-
-    if (send_packet(device, MSG_GET_FIRMWARE_VERSION, 0, 0, 64, (uint8_t*)&response))
-    {
-        write_log(1, "Unable to read firmware version\n");
-        return;
-    }
-    write_log(0, "Firmware Version: %s\n", response.version);
-
-    if (get_watch_name(device, buf, sizeof(buf)))
+    if (ttwatch_get_watch_name(watch, name, sizeof(name)) != TTWATCH_NoError)
     {
         write_log(1, "Unable to read watch name\n");
         return;
     }
-    write_log(0, "Watch Name: %s\n", buf);
-
-    if (get_serial_number(device, buf, sizeof(buf)))
-    {
-        write_log(1, "Unable to get watch serial number\n");
-        return;
-    }
-    write_log(0, "Serial Number: %s\n", buf);
-}
-
-RXFindFilePacket *get_file_list(libusb_device_handle *device)
-{
-    RXFindFilePacket *files = (RXFindFilePacket *)malloc(100 * sizeof(RXFindFilePacket));
-    RXFindFilePacket *file = files;
-    if (find_first_file(device, file))
-    {
-        free(files);
-        return NULL;
-    }
-    while (!file->end_of_list)
-    {
-        if (find_next_file(device, ++file))
-            break;
-    }
-    send_message_group_1(device);
-
-    return files;
+    write_log(0, "Watch Name:       %s\n", name);
+    write_log(0, "Serial Number:    %s\n", watch->serial_number);
 }
 
 #ifdef UNSAFE
-void show_file_list(libusb_device_handle *device)
+/*****************************************************************************/
+void show_file_list_callback(uint32_t id, uint32_t length, void *data)
 {
-    RXFindFilePacket file;
-    if (find_first_file(device, &file))
+    write_log(0, "0x%08x: %u\n", id, length);
+}
+void show_file_list(TTWATCH *watch)
+{
+    if (ttwatch_enumerate_files(watch, 0, show_file_list_callback, 0) != TTWATCH_NoError)
+        write_log(1, "Unable to display file list\n");
+}
+
+/*****************************************************************************/
+void do_read_file(TTWATCH *watch, uint32_t id, FILE *file)
+{
+    uint32_t length;
+    void *data;
+
+    if (ttwatch_read_whole_file(watch, id, &data, &length) != TTWATCH_NoError)
+    {
+        write_log(1, "Unable to read file\n");
         return;
-    while (!file.end_of_list)
-    {
-        write_log(0, "0x%08x: %u\n", file.id, file.file_size);
-        if (find_next_file(device, &file))
-            break;
     }
-    send_message_group_1(device);
+
+    fwrite(data, 1, length, file);
+    free(data);
 }
 
-void do_read_file(libusb_device_handle *device, uint32_t id, FILE *file)
-{
-    uint32_t size = 0;
-    uint8_t *data = 0;
-
-    /* read the file data */
-    data = read_whole_file(device, id, &size);
-    if (size && data)
-    {
-        /* save the file data */
-        fwrite(data, 1, size, file);
-        free(data);
-    }
-}
-
-void do_write_file(libusb_device_handle *device, uint32_t id, FILE *file)
+/*****************************************************************************/
+void do_write_file(TTWATCH *watch, uint32_t id, FILE *file)
 {
     uint32_t size = 0;
     uint8_t *data = 0;
@@ -283,38 +126,31 @@ void do_write_file(libusb_device_handle *device, uint32_t id, FILE *file)
     }
 
     /* write the file to the device */
-    write_verify_whole_file(device, id, data, size);
+    ttwatch_write_verify_whole_file(watch, id, data, size);
 
     free(data);
 }
 
-void read_all_files(libusb_device_handle *device)
+/*****************************************************************************/
+void read_all_files_callback(uint32_t id, uint32_t length, void *data)
 {
-    /* retrieve the file list */
-    RXFindFilePacket *file;
-    RXFindFilePacket *files = get_file_list(device);
-    if (!files)
-        return;
-
-    /* loop through and save each file */
-    file = files;
-    while (!file->end_of_list)
+    char filename[16];
+    FILE *f;
+    sprintf(filename, "%08x.bin", id);
+    if ((f = fopen(filename, "w")) != 0)
     {
-        char filename[16];
-        FILE *f;
-        sprintf(filename, "%08x.bin", file->id);
-        if (f = fopen(filename, "w"))
-        {
-            do_read_file(device, file->id, f);
-            fclose(f);
-        }
-        ++file;
+        do_read_file((TTWATCH*)data, id, f);
+        fclose(f);
     }
-
-    free(files);
+}
+void read_all_files(TTWATCH *watch)
+{
+    if (ttwatch_enumerate_files(watch, 0, read_all_files_callback, watch) != TTWATCH_NoError)
+        write_log(1, "Unable to enumerate files\n");
 }
 #endif  /* UNSAFE */
 
+/*****************************************************************************/
 static size_t write_download(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
     DOWNLOAD *download = (DOWNLOAD*)userdata;
@@ -328,6 +164,7 @@ static size_t write_download(char *ptr, size_t size, size_t nmemb, void *userdat
     return length;
 }
 
+/*****************************************************************************/
 static int download_file(const char *url, DOWNLOAD *download)
 {
     int result;
@@ -359,11 +196,10 @@ static int download_file(const char *url, DOWNLOAD *download)
     return 0;
 }
 
-void do_update_gps(libusb_device_handle *device)
+/*****************************************************************************/
+void do_update_gps(TTWATCH *watch)
 {
     DOWNLOAD download = {0};
-    uint32_t size = 0;
-    uint8_t *data = 0;
 
     /* download the data file */
     write_log(0, "Downloading GPSQuickFix data file...\n");
@@ -374,159 +210,62 @@ void do_update_gps(libusb_device_handle *device)
     }
 
     write_log(0, "Writing file to watch...\n");
-    switch (write_verify_whole_file(device, FILE_GPSQUICKFIX_DATA, download.data, download.length))
-    {
-    case 0:
+    if (ttwatch_write_verify_whole_file(watch, TTWATCH_FILE_GPSQUICKFIX_DATA, download.data, download.length) == TTWATCH_NoError)
         write_log(0, "GPSQuickFix data updated\n");
-
-        /* not sure what this message does, but the official software
-           sends it after updating this data, so we'll do it too */
-        end_gps_update(device);
-        break;
-    case 3:
-        write_log(1, "Verify failed\n");
-    default:    /* intentional fallthrough */
-        write_log(1, "GPSQuickFix data update failed\n");
-        break;
-    }
+    else
+        write_log(1, "GPSQuickFix update failed\n");
 
     free(download.data);
 }
 
-uint8_t *update_preferences_modified_time(uint8_t *data, uint32_t *size)
+/*****************************************************************************/
+void do_get_time(TTWATCH *watch)
 {
-    static const char *const DAYNAMES[]   = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-    static const char *const MONTHNAMES[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-    char timestr[64];
-    time_t rawtime;
-    struct tm *timeinfo;
-    uint8_t *start, *end;
-
-    /* find the location of the modified time */
-    start = strstr(data, "modified=\"");
-    if (start)
-    {
-        start += 10;
-        end = strchr(start, '\"');
-    }
-
-    if (start && end)
-    {
-        int len, diff;
-        uint8_t *new_data;
-
-        /* get the current time and format it as required */
-        time(&rawtime);
-        timeinfo = localtime(&rawtime);
-        len = sprintf(timestr, "%s %d. %s %02d:%02d:%02d %04d",
-             DAYNAMES[timeinfo->tm_wday], timeinfo->tm_mday,
-             MONTHNAMES[timeinfo->tm_mon], timeinfo->tm_hour,
-             timeinfo->tm_min, timeinfo->tm_sec, timeinfo->tm_year + 1900);
-
-        /* find the difference in length between the two strings and
-           adjust the size of the preferences file accordingly */
-        diff = len - (end - start);
-        new_data = malloc(*size + diff);
-
-        memcpy(new_data, data, start - data);
-        memcpy(new_data + (start - data), timestr, len);
-        memcpy(new_data + (start - data) + len, end, data + *size - end + 1);
-
-        *size += diff;
-
-        free(data);
-        return new_data;
-    }
-
-    return data;
-}
-
-void do_get_time(libusb_device_handle *device)
-{
-    uint32_t size = 0;
-    uint8_t *data = 0;
-    TT_MANIFEST_FILE *manifest;
     char timestr[64];
     time_t time;
-    int i;
-    if (get_watch_time(device, &time))
+    if (ttwatch_get_watch_time(watch, &time) != TTWATCH_NoError)
         return;
 
     strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
 
     write_log(0, "UTC time:   %s\n", timestr);
 
-    data = read_whole_file(device, FILE_MANIFEST1, &size);
-    if (!data)
+    int32_t offset;
+    if (ttwatch_get_manifest_entry(watch, TT_MANIFEST_ENTRY_UTC_OFFSET, (uint32_t*)&offset) != TTWATCH_NoError)
     {
-        write_log(1, "Unable to read watch local time offset\n");
+        write_log(1, "Unable to get UTC offset\n");
         return;
     }
 
-    /* look for the UTC offset entry in the manifest file */
-    manifest = (TT_MANIFEST_FILE*)data;
-    for (i = 0; i < manifest->entry_count; ++i)
-    {
-        if (manifest->entries[i].entry == TT_MANIFEST_ENTRY_UTC_OFFSET)
-        {
-            /* generate, format and display the local time value */
-            int32_t offset = (int32_t) manifest->entries[i].value;
-            time += offset;
-            strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
-            if (offset % 3600)
-                write_log(0, "Local time: %s (UTC%+.1f)\n", timestr, offset / 3600.0);
-            else
-                write_log(0, "Local time: %s (UTC%+d)\n", timestr, offset / 3600);
-            break;
-        }
-    }
-
-    free(data);
+    time += offset;
+    strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", gmtime(&time));
+    if (offset % 3600)
+        write_log(0, "Local time: %s (UTC%+.1f)\n", timestr, offset / 3600.0);
+    else
+        write_log(0, "Local time: %s (UTC%+d)\n", timestr, offset / 3600);
 }
 
-void do_set_time(libusb_device_handle *device)
+/*****************************************************************************/
+void do_set_time(TTWATCH *watch)
 {
-    uint32_t size = 0;
-    uint8_t *data = 0;
-    TT_MANIFEST_FILE *manifest;
     struct tm tm_local;
-    uint32_t i;
     time_t utc_time = time(NULL);
 
     localtime_r(&utc_time, &tm_local);
 
-    /* read the manifest file */
-    data = read_whole_file(device, FILE_MANIFEST1, &size);
-    if (!data)
+    int32_t offset = tm_local.tm_gmtoff;
+    if ((ttwatch_set_manifest_entry(watch, TT_MANIFEST_ENTRY_UTC_OFFSET, (uint32_t*)&offset) != TTWATCH_NoError) ||
+        (ttwatch_write_manifest(watch) != TTWATCH_NoError))
     {
         write_log(1, "Unable to set watch time\n");
         return;
     }
 
-    /* look for the UTC offset entry in the manifest file */
-    manifest = (TT_MANIFEST_FILE*)data;
-    for (i = 0; i < manifest->entry_count; ++i)
-    {
-        if (manifest->entries[i].entry == TT_MANIFEST_ENTRY_UTC_OFFSET)
-        {
-            manifest->entries[i].value = (uint32_t)(int32_t)tm_local.tm_gmtoff;
-            break;
-        }
-    }
-
-    /* write the file back to the device */
-    if (write_verify_whole_file(device, FILE_MANIFEST1, data, size))
-    {
-        free(data);
-        write_log(1, "Unable to set watch time\n");
-        return;
-    }
-
-    /* perform a watch synchronisation */
-    get_watch_time(device, &utc_time);
-    free(data);
+    if (ttwatch_get_watch_time(watch, &utc_time) != TTWATCH_NoError)
+        write_log(1, "Unable to get watch time\n");
 }
 
+/*****************************************************************************/
 /* performs a 'mkdir -p', i.e. creates an entire directory tree */
 static void _mkdir(const char *dir)
 {
@@ -550,115 +289,116 @@ static void _mkdir(const char *dir)
     mkdir(tmp, 0755);
 }
 
-void do_get_activities(libusb_device_handle *device, OPTIONS *options, uint32_t formats)
+/*****************************************************************************/
+typedef struct
 {
-    char filename[256] = {0};
-    char **ptr;
-    unsigned i;
-    uint32_t fmt1;
+    TTWATCH *watch;
+    OPTIONS *options;
+    uint32_t formats;
 
-    /* read the list of all files so we can find the activity files */
-    RXFindFilePacket *file;
-    RXFindFilePacket *files = get_file_list(device);
-    if (!files)
+} DGACallback;
+void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdata)
+{
+    DGACallback *c = (DGACallback*)cbdata;
+    char filename[256] = {0};
+    uint8_t *data;
+    TTBIN_FILE *ttbin;
+    FILE *f;
+    struct tm timestamp;
+    uint32_t fmt1;
+    int i;
+
+    if (ttwatch_read_whole_file(c->watch, id, (void**)&data, 0) != TTWATCH_NoError)
         return;
 
-    file = files;
-    for (file = files; !file->end_of_list; ++file)
+    /* parse the activity file */
+    ttbin = parse_ttbin_data(data, length);
+    if (c->formats && ttbin->gps_records.count && !c->options->skip_elevation)
     {
-        uint32_t size;
-        uint8_t *data;
-        TTBIN_FILE *ttbin;
-        FILE *f;
-        struct tm timestamp;
-
-        /* check if this is a ttbin activity file */
-        if ((file->id & FILE_TYPE_MASK) != FILE_TTBIN_DATA)
-            continue;
-
-        data = read_whole_file(device, file->id, &size);
-        if (!data)
-            continue;
-
-        /* parse the activity file */
-        ttbin = parse_ttbin_data(data, size);
-        if (formats && ttbin->gps_records.count && !options->skip_elevation)
-        {
-            write_log(0, "Downloading elevation data\n");
-            download_elevation_data(ttbin);
-        }
-
-        gmtime_r(&ttbin->timestamp_local, &timestamp);
-
-        /* create the directory name: [store]/[watch name]/[date] */
-        strcpy(filename, options->activity_store);
-        strcat(filename, "/");
-        if (!get_watch_name(device, filename + strlen(filename), sizeof(filename) - strlen(filename)))
-            strcat(filename, "/");
-        sprintf(filename + strlen(filename), "%04d-%02d-%02d",
-            timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday);
-        _mkdir(filename);
-        chdir(filename);
-
-        /* create the file name */
-        sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
-
-        /* write the ttbin file */
-        f = fopen(filename, "w+");
-        if (f)
-        {
-            uint8_t *data1;
-            fwrite(data, 1, size, f);
-
-            /* verify that the file was written correctly */
-            fseek(f, 0, SEEK_SET);
-            data1 = malloc(size);
-            if (fread(data1, 1, size, f) != size)
-                write_log(1, "TTBIN file did not verify correctly\n");
-            else if (memcmp(data, data1, size) != 0)
-                write_log(1, "TTBIN file did not verify correctly\n");
-            else
-            {
-                /* delete the file from the watch only if verification passed */
-                delete_file(device, file->id);
-            }
-            free(data1);
-
-            fclose(f);
-        }
-        else
-            write_log(1, "Unable to write file: %s\n", filename);
-
-        /* export_formats returns the formats parameter with bits corresponding to failed exports cleared */
-        fmt1 = formats ^ export_formats(ttbin, formats);
-        if (fmt1)
-        {
-            write_log(1, "Unable to write file formats: ");
-            for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
-            {
-                if (fmt1 & OFFLINE_FORMATS[i].mask)
-                    write_log(1, "%s ", OFFLINE_FORMATS[i].name);
-            }
-            write_log(1, "\n");
-        }
-
-        /* don't run the post-processor as root */
-        if (options->post_processor && (getuid() != 0))
-        {
-            if (fork() == 0)
-            {
-                /* execute the post-processor */
-                execl(options->post_processor, options->post_processor, filename, (char*)0);
-            }
-        }
-
-        free_ttbin(ttbin);
-        free(data);
+        write_log(0, "Downloading elevation data\n");
+        download_elevation_data(ttbin);
     }
 
-    free(files);
+    gmtime_r(&ttbin->timestamp_local, &timestamp);
+
+    /* create the directory name: [store]/[watch name]/[date] */
+    strcpy(filename, c->options->activity_store);
+    strcat(filename, "/");
+    if (ttwatch_get_watch_name(c->watch, filename + strlen(filename), sizeof(filename) - strlen(filename)) == TTWATCH_NoError)
+        strcat(filename, "/");
+    sprintf(filename + strlen(filename), "%04d-%02d-%02d",
+        timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday);
+    _mkdir(filename);
+    chdir(filename);
+
+    /* create the file name */
+    sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
+
+    /* write the ttbin file */
+    f = fopen(filename, "w+");
+    if (f)
+    {
+        uint8_t *data1;
+        fwrite(data, 1, length, f);
+
+        /* verify that the file was written correctly */
+        fseek(f, 0, SEEK_SET);
+        data1 = malloc(length);
+        if ((fread(data1, 1, length, f) != length) ||
+            (memcmp(data, data1, length) != 0))
+        {
+            write_log(1, "TTBIN file did not verify correctly\n");
+            free_ttbin(ttbin);
+            free(data);
+            free(data1);
+            return;
+        }
+        else
+        {
+            /* delete the file from the watch only if verification passed */
+            ttwatch_delete_file(c->watch, id);
+        }
+        free(data1);
+
+        fclose(f);
+    }
+    else
+        write_log(1, "Unable to write file: %s\n", filename);
+
+    /* export_formats returns the formats parameter with bits corresponding to failed exports cleared */
+    fmt1 = c->formats ^ export_formats(ttbin, c->formats);
+    if (fmt1)
+    {
+        write_log(1, "Unable to write file formats: ");
+        for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
+        {
+            if (fmt1 & OFFLINE_FORMATS[i].mask)
+                write_log(1, "%s ", OFFLINE_FORMATS[i].name);
+        }
+        write_log(1, "\n");
+    }
+
+    /* don't run the post-processor as root */
+    if (c->options->post_processor && (getuid() != 0))
+    {
+        if (fork() == 0)
+        {
+            /* execute the post-processor */
+            execl(c->options->post_processor, c->options->post_processor, filename, (char*)0);
+        }
+    }
+
+    free_ttbin(ttbin);
+    free(data);
+}
+void do_get_activities(TTWATCH *watch, OPTIONS *options, uint32_t formats)
+{
+    DGACallback dgacallback = { watch, options, formats };
+    if (ttwatch_enumerate_files(watch, TTWATCH_FILE_TTBIN_DATA, do_get_activities_callback, &dgacallback) != TTWATCH_NoError)
+        write_log(1, "Unable to enumerate files\n");
 }
 
+/*****************************************************************************/
 /* find the firmware version from the downloaded firmware version XML file */
 uint32_t decode_latest_firmware_version(char *data)
 {
@@ -681,6 +421,7 @@ uint32_t decode_latest_firmware_version(char *data)
     return latest_version;
 }
 
+/*****************************************************************************/
 /* find a firmware URL from the downloaded firmware version XML file. Updates the
    provided pointer so that this function can be called repeatedly until it fails,
    to find the complete list of URLs */
@@ -705,16 +446,17 @@ char *find_firmware_url(char **data)
     return str;
 }
 
+/*****************************************************************************/
 /* updates either one single file (if id is not zero), or all remaining files (if id is zero) */
-int update_firmware_file(libusb_device_handle *device, FIRMWARE_FILE *files, int file_count, uint32_t id)
+int update_firmware_file(TTWATCH *watch, FIRMWARE_FILE *files, int file_count, uint32_t id)
 {
     int i;
     for (i = 0; i < file_count; ++i)
     {
         if (id && (files[i].id != id))
             continue;
-        else if (!id && ((files[i].id == FILE_SYSTEM_FIRMWARE) || (files[i].id == FILE_GPS_FIRMWARE) ||
-                         (files[i].id == FILE_MANIFEST1)       || (files[i].id == FILE_MANIFEST2)))
+        else if (!id && ((files[i].id == TTWATCH_FILE_SYSTEM_FIRMWARE) || (files[i].id == TTWATCH_FILE_GPS_FIRMWARE) ||
+                         (files[i].id == TTWATCH_FILE_MANIFEST1)       || (files[i].id == TTWATCH_FILE_MANIFEST2)))
         {
             continue;
         }
@@ -722,7 +464,7 @@ int update_firmware_file(libusb_device_handle *device, FIRMWARE_FILE *files, int
         /* update the file; even if it fails, still update the next file */
         write_log(0, "Updating firmware file: %08x ... ", files[i].id);
         fflush(stdout);
-        if (write_verify_whole_file(device, files[i].id, files[i].download.data, files[i].download.length))
+        if (ttwatch_write_verify_whole_file(watch, files[i].id, files[i].download.data, files[i].download.length) != TTWATCH_NoError)
             write_log(0, "Failed\n");
         else
             write_log(0, "Done\n");
@@ -731,7 +473,8 @@ int update_firmware_file(libusb_device_handle *device, FIRMWARE_FILE *files, int
     return 0;
 }
 
-void do_update_firmware(libusb_device_handle *device)
+/*****************************************************************************/
+void do_update_firmware(TTWATCH *watch)
 {
     uint32_t product_id;
     char url[128];
@@ -743,24 +486,11 @@ void do_update_firmware(libusb_device_handle *device)
     FIRMWARE_FILE *firmware_files = 0;
     int file_count = 0;
     int i;
-    uint32_t id;
     char *ptr, *fw_url;
 
-    /* the product id is required to get the correct firmware from TomTom's website */
-    product_id = get_product_id(device);
-    if (!product_id)
-    {
-        write_log(1, "Unable to read product ID\n");
-        goto cleanup;
-    }
-
-    /* get the current firmware version */
-    current_version = get_firmware_version(device);
-    if (!current_version)
-    {
-        write_log(1, "Unable to determine current firmware version\n");
-        goto cleanup;
-    }
+    product_id = watch->product_id;
+    current_version = watch->firmware_version;
+    current_ble_version = watch->ble_version;
 
     /* download the firmware information file */
     sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/FirmwareVersionConfigV2.xml?timestamp=%d",
@@ -773,18 +503,15 @@ void do_update_firmware(libusb_device_handle *device)
     download.data[download.length - 1] = 0;
 
     /* get the latest firmware version */
-    latest_version = decode_latest_firmware_version(download.data);
+    latest_version = decode_latest_firmware_version((char*)download.data);
     if (!latest_version)
     {
         write_log(1, "Unable to determine latest firmware version\n");
         goto cleanup;
     }
 
-    /* get the current BLE version */
-    current_ble_version = get_ble_version(device);
-
     /* find the latest BLE version */
-    ptr = strstr(download.data, "<BLE version=\"");
+    ptr = strstr((char*)download.data, "<BLE version=\"");
     if (!ptr)
     {
         write_log(1, "Unable to determine latest BLE version\n");
@@ -807,8 +534,8 @@ void do_update_firmware(libusb_device_handle *device)
         write_log(0, "Latest Firmware Version : 0x%08x\n", latest_version);
 
         /* download all the firmware files from the server */
-        ptr = download.data;
-        while (fw_url = find_firmware_url(&ptr))
+        ptr = (char*)download.data;
+        while ((fw_url = find_firmware_url(&ptr)) != 0)
         {
             /* find the file ID within the file URL */
             char *start = strrchr(fw_url, '/');
@@ -839,17 +566,17 @@ void do_update_firmware(libusb_device_handle *device)
         }
 
         /* update files in this order: 0x000000f0, 0x00010200, 0x00850000, 0x00850001, others */
-        update_firmware_file(device, firmware_files, file_count, FILE_SYSTEM_FIRMWARE);
-        send_message_group_1(device);   /* not sure why this is needed */
-        update_firmware_file(device, firmware_files, file_count, FILE_GPS_FIRMWARE);
-        send_message_group_1(device);   /* not sure why this is needed */
-        update_firmware_file(device, firmware_files, file_count, FILE_MANIFEST1);
-        update_firmware_file(device, firmware_files, file_count, FILE_MANIFEST2);
-        update_firmware_file(device, firmware_files, file_count, 0);
+        update_firmware_file(watch, firmware_files, file_count, TTWATCH_FILE_SYSTEM_FIRMWARE);
+        ttwatch_send_message_group_1(watch);   /* not sure why this is needed */
+        update_firmware_file(watch, firmware_files, file_count, TTWATCH_FILE_GPS_FIRMWARE);
+        ttwatch_send_message_group_1(watch);   /* not sure why this is needed */
+        update_firmware_file(watch, firmware_files, file_count, TTWATCH_FILE_MANIFEST1);
+        update_firmware_file(watch, firmware_files, file_count, TTWATCH_FILE_MANIFEST2);
+        update_firmware_file(watch, firmware_files, file_count, 0);
 
         /* resetting the watch causes the watch to disconnect and
            reconnect. This can take almost 90 seconds to complete */
-        reset_watch(device);
+        ttwatch_reset_watch(watch);
         write_log(0, "Waiting for watch to restart");
         for (i = 0; i < 45; ++i)
         {
@@ -861,6 +588,7 @@ void do_update_firmware(libusb_device_handle *device)
         write_log(0, "Firmware updated\n");
     }
 
+#if 0
     /* check to see if we need to do anything */
     if (latest_ble_version <= current_ble_version)
         write_log(1, "Current BLE firmware is already at latest version\n");
@@ -918,6 +646,7 @@ void do_update_firmware(libusb_device_handle *device)
 
         write_log(0, "BLE firmware updated\n");
     }
+#endif
 
 cleanup:
     /* free all the allocated data */
@@ -934,128 +663,48 @@ cleanup:
     }
 }
 
-void do_get_watch_name(libusb_device_handle *device)
+/*****************************************************************************/
+void do_get_watch_name(TTWATCH *watch)
 {
     char name[64];
-    if (get_watch_name(device, name, sizeof(name)))
+    if (ttwatch_get_watch_name(watch, name, sizeof(name)) != TTWATCH_NoError)
         write_log(1, "Unable to get watch name\n");
-    write_log(0, "%s\n", name);
+    else
+        write_log(0, "%s\n", name);
 }
 
-void do_set_watch_name(libusb_device_handle *device, const char *name)
+/*****************************************************************************/
+void do_set_watch_name(TTWATCH *watch, const char *name)
 {
-    uint32_t size;
-    char *data;
-    char *start, *end;
-    uint8_t *new_data;
-    int diff;
-    int len;
-    
-    data = read_whole_file(device, FILE_PREFERENCES_XML, &size);
-    if (!data)
-    {
-        write_log(1, "Unable to write watch name\n");
-        return;
-    }
-
-    start = strstr(data, "<watchName>");
-    if (!start)
-    {
-        write_log(1, "Unable to write watch name\n");
-        free(data);
-        return;
-    }
-
-    start += 11;
-    end = strstr(start, "</watchName>");
-    if (!end)
-    {
-        write_log(1, "Unable to write watch name\n");
-        free(data);
-        return;
-    }
-
-    /* find the difference in length between the two strings and
-       adjust the size of the preferences file accordingly */
-    len = strlen(name);
-    diff = len - (end - start);
-    new_data = malloc(size + diff);
-
-    memcpy(new_data, data, start - data);
-    memcpy(new_data + (start - data), name, len);
-    memcpy(new_data + (start - data) + len, end, data + size - end + 1);
-    size += diff;
-
-    free(data);
-
-    data = update_preferences_modified_time(new_data, &size);
-
-    if (write_verify_whole_file(device, FILE_PREFERENCES_XML, data, size))
+    if (ttwatch_set_watch_name(watch, name) != TTWATCH_NoError)
         write_log(1, "Unable to write new watch name\n");
-
-    free(data);
+    if (ttwatch_update_preferences_modified_time(watch) != TTWATCH_NoError)
+        write_log(1, "Unable to write new watch name\n");
 }
 
-uint32_t get_configured_formats(libusb_device_handle *device)
+/*****************************************************************************/
+static void get_configured_formats_callback(const char *id, int auto_open, void *data)
 {
-    uint32_t size;
-    char *data;
-    char *start, *end;
-    char *start1, *start2;
-    uint32_t formats;
-
-    /* the preferences XML file contains the export formats */
-    data = read_whole_file(device, FILE_PREFERENCES_XML, &size);
-    if (!data)
+    unsigned i;
+    for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
-        write_log(1, "Unable to read watch preferences\n");
-        return 0;
+        if (strcasecmp(id, OFFLINE_FORMATS[i].name) == 0)
+            *(uint32_t*)data |= OFFLINE_FORMATS[i].mask;
     }
-
-    /* we don't attempt to process online exporters */
-    start = strstr(data, "<offline>");
-    if (!start)
-    {
-        free(data);
-        return 0;
-    }
-    start += 9;
-
-    start1 = strstr(start, "<export id=\"");
-    start2 = strstr(start, "</offline>");
-
-    while (start1 && start2 && (start1 < start2))
-    {
-        char *ptr;
-        unsigned i;
-
-        start1 += 12;
-        end = strchr(start1, '\"');
-        if (!end)
-        {
-            free(data);
-            return 1;
-        }
-        *end++ = 0;
-
-        for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
-        {
-            if (strcasecmp(start1, OFFLINE_FORMATS[i].name) == 0)
-                formats |= OFFLINE_FORMATS[i].mask;
-        }
-
-        start1 = strstr(end, "<export id=\"");
-        start2 = strstr(end, "</offline>");
-    }
-
-    free(data);
+}
+static uint32_t get_configured_formats(TTWATCH *watch)
+{
+    uint32_t formats = 0;
+    if (ttwatch_enumerate_offline_formats(watch, get_configured_formats_callback, &formats) != TTWATCH_NoError)
+        write_log(1, "Unable to read configured formats\n");
     return formats;
 }
 
-void do_list_formats(libusb_device_handle *device)
+/*****************************************************************************/
+void do_list_formats(TTWATCH *watch)
 {
     unsigned i;
-    uint32_t formats = get_configured_formats(device);
+    uint32_t formats = get_configured_formats(watch);
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (formats & OFFLINE_FORMATS[i].mask)
@@ -1065,14 +714,14 @@ void do_list_formats(libusb_device_handle *device)
     write_log(0, "\n");
 }
 
-void do_set_formats(libusb_device_handle *device, uint32_t formats)
+/*****************************************************************************/
+static void do_set_formats_callback(const char *id, int auto_open, void *data)
 {
-    uint32_t size = 0;
-    char *data = 0, *new_data;
-    char *ptr, *str;
-    char *start, *end;
-    int i, len, diff;
-
+    ttwatch_remove_offline_format((TTWATCH*)data, id);
+}
+void do_set_formats(TTWATCH *watch, uint32_t formats)
+{
+    unsigned i;
     /* make sure we've got some formats... */
     if (!formats)
     {
@@ -1080,142 +729,63 @@ void do_set_formats(libusb_device_handle *device, uint32_t formats)
         return;
     }
 
-    /* create the string for the new file formats */
-    ptr = str = malloc(45 * OFFLINE_FORMAT_COUNT + 40);
-    ptr += sprintf(ptr, "        <offline>\n");
+    if (ttwatch_enumerate_offline_formats(watch, do_set_formats_callback, watch) != TTWATCH_NoError)
+    {
+        write_log(1, "Unable to clear format list\n");
+        return;
+    }
+
     for (i = 0; i < OFFLINE_FORMAT_COUNT; ++i)
     {
         if (formats & (1 << i))
-            ptr += sprintf(ptr, "            <export id=\"%s\" autoOpen=\"0\"/>\n", OFFLINE_FORMATS[i].name);
-    }
-    ptr += sprintf(ptr, "        </offline>\n");
-
-    /* read the current preferences file */
-    data = read_whole_file(device, FILE_PREFERENCES_XML, &size);
-    if (!data)
-    {
-        write_log(1, "Unable to determine current format list\n");
-        free(str);
-        return;
-    }
-
-    len = strlen(str);
-    /* look for the section that needs updating */
-    start = strstr(data, "<offline>");
-    if (!start)
-    {
-        /* no offline format section, so add one */
-        start = strstr(data, "<exporters>");
-        if (!start)
         {
-            /* oh dear, no exporters section either; give up */
-            write_log(1, "Unable to set new format list\n");
-            free(data);
-            free(str);
-            return;
-        }
-        else
-        {
-            /* we found an exporters section, so we can add
-              the offline section immediately after it */
-            start += 11;
-            end = start;
+            if (ttwatch_add_offline_format(watch, OFFLINE_FORMATS[i].name, 0) != TTWATCH_NoError)
+            {
+                write_log(1, "Unable to add offline format\n");
+                return;
+            }
         }
     }
-    else
-    {
-        /* skip back to the beginning of the line */
-        while (*--start == ' ')
-            --start;
-        ++start;
-        /* find the end of the offline section, so we replace the whole thing */
-        end = strstr(start, "</offline>");
-        if (!end)
-        {
-            write_log(1, "Unable to set new format list\n");
-            free(data);
-            free(str);
-            return;
-        }
-        /* skip to the end of the line */
-        while (*end && (*end != '\n'))
-            ++end;
-        if (*end)
-            ++end;
-    }
 
-    /* find the difference in length between the two strings and
-       adjust the size of the preferences file accordingly */
-    diff = len - (end - start);
-    new_data = malloc(size + diff);
+    if (ttwatch_update_preferences_modified_time(watch) != TTWATCH_NoError)
+        write_log(1, "Unable to write preferences file\n");
 
-    memcpy(new_data, data, start - data);
-    memcpy(new_data + (start - data), str, len);
-    memcpy(new_data + (start - data) + len, end, data + size - end + 1);
-    size += diff;
-
-    free(data);
-    free(str);
-
-    data = update_preferences_modified_time(new_data, &size);
-
-    if (write_verify_whole_file(device, FILE_PREFERENCES_XML, data, size))
-        write_log(1, "Unable to write new watch name\n");
-
-    free(data);
+    if (ttwatch_write_preferences(watch) != TTWATCH_NoError)
+        write_log(1, "Unable to write preferences file\n");
 }
 
-void do_list_races(libusb_device_handle *device)
+/*****************************************************************************/
+static void do_list_races_callback(TTWATCH_ACTIVITY activity, int index, const TTWATCH_RACE_FILE *race, void *data)
 {
     static const char ACTIVITY_CHARS[] = "rcs    tf";
-    /* read the list of all files so we can find the race files */
-    RXFindFilePacket *file;
-    RXFindFilePacket *files = get_file_list(device);
-    if (!files)
-        return;
+    uint32_t i;
 
-    for (file = files; !file->end_of_list; ++file)
+    printf("%c%d, \"%s\", %ds, %dm, %d checkpoints = { ", ACTIVITY_CHARS[activity],
+        index + 1, race->name, race->time, race->distance, race->checkpoints);
+    index = 0;
+    for (i = 0; i < race->checkpoints; ++i)
     {
-        uint8_t *data;
-        uint32_t length;
-        TT_RACE_FILE *race;
-        uint32_t i;
-        uint32_t index;
-
-        /* look for race file definitions */
-        if ((file->id & FILE_TYPE_MASK) != FILE_RACE_DATA)
-            continue;
-
-        /* read the file */
-        data = read_whole_file(device, file->id, &length);
-        if (!data)
-            continue;
-
-        race = (TT_RACE_FILE*)data;
-        printf("%c%d, \"%s\", %ds, %dm, %d checkpoints = { ", ACTIVITY_CHARS[(file->id >> 8) & 0xff],
-            (file->id & 0xff) + 1, race->name, race->time, race->distance, race->checkpoints);
-        index = 0;
-        for (i = 0; i < race->checkpoints; ++i)
+        uint32_t distance = 0;
+        do
         {
-            uint32_t distance = 0;
-            do
-            {
-                distance += race->distances[index];
-            }
-            while (race->distances[index++] == 0xff);
-            printf("%d", distance);
-            if (i < (race->checkpoints - 1))
-                printf(", ");
-            else
-                printf(" }\n");
+            distance += race->distances[index];
         }
-
-        free(data);
+        while (race->distances[index++] == 0xff);
+        printf("%d", distance);
+        if (i < (race->checkpoints - 1))
+            printf(", ");
+        else
+            printf(" }\n");
     }
-    free(files);
+}
+void do_list_races(TTWATCH *watch)
+{
+    if (ttwatch_enumerate_races(watch, do_list_races_callback, 0) != TTWATCH_NoError)
+        write_log(1, "Unable to enumerate races\n");
 }
 
-void do_update_race(libusb_device_handle *device, char *race)
+/*****************************************************************************/
+void do_update_race(TTWATCH *watch, char *race)
 {
     int activity;
     int index;
@@ -1224,13 +794,7 @@ void do_update_race(libusb_device_handle *device, char *race)
     uint32_t distance;
     uint32_t checkpoints;
     int num;
-    uint8_t *data;
-    uint32_t length;
-    float checkpoint_distance;
-    int required_length;
-    uint32_t current_distance;
-    TT_RACE_FILE *race_file;
-    int i, j;
+    int i;
 
     /* parse the race data */
     switch (race[0])
@@ -1318,266 +882,94 @@ void do_update_race(libusb_device_handle *device, char *race)
         return;
     }
 
-    checkpoint_distance = (float)distance / checkpoints;
-    required_length = (int)((checkpoint_distance + 254) / 255) * checkpoints;
-
-    data = read_whole_file(device, FILE_RACE_DATA | (activity << 8) | index, &length);
-    if (!data)
+    if (ttwatch_update_race(watch, (TTWATCH_ACTIVITY)activity,
+        index, name, distance, duration, checkpoints) != TTWATCH_NoError)
     {
-        write_log(1, "Unable to read current race data\n");
-        return;
+        write_log(1, "Unable to update race\n");
     }
-
-    /* resize the file if required */
-    if (length < (sizeof(TT_RACE_FILE) - 1 + required_length))
-        data = realloc(data, sizeof(TT_RACE_FILE) - 1 + required_length);
-
-    race_file = (TT_RACE_FILE*)data;
-
-    /* start copying the race data */
-    strncpy(race_file->name, name, 16);
-    race_file->distance    = distance;
-    race_file->time        = duration;
-    race_file->checkpoints = checkpoints;
-
-    /* add in the lap distances */
-    current_distance = 0;
-    j = 0;
-    for (i = 1; i <= checkpoints; ++i)
-    {
-        uint32_t end_distance = (distance * i + checkpoints / 2) / checkpoints;
-        while (current_distance < end_distance)
-        {
-            if ((end_distance - current_distance) >= 255)
-                race_file->distances[j] = 255;
-            else
-                race_file->distances[j] = end_distance - current_distance;
-            current_distance += race_file->distances[j++];
-        }
-    }
-
-    length = sizeof(TT_RACE_FILE) - 1 + required_length;
-    if (write_verify_whole_file(device, 0x00710000 | (activity << 8) | index, data, length))
-        write_log(1, "Unable to write race data to watch\n");
-
-    free(data);
 }
 
-void do_list_history(libusb_device_handle *device)
+/*****************************************************************************/
+static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const TTWATCH_HISTORY_ENTRY *entry, void *data)
 {
-    /* read the list of all files so we can find the history files */
-    RXFindFilePacket *file;
-    RXFindFilePacket *files = get_file_list(device);
-    if (!files)
-        return;
-
-    for (file = files; !file->end_of_list; ++file)
+    TTWATCH_ACTIVITY act = *(TTWATCH_ACTIVITY*)data;
+    if (act != activity)
     {
-        uint8_t *data;
-        uint32_t length;
-        TT_HISTORY_FILE *history;
-        uint32_t i;
-        uint8_t *ptr;
-
-        /* look for history file definitions */
-        if ((file->id & FILE_TYPE_MASK) != FILE_HISTORY_SUMMARY)
-            continue;
-
-        /* read the file */
-        data = read_whole_file(device, file->id, &length);
-        if (!data)
-            continue;
-
-        /* if there are no entries, skip this file */
-        history = (TT_HISTORY_FILE*)data;
-        if (history->entry_count == 0)
+        switch (activity)
         {
-            free(data);
-            continue;
+        case TTWATCH_Running:   write_log(0, "Running:\n");  break;
+        case TTWATCH_Cycling:   write_log(0, "Cycling:\n");   break;
+        case TTWATCH_Swimming:  write_log(0, "Swimming:\n");  break;
+        case TTWATCH_Treadmill: write_log(0, "Treadmill:\n"); break;
+        case TTWATCH_Freestyle: write_log(0, "Freestyle:\n"); break;
         }
-
-        switch (history->activity)
-        {
-        case ACTIVITY_RUNNING:   write_log(0, "Running:\n");  break;
-        case ACTIVITY_CYCLING:   write_log(0, "Cycling:\n");   break;
-        case ACTIVITY_SWIMMING:  write_log(0, "Swimming:\n");  break;
-        case ACTIVITY_TREADMILL: write_log(0, "Treadmill:\n"); break;
-        case ACTIVITY_FREESTYLE: write_log(0, "Freestyle:\n"); break;
-        }
-
-        ptr = history->data;
-        for (i = 0; i < history->entry_count; ++i)
-        {
-            TT_HISTORY_ENTRY *entry = (TT_HISTORY_ENTRY*)ptr;
-            write_log(0, "%d: %04d/%02d/%02d %02d:%02d:%02d, %4ds, %8.2fm, %4d calories", i + 1,
-                entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second,
-                entry->duration, entry->distance, entry->calories);
-            if (entry->activity == ACTIVITY_SWIMMING)
-                write_log(0, ", %d swolf, %d spl", entry->swolf, entry->strokes_per_lap);
-            write_log(0, "\n");
-
-            ptr += history->entry_length;
-        }
-
-        free(data);
+        *(int*)data = activity;
     }
-    free(files);
+    write_log(0, "%d: %04d/%02d/%02d %02d:%02d:%02d, %4ds, %8.2fm, %4d calories", index + 1,
+        entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second,
+        entry->duration, entry->distance, entry->calories);
+    if (entry->activity == TTWATCH_Swimming)
+        write_log(0, ", %d swolf, %d spl", entry->swolf, entry->strokes_per_lap);
+    write_log(0, "\n");
+}
+void do_list_history(TTWATCH *watch)
+{
+    unsigned act = -1;
+    if (ttwatch_enumerate_history_entries(watch, do_list_history_callback, &act) != TTWATCH_NoError)
+        write_log(1, "Unable to enumerate history entries\n");
 }
 
-void do_delete_history_item(libusb_device_handle *device, const char *item)
+/*****************************************************************************/
+void do_delete_history_item(TTWATCH *watch, const char *item)
 {
-    int activity;
+    TTWATCH_ACTIVITY activity;
     int index;
-
-    /* read the list of all files so we can find the history files */
-    RXFindFilePacket *file;
-    RXFindFilePacket *files = get_file_list(device);
-    if (!files)
-        return;
-
     /* decode the input string */
     switch (item[0])
     {
-    case 'r': activity = ACTIVITY_RUNNING;   break;
-    case 'c': activity = ACTIVITY_CYCLING;   break;
-    case 's': activity = ACTIVITY_SWIMMING;  break;
-    case 't': activity = ACTIVITY_TREADMILL; break;
-    case 'f': activity = ACTIVITY_FREESTYLE; break;
+    case 'r': activity = TTWATCH_Running;   break;
+    case 'c': activity = TTWATCH_Cycling;   break;
+    case 's': activity = TTWATCH_Swimming;  break;
+    case 't': activity = TTWATCH_Treadmill; break;
+    case 'f': activity = TTWATCH_Freestyle; break;
     default:
         write_log(1, "Invalid activity type specified, must be one of r, c, s, t or f\n");
-        free(files);
         return;
     }
 
     if ((sscanf(item + 1, "%d", &index) < 1) || (index < 1))
     {
         write_log(1, "Invalid index specified, must be a positive integer (1, 2, 3 etc...)\n");
-        free(files);
         return;
     }
     --index;    /* we really want a 0-based index */
 
-    for (file = files; !file->end_of_list; ++file)
-    {
-        uint8_t *data;
-        uint32_t length;
-        TT_HISTORY_FILE *history;
-        TT_HISTORY_ENTRY *entry;
-
-        /* look for history file definitions */
-        if ((file->id & FILE_TYPE_MASK) != FILE_HISTORY_SUMMARY)
-            continue;
-
-        /* read the file */
-        data = read_whole_file(device, file->id, &length);
-        if (!data)
-            continue;
-
-        /* if there are no entries or this is the wrong activity, skip this file */
-        history = (TT_HISTORY_FILE*)data;
-        if ((history->entry_count == 0) || (history->activity != activity))
-        {
-            free(data);
-            continue;
-        }
-
-        /* check that the index is correct */
-        if (index >= history->entry_count)
-        {
-            write_log(1, "Invalid index specified, must be <= %d\n", history->entry_count);
-            free(data);
-            break;
-        }
-
-        /* delete any associated history data files */
-        if (activity != ACTIVITY_SWIMMING)
-        {
-            entry = (TT_HISTORY_ENTRY*)(history->data + (index * history->entry_length));
-            delete_file(device, FILE_HISTORY_DATA | entry->file_id);
-            delete_file(device, FILE_RACE_HISTORY_DATA | entry->file_id);
-        }
-
-        /* move the data around to delete the unwanted entry */
-        if (index != (history->entry_count - 1))
-        {
-            memmove(history->data + (index * history->entry_length),
-                    history->data + ((index + 1) * history->entry_length),
-                    (history->entry_count - index - 1) * history->entry_length);
-        }
-
-        /* update the history file information and rewrite the file */
-        --history->entry_count;
-        length -= history->entry_length;
-        write_verify_whole_file(device, file->id, data, length);
-
-        free(data);
-        break;
-    }
-    free(files);
+    if (ttwatch_delete_history_entry(watch, activity, index) != TTWATCH_NoError)
+        write_log(1, "Unable to delete history entry\n");
 }
 
-void do_clear_data(libusb_device_handle *device)
+/*****************************************************************************/
+void do_clear_data(TTWATCH *watch)
 {
-    /* read the list of all files so we can find the files we want to delete */
-    RXFindFilePacket *file;
-    RXFindFilePacket *files = get_file_list(device);
-    if (!files)
-        return;
-
-    for (file = files; !file->end_of_list; ++file)
-    {
-        uint32_t length;
-        uint8_t *data;
-
-        switch (file->id & FILE_TYPE_MASK)
-        {
-        case FILE_TTBIN_DATA:
-        case FILE_RACE_HISTORY_DATA:
-        case FILE_HISTORY_DATA:
-            delete_file(device, file->id);
-            break;
-
-        case FILE_HISTORY_SUMMARY:
-            data = read_whole_file(device, file->id, &length);
-            if (data)
-            {
-                TT_HISTORY_FILE *history = (TT_HISTORY_FILE*)data;
-                history->entry_count = 0;
-                length = sizeof(TT_HISTORY_FILE) - 1;
-                write_verify_whole_file(device, file->id, data, length);
-                free(data);
-            }
-            break;
-        }
-    }
-    free(files);
+    if (ttwatch_clear_data(watch) != TTWATCH_NoError)
+        write_log(1, "Unable to clear watch data\n");
 }
 
-void do_display_settings(libusb_device_handle* device)
+/*****************************************************************************/
+void do_display_settings(TTWATCH *watch)
 {
-    uint32_t size;
-    uint8_t *data;
-    TT_MANIFEST_FILE *manifest;
-    uint32_t i;
-    uint32_t j;
+    unsigned i;
+    int j;
     struct MANIFEST_ENUM_DEFINITION *enum_defn;
     struct MANIFEST_INT_DEFINITION *int_defn;
     struct MANIFEST_FLOAT_DEFINITION *float_defn;
     struct MANIFEST_DEFINITION** definitions = 0;
     uint32_t defn_count = 0;
 
-    /* get the current firmware version */
-    uint32_t version = get_firmware_version(device);
-    if (!version)
-    {
-        write_log(1, "Unable to read watch version\n");
-        return;
-    }
-
     /* check to make sure we support this firmware version */
     for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
     {
-        if (MANIFEST_DEFINITIONS[i].version == version)
+        if (MANIFEST_DEFINITIONS[i].version == watch->firmware_version)
         {
             definitions = MANIFEST_DEFINITIONS[i].definitions;
             defn_count  = MANIFEST_DEFINITIONS[i].count;
@@ -1590,20 +982,18 @@ void do_display_settings(libusb_device_handle* device)
         return;
     }
 
-    /* read the manifest file */
-    data = read_whole_file(device, FILE_MANIFEST1, &size);
-    if (!data)
-        return;
-    manifest = (TT_MANIFEST_FILE*)data;
-
-    /* loop through the manifest entries and display them */
-    for (i = 0; i < manifest->entry_count; ++i)
+    for (i = 0; i < defn_count; ++i)
     {
-        if (i >= defn_count)
-            continue;
+        uint32_t value;
 
         if (!definitions[i])
             continue;
+
+        if (ttwatch_get_manifest_entry(watch, i, &value) != TTWATCH_NoError)
+        {
+            write_log(1, "Unable to read manifest entry\n");
+            return;
+        }
 
         write_log(0, "%s = ", definitions[i]->name);
         switch (definitions[i]->type)
@@ -1612,37 +1002,34 @@ void do_display_settings(libusb_device_handle* device)
             enum_defn = (struct MANIFEST_ENUM_DEFINITION*)definitions[i];
             for (j = 0; j < enum_defn->value_count; ++j)
             {
-                if (manifest->entries[i].value == enum_defn->values[j].value)
+                if (value == enum_defn->values[j].value)
                 {
                     write_log(0, "%s", enum_defn->values[j].name);
                     break;
                 }
             }
             if (j >= enum_defn->value_count)
-                write_log(0, "unknown (%u)", manifest->entries[i].value);
+                write_log(0, "unknown (%u)", value);
             break;
         case MANIFEST_TYPE_INT:
             int_defn = (struct MANIFEST_INT_DEFINITION*)definitions[i];
-            write_log(0, "%d %s", manifest->entries[i].value, int_defn->units);
+            write_log(0, "%d %s", (int)value, int_defn->units);
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
-            write_log(0, "%.2f %s", manifest->entries[i].value / float_defn->scaling_factor, float_defn->units);
+            write_log(0, "%.2f %s", *(float*)&value / float_defn->scaling_factor, float_defn->units);
             break;
         }
         write_log(0, "\n");
+        
     }
-
-    free(data);
 }
 
-void do_set_setting(libusb_device_handle *device, const char *setting, const char *value)
+/*****************************************************************************/
+void do_set_setting(TTWATCH *watch, const char *setting, const char *value)
 {
-    uint32_t size;
-    uint8_t *data;
     uint32_t i;
     int j;
-    TT_MANIFEST_FILE *manifest;
     struct MANIFEST_ENUM_DEFINITION *enum_defn;
     struct MANIFEST_INT_DEFINITION *int_defn;
     struct MANIFEST_FLOAT_DEFINITION *float_defn;
@@ -1651,18 +1038,10 @@ void do_set_setting(libusb_device_handle *device, const char *setting, const cha
     struct MANIFEST_DEFINITION** definitions = 0;
     uint32_t defn_count = 0;
 
-    /* get the current firmware version */
-    uint32_t version = get_firmware_version(device);
-    if (!version)
-    {
-        write_log(1, "Unable to read watch version\n");
-        return;
-    }
-
     /* check to make sure we support this firmware version */
     for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
     {
-        if (MANIFEST_DEFINITIONS[i].version == version)
+        if (MANIFEST_DEFINITIONS[i].version == watch->firmware_version)
         {
             definitions = MANIFEST_DEFINITIONS[i].definitions;
             defn_count  = MANIFEST_DEFINITIONS[i].count;
@@ -1690,14 +1069,6 @@ void do_set_setting(libusb_device_handle *device, const char *setting, const cha
             return;
         }
 
-        data = read_whole_file(device, FILE_MANIFEST1, &size);
-        if (!data)
-        {
-            write_log(1, "Unable to read watch settings\n");
-            return;
-        }
-        manifest = (TT_MANIFEST_FILE*)data;
-
         switch (definitions[i]->type)
         {
         case MANIFEST_TYPE_ENUM:
@@ -1706,14 +1077,13 @@ void do_set_setting(libusb_device_handle *device, const char *setting, const cha
             {
                 if (!strcasecmp(value, enum_defn->values[j].name))
                 {
-                    manifest->entries[i].value = enum_defn->values[j].value;
+                    int_val = enum_defn->values[j].value;
                     break;
                 }
             }
             if (j >= enum_defn->value_count)
             {
                 write_log(0, "Unknown value: %s\n", value);
-                free(data);
                 return;
             }
             break;
@@ -1722,70 +1092,56 @@ void do_set_setting(libusb_device_handle *device, const char *setting, const cha
             if (sscanf(value, "%u", &int_val) != 1)
             {
                 write_log(1, "Invalid value specified: %s\n", value);
-                free(data);
                 return;
             }
             if ((int_val < int_defn->min) || (int_val > int_defn->max))
             {
                 write_log(1, "Valid out of range: %u (%u <= value <= %u)\n", int_val,
                     int_defn->min, int_defn->max);
-                free(data);
                 return;
             }
-            manifest->entries[i].value = int_val;
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
             if (sscanf(value, "%f", &float_val) != 1)
             {
                 write_log(1, "Invalid value specified: %s\n", value);
-                free(data);
                 return;
             }
             if ((float_val < float_defn->min) || (float_val > float_defn->max))
             {
                 write_log(1, "Valid out of range: %.3f (%.3f <= value <= %.3f)\n", float_val,
                     float_defn->min, float_defn->max);
-                free(data);
                 return;
             }
-            manifest->entries[i].value = (uint32_t)(float_val * float_defn->scaling_factor);
+            int_val = (uint32_t)(float_val * float_defn->scaling_factor);
             break;
         }
-        if (write_verify_whole_file(device, FILE_MANIFEST1, data, size))
-            write_log(1, "Unable to write watch settings\n");
-
-        free(data);
+        if (ttwatch_set_manifest_entry(watch, i, &int_val) != TTWATCH_NoError)
+        {
+            write_log(1, "Unable to set manifest entry value\n");
+            return;
+        }
         return;
     }
     write_log(1, "Unknown setting: %s\n", setting);
 }
 
-void do_get_setting(libusb_device_handle *device, const char *setting)
+/*****************************************************************************/
+void do_get_setting(TTWATCH *watch, const char *setting)
 {
-    uint32_t size;
-    uint8_t *data;
     uint32_t i;
     int j;
-    TT_MANIFEST_FILE *manifest;
     struct MANIFEST_ENUM_DEFINITION *enum_defn;
     struct MANIFEST_INT_DEFINITION *int_defn;
     struct MANIFEST_FLOAT_DEFINITION *float_defn;
     struct MANIFEST_DEFINITION** definitions = 0;
     uint32_t defn_count = 0;
 
-    /* get the current firmware version */
-    uint32_t version = get_firmware_version(device);
-    if (!version)
-    {
-        write_log(1, "Unable to read watch version\n");
-        return;
-    }
-
     /* check to make sure we support this firmware version */
     for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
     {
-        if (MANIFEST_DEFINITIONS[i].version == version)
+        if (MANIFEST_DEFINITIONS[i].version == watch->firmware_version)
         {
             definitions = MANIFEST_DEFINITIONS[i].definitions;
             defn_count  = MANIFEST_DEFINITIONS[i].count;
@@ -1801,19 +1157,18 @@ void do_get_setting(libusb_device_handle *device, const char *setting)
     /* check to see if the setting exists */
     for (i = 0; i < defn_count; ++i)
     {
+        uint32_t value;
         if (!definitions[i])
             continue;
 
         if (strcasecmp(definitions[i]->name, setting))
             continue;
 
-        data = read_whole_file(device, FILE_MANIFEST1, &size);
-        if (!data)
+        if (ttwatch_get_manifest_entry(watch, i, &value) != TTWATCH_NoError)
         {
-            write_log(1, "Unable to read watch settings\n");
+            write_log(1, "Unable to read manifest entry\n");
             return;
         }
-        manifest = (TT_MANIFEST_FILE*)data;
 
         write_log(0, "%s = ", definitions[i]->name);
         switch (definitions[i]->type)
@@ -1822,55 +1177,46 @@ void do_get_setting(libusb_device_handle *device, const char *setting)
             enum_defn = (struct MANIFEST_ENUM_DEFINITION*)definitions[i];
             for (j = 0; j < enum_defn->value_count; ++j)
             {
-                if (manifest->entries[i].value == enum_defn->values[j].value)
+                if (value == enum_defn->values[j].value)
                 {
                     write_log(0, "%s", enum_defn->values[j].name);
                     break;
                 }
             }
             if (j >= enum_defn->value_count)
-                write_log(0, "unknown (%u)", manifest->entries[i].value);
+                write_log(0, "unknown (%u)", value);
             break;
         case MANIFEST_TYPE_INT:
             int_defn = (struct MANIFEST_INT_DEFINITION*)definitions[i];
-            write_log(0, "%d %s", manifest->entries[i].value, int_defn->units);
+            write_log(0, "%d %s", (int)value, int_defn->units);
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
-            write_log(0, "%.2f %s", manifest->entries[i].value / float_defn->scaling_factor, float_defn->units);
+            write_log(0, "%.2f %s", *(float*)&value / float_defn->scaling_factor, float_defn->units);
             break;
         }
         write_log(0, "\n");
 
-        free(data);
         return;
     }
     write_log(1, "Unknown setting: %s\n", setting);
 }
 
-void do_list_settings(libusb_device_handle *device)
+/*****************************************************************************/
+void do_list_settings(TTWATCH *watch)
 {
     uint32_t i;
     int j;
-    TT_MANIFEST_FILE *manifest;
     struct MANIFEST_ENUM_DEFINITION *enum_defn;
     struct MANIFEST_INT_DEFINITION *int_defn;
     struct MANIFEST_FLOAT_DEFINITION *float_defn;
     struct MANIFEST_DEFINITION** definitions = 0;
     uint32_t defn_count = 0;
 
-    /* get the current firmware version */
-    uint32_t version = get_firmware_version(device);
-    if (!version)
-    {
-        write_log(1, "Unable to read watch version\n");
-        return;
-    }
-
     /* check to make sure we support this firmware version */
     for (i = 0; i < MANIFEST_DEFINITION_COUNT; ++i)
     {
-        if (MANIFEST_DEFINITIONS[i].version == version)
+        if (MANIFEST_DEFINITIONS[i].version == watch->firmware_version)
         {
             definitions = MANIFEST_DEFINITIONS[i].definitions;
             defn_count  = MANIFEST_DEFINITIONS[i].count;
@@ -1941,16 +1287,24 @@ void do_list_settings(libusb_device_handle *device)
     }
 }
 
-void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
+/*****************************************************************************/
+int list_devices_callback(TTWATCH *watch, void *data)
+{
+    char name[64] = {0};
+    ttwatch_get_watch_name(watch, name, sizeof(name));
+    write_log(0, "%s: %s\n", watch->serial_number, name);
+    return 1;
+}
+
+/*****************************************************************************/
+void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)
 {
     char name[32];
     OPTIONS *new_options = copy_options(options);
 
-    send_startup_message_group(device);
-
     /* make a copy of the options, and load any overriding
        ones from the watch-specific conf file */
-    if (!get_watch_name(device, name, sizeof(name)))
+    if (ttwatch_get_watch_name(watch, name, sizeof(name)) != TTWATCH_NoError)
     {
         char *filename = malloc(strlen(new_options->activity_store) + 1 + strlen(name) + 1 + 12 + 1);
         sprintf(filename, "%s/%s/ttwatch.conf", new_options->activity_store, name);
@@ -1961,49 +1315,47 @@ void daemon_watch_operations(libusb_device_handle *device, OPTIONS *options)
     /* perform the activities the user has requested */
     if (new_options->get_activities)
     {
-        uint32_t formats = get_configured_formats(device);
+        uint32_t formats = get_configured_formats(watch);
         if (!new_options->set_formats)
             formats |= new_options->formats;
-        do_get_activities(device, new_options, formats);
+        do_get_activities(watch, new_options, formats);
     }
 
     if (new_options->update_gps)
-        do_update_gps(device);
+        do_update_gps(watch);
 
     if (new_options->update_firmware)
-        do_update_firmware(device);
+        do_update_firmware(watch);
 
     if (new_options->set_time)
-        do_set_time(device);
+        do_set_time(watch);
 
     free_options(new_options);
 }
 
+/*****************************************************************************/
 int hotplug_attach_callback(struct libusb_context *ctx, struct libusb_device *dev,
     libusb_hotplug_event event, void *user_data)
 {
-    libusb_device_handle *device = 0;
-    int index = 0;
     OPTIONS *options = (OPTIONS*)user_data;
+    TTWATCH *watch = 0;
 
     write_log(0, "Watch connected...\n");
 
-    device = open_selected_device(dev, &index, 0, options->select_device, options->device);
-    if (device)
+    if (ttwatch_open_device(dev, options->select_device ? options->device : 0, &watch) == TTWATCH_NoError)
     {
-        daemon_watch_operations(device, options);
+        daemon_watch_operations(watch, options);
 
         write_log(0, "Finished watch operations\n");
 
-        libusb_release_interface(device, 0);
-        libusb_attach_kernel_driver(device, 0);
-        libusb_close(device);
+        ttwatch_close(watch);
     }
     else
         write_log(0, "Watch not processed - does not match user selection\n");
     return 0;
 }
 
+/*****************************************************************************/
 void daemonise(const char *user)
 {
     pid_t pid, sid;
@@ -2096,6 +1448,7 @@ void daemonise(const char *user)
     }
 }
 
+/*****************************************************************************/
 void help(char *argv[])
 {
     int i;
@@ -2229,11 +1582,13 @@ void help(char *argv[])
     write_log(0, "to the activity store location.\n");
 }
 
+/*****************************************************************************/
 int main(int argc, char *argv[])
 {
     int opt;
     int option_index = 0;
-    int attach_kernel_driver = 0;
+
+    TTWATCH *watch = 0;
 
     OPTIONS *options = alloc_options();
 
@@ -2259,15 +1614,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    libusb_device_handle *device;
-
     struct option long_options[] = {
         { "update-fw",      no_argument,       &options->update_firmware, 1 },
         { "update-gps",     no_argument,       &options->update_gps,      1 },
         { "get-time",       no_argument,       &options->get_time,        1 },
         { "set-time",       no_argument,       &options->set_time,        1 },
         { "get-activities", no_argument,       &options->get_activities,  1 },
-        { "packets",        no_argument,       &show_packets,             1 },
+        { "packets",        no_argument,       &options->show_packets,    1 },
         { "devices",        no_argument,       &options->list_devices,    1 },
         { "get-formats",    no_argument,       &options->list_formats,    1 },
         { "get-name",       no_argument,       &options->get_name,        1 },
@@ -2383,14 +1736,14 @@ int main(int argc, char *argv[])
         case 'h': /* help */
             help(argv);
             free_options(options);
-            return;
+            return 0;
         }
     }
 
 #ifdef UNSAFE
     /* keep track of the file argument if one was provided */
     if (optind < argc)
-        options->file = argv[optind];
+        options->file = strdup(argv[optind]);
 
     /* make sure we've got compatible command-line options */
     if (options->read_file && options->write_file)
@@ -2472,9 +1825,9 @@ int main(int argc, char *argv[])
         if (libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
         {
             int result;
-            if (result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
+            if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
                 LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_PRODUCT_ID,
-                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL))
+                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
             {
                 write_log(1, "Unable to register hotplug callback: %d\n", result);
                 _exit(1);
@@ -2514,50 +1867,33 @@ int main(int argc, char *argv[])
 
     libusb_init(NULL);
 
-    /* look for compatible USB devices */
-    device = open_usb_device(options->list_devices, options->select_device, options->device);
-    if (!device)
-    {
-        if (!options->list_devices)
-            write_log(1, "Unable to open USB device\n");
-        free_options(options);
-        return 1;
-    }
-    /* if the device list was requested, exit here */
+    if (options->show_packets)
+        ttwatch_show_packets(1);
+
     if (options->list_devices)
     {
-        free_options(options);
+        ttwatch_enumerate_devices(list_devices_callback, 0);
         return 0;
     }
 
-    /* detach the kernel HID driver, otherwise we can't do anything */
-    if (libusb_kernel_driver_active(device, 0))
+    if (ttwatch_open(options->select_device ? options->device : 0, &watch) != TTWATCH_NoError)
     {
-        int result = libusb_detach_kernel_driver(device, 0);
-        if (!result)
-            attach_kernel_driver = 1;
-    }
-    if(libusb_claim_interface(device, 0))
-    {
-        write_log(1, "Unable to claim device interface\n");
+        write_log(1, "Unable to open USB device\n");
         free_options(options);
         return 1;
     }
 
-    /* this group of messages is always sent at startup */
-    send_startup_message_group(device);
-
     if (options->show_versions)
-        show_device_versions(device);
+        show_device_versions(watch);
 
 #ifdef UNSAFE
     if (options->list_files)
-        show_file_list(device);
+        show_file_list(watch);
 
     if (options->read_file)
     {
         if (options->file_id == 0)
-            read_all_files(device);
+            read_all_files(watch);
         else
         {
             FILE *f;
@@ -2569,7 +1905,7 @@ int main(int argc, char *argv[])
                 write_log(1, "Unable to open file: %s\n", options->file);
             else
             {
-                do_read_file(device, options->file_id, f);
+                do_read_file(watch, options->file_id, f);
                 if (f != stdout)
                     fclose(f);
             }
@@ -2591,7 +1927,7 @@ int main(int argc, char *argv[])
                 write_log(1, "Unable to open file: %s\n", options->file);
             else
             {
-                do_write_file(device, options->file_id, f);
+                do_write_file(watch, options->file_id, f);
                 if (f != stdin)
                     fclose(f);
             }
@@ -2600,59 +1936,59 @@ int main(int argc, char *argv[])
 #endif
 
     if (options->get_time)
-        do_get_time(device);
+        do_get_time(watch);
 
     if (options->set_time)
-        do_set_time(device);
+        do_set_time(watch);
 
     if (options->get_activities)
     {
         char name[32];
-        if (!get_watch_name(device, name, sizeof(name)))
+        if (!ttwatch_get_watch_name(watch, name, sizeof(name)) == TTWATCH_NoError)
         {
             char *filename = malloc(strlen(options->activity_store) + 1 + strlen(name) + 1 + 12 + 1);
             sprintf(filename, "%s/%s/ttwatch.conf", options->activity_store, name);
             load_conf_file(filename, options, LoadDaemonOperations);
             free(filename);
         }
-        do_get_activities(device, options, get_configured_formats(device));
+        do_get_activities(watch, options, get_configured_formats(watch));
     }
 
     if (options->update_gps)
-        do_update_gps(device);
+        do_update_gps(watch);
 
     if (options->update_firmware)
-        do_update_firmware(device);
+        do_update_firmware(watch);
 
     if (options->get_name)
-        do_get_watch_name(device);
+        do_get_watch_name(watch);
 
     if (options->set_name)
-        do_set_watch_name(device, options->watch_name);
+        do_set_watch_name(watch, options->watch_name);
 
     if (options->list_formats)
-        do_list_formats(device);
+        do_list_formats(watch);
 
     if (options->set_formats)
-        do_set_formats(device, options->formats);
+        do_set_formats(watch, options->formats);
 
     if (options->list_races)
-        do_list_races(device);
+        do_list_races(watch);
 
     if (options->update_race)
-        do_update_race(device, options->race);
+        do_update_race(watch, options->race);
 
     if (options->list_history)
-        do_list_history(device);
+        do_list_history(watch);
 
     if (options->delete_history)
-        do_delete_history_item(device, options->history_entry);
+        do_delete_history_item(watch, options->history_entry);
 
     if (options->clear_data)
-        do_clear_data(device);
+        do_clear_data(watch);
 
     if (options->display_settings)
-        do_display_settings(device);
+        do_display_settings(watch);
 
     if (options->setting)
     {
@@ -2660,20 +1996,16 @@ int main(int argc, char *argv[])
         if (str)
         {
             *str = 0;
-            do_set_setting(device, options->setting_spec, ++str);
+            do_set_setting(watch, options->setting_spec, ++str);
         }
         else
-            do_get_setting(device, options->setting_spec);
+            do_get_setting(watch, options->setting_spec);
     }
 
     if (options->list_settings)
-        do_list_settings(device);
+        do_list_settings(watch);
 
-    libusb_release_interface(device, 0);
-
-    if (attach_kernel_driver)
-        libusb_attach_kernel_driver(device, 0);
-    libusb_close(device);
+    ttwatch_close(watch);
 
     libusb_exit(NULL);
 

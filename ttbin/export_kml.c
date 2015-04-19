@@ -51,7 +51,6 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
     uint32_t i;
     char text_buf[150];
     const char *type_text;
-    time_t timestamp;
     struct tm *time;
     uint32_t initial_time;
 
