@@ -31,6 +31,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_avg_heart_rate;
     unsigned lap_max_heart_rate;
     unsigned lap_step_count;
+    float cadence_avg = 0.0f;
 
     if (!ttbin->gps_records.count)
         return;
@@ -124,7 +125,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps.instant_speed);
             if (ttbin->activity==ACTIVITY_RUNNING)
             {
-                fprintf(file, "                                <RunCadence>%d</RunCadence>\r\n", 30*(int)record->gps.cycles);
+                /* use an exponential moving average to smooth cadence data */
+                if ((int)record->gps.cycles <= 4) // max 4 * 60 = 240 spm
+                    cadence_avg = (0.05 * 30 * (int)record->gps.cycles) + (1.0 - 0.05) * cadence_avg;
+                fprintf(file, "                                <RunCadence>%d</RunCadence>\r\n", (int)cadence_avg);
                 total_step_count += record->gps.cycles;
             }
             fputs(        "                            </TPX>\r\n"
