@@ -365,7 +365,8 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
     // get the watch serial number
     count = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber,
         (unsigned char*)(*watch)->serial_number, sizeof((*watch)->serial_number));
-    ((char*)(*watch)->serial_number)[count] = 0;
+    if (count > 0)
+        ((char*)(*watch)->serial_number)[count] = 0;
 
     RETURN_ERROR(ttwatch_send_startup_message_group(*watch));
 
@@ -924,7 +925,10 @@ int ttwatch_get_watch_name(TTWATCH *watch, char *name, size_t max_length)
 
     size_t start = file.find("<watchName>");
     if (start == std::string::npos)
-        return TTWATCH_ParseError;
+    {
+        name[0] = 0;
+        return TTWATCH_NoError;
+    }
     start += 11;
 
     size_t end = file.find("</watchName>", start);
@@ -952,14 +956,25 @@ int ttwatch_set_watch_name(TTWATCH *watch, const char *name)
 
     size_t start = file.find("<watchName>");
     if (start == std::string::npos)
-        return TTWATCH_ParseError;
-    start += 11;
+    {
+        start = file.find("<preferences");
+        if (start == std::string::npos)
+            return TTWATCH_ParseError;
+        start = file.find('>', start);
+        if (start == std::string::npos)
+            return TTWATCH_ParseError;
+        file.insert(start + 1, "<watchName>" + std::string(name) + "</watchName>");
+    }
+    else
+    {
+        start += 11;
 
-    size_t end = file.find("</watchName>", start);
-    if (end == std::string::npos)
-        return TTWATCH_ParseError;
+        size_t end = file.find("</watchName>", start);
+        if (end == std::string::npos)
+            return TTWATCH_ParseError;
 
-    file.replace(start, end - start, name);
+        file.replace(start, end - start, name);
+    }
 
     free(watch->preferences_file);
     watch->preferences_file = strdup(file.c_str());
