@@ -27,6 +27,8 @@
             return result;              \
     } while (0)                         \
 
+#define foreach(var, container) for (__decltype(container)::iterator var = container.begin(); var != container.end(); ++var)
+
 // message IDs
 #define MSG_OPEN_FILE_WRITE         (0x02)
 #define MSG_DELETE_FILE             (0x03)
@@ -317,7 +319,7 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
         return TTWATCH_NotAWatch;
     }
 
-    /* open the device so we can read the serial number */
+    // open the device so we can read the serial number
     if (libusb_open(device, &handle))
     {
         *watch = 0;
@@ -352,7 +354,7 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
         else
             break;
     }
-    /* if we have finished the attempts and it's still busy, abort */
+    // if we have finished the attempts and it's still busy, abort
     if (result)
     {
         ttwatch_close(*watch);
@@ -580,7 +582,7 @@ int ttwatch_enumerate_files(TTWATCH *watch, uint32_t type, TTWATCH_FILE_ENUMERAT
     FileList files;
     RETURN_ERROR(enum_files(watch, type, files));
 
-    for (FileList::iterator it = files.begin(); it != files.end(); ++it)
+    foreach (it, files)
         enumerator(it->first, it->second, data);
     return TTWATCH_NoError;
 }
@@ -814,7 +816,7 @@ int ttwatch_clear_data(TTWATCH *watch)
     FileList files;
     enum_files(watch, 0, files);
 
-    for (FileList::iterator it = files.begin(); it != files.end(); ++it)
+    foreach (it, files)
     {
         uint32_t length;
         TTWATCH_HISTORY_FILE *history;
@@ -830,7 +832,6 @@ int ttwatch_clear_data(TTWATCH *watch)
         case TTWATCH_FILE_HISTORY_SUMMARY:
             RETURN_ERROR(ttwatch_read_whole_file(watch, it->first, (void**)&history, &length));
             {
-                /*TTWATCH_HISTORY_FILE *history = (TTWATCH_HISTORY_FILE*)data;*/
                 history->entry_count = 0;
                 length = sizeof(TTWATCH_HISTORY_FILE) - 1;
                 int res = ttwatch_write_verify_whole_file(watch, it->first, history, length);
@@ -973,6 +974,9 @@ int ttwatch_enumerate_offline_formats(TTWATCH *watch, TTWATCH_FORMAT_ENUMERATOR 
     if (!watch || !enumerator)
         return TTWATCH_InvalidParameter;
 
+    if (!watch->preferences_file)
+        RETURN_ERROR(ttwatch_reload_preferences(watch));
+
     std::string file = watch->preferences_file;
 
     size_t start = file.find("<exporters>");
@@ -1027,6 +1031,9 @@ int ttwatch_add_offline_format(TTWATCH *watch, const char *format, int auto_open
 {
     if (!watch)
         return TTWATCH_InvalidParameter;
+
+    if (!watch->preferences_file)
+        RETURN_ERROR(ttwatch_reload_preferences(watch));
 
     std::string file = watch->preferences_file;
 
@@ -1095,6 +1102,9 @@ int ttwatch_remove_offline_format(TTWATCH *watch, const char *format)
 {
     if (!watch)
         return TTWATCH_InvalidParameter;
+
+    if (!watch->preferences_file)
+        RETURN_ERROR(ttwatch_reload_preferences(watch));
 
     std::string file = watch->preferences_file;
 
@@ -1253,7 +1263,7 @@ int ttwatch_enumerate_races(TTWATCH *watch, TTWATCH_RACE_ENUMERATOR enumerator, 
     FileList files;
     RETURN_ERROR(enum_files(watch, TTWATCH_FILE_RACE_DATA, files));
 
-    for (FileList::iterator it = files.begin(); it != files.end(); ++it)
+    foreach (it, files)
     {
         TTWATCH_RACE_FILE *file;
         RETURN_ERROR(ttwatch_read_whole_file(watch, it->first, (void**)&file, 0));
@@ -1311,13 +1321,11 @@ int ttwatch_update_race(TTWATCH *watch, TTWATCH_ACTIVITY activity, int index,
     return TTWATCH_NoError;
 }
 
-#define foreach(var, container) for (__decltype(container)::iterator var = container.begin(); var != container.end(); ++var)
-
 //------------------------------------------------------------------------------
 // history functions
 int ttwatch_enumerate_history_entries(TTWATCH *watch, TTWATCH_HISTORY_ENUMERATOR enumerator, void *data)
 {
-    if (!watch)
+    if (!watch || !enumerator)
         return TTWATCH_InvalidParameter;
 
     FileList files;

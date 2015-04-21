@@ -310,17 +310,21 @@ void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdata)
     int i;
 
     if (ttwatch_read_whole_file(c->watch, id, (void**)&data, 0) != TTWATCH_NoError)
+    {
+        write_log(1, "Unable to read activity file\n");
         return;
+    }
 
     /* parse the activity file */
     ttbin = parse_ttbin_data(data, length);
-    if (c->formats && ttbin->gps_records.count && !c->options->skip_elevation)
-    {
-        write_log(0, "Downloading elevation data\n");
-        download_elevation_data(ttbin);
-    }
 
-    gmtime_r(&ttbin->timestamp_local, &timestamp);
+    if (ttbin)
+        gmtime_r(&ttbin->timestamp_local, &timestamp);
+    else
+    {
+        time_t t = time(NULL);
+        gmtime_r(&t, &timestamp);
+    }
 
     /* create the directory name: [store]/[watch name]/[date] */
     strcpy(filename, c->options->activity_store);
@@ -333,7 +337,10 @@ void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdata)
     chdir(filename);
 
     /* create the file name */
-    sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
+    if (ttbin)
+        sprintf(filename, "%s", create_filename(ttbin, "ttbin"));
+    else
+        sprintf(filename, "Unknown_%d-%d-%d_%d.ttbin", timestamp.tm_hour, timestamp.tm_min, timestamp.tm_sec, length);
 
     /* write the ttbin file */
     f = fopen(filename, "w+");
@@ -349,7 +356,8 @@ void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdata)
             (memcmp(data, data1, length) != 0))
         {
             write_log(1, "TTBIN file did not verify correctly\n");
-            free_ttbin(ttbin);
+            if (ttbin)
+                free_ttbin(ttbin);
             free(data);
             free(data1);
             return;
@@ -365,6 +373,20 @@ void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdata)
     }
     else
         write_log(1, "Unable to write file: %s\n", filename);
+
+    if (!ttbin)
+    {
+        write_log(1, "Warning: Corrupt or unrecognisable activity file: %s\n", filename);
+        free(data);
+        return;
+    }
+
+    /* download the elevation data */
+    if (c->formats && ttbin->gps_records.count && !c->options->skip_elevation)
+    {
+        write_log(0, "Downloading elevation data\n");
+        download_elevation_data(ttbin);
+    }
 
     /* export_formats returns the formats parameter with bits corresponding to failed exports cleared */
     fmt1 = c->formats ^ export_formats(ttbin, c->formats);
@@ -1470,7 +1492,7 @@ void help(char *argv[])
     write_log(0, "                               watch. Does NOT save the data before deleting it\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
     write_log(0, "      --delete-history=[ENTRY] Deletes a single history entry from the watch\n");
-    write_log(0, "  -d, --device=NUMBER|STRING Specify which device to use (see below)\n");
+    write_log(0, "  -d, --device=STRING        Specify which device to use (see below)\n");
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
     write_log(0, "                               currently stored on the watch\n");
@@ -1517,13 +1539,9 @@ void help(char *argv[])
     write_log(0, "\n");
     write_log(0, "NUMBER is an integer specified in decimal, octal, or hexadecimal form.\n");
     write_log(0, "\n");
-    write_log(0, "The --device (-d) option can take either a number or a string. The number\n");
-    write_log(0, "refers to the index of the device within the device list, as disaplyed by\n");
-    write_log(0, "the --devices option. The string can match either the serial number or the\n");
-    write_log(0, "name of the watch. Both are also printed out by the --devices option. When\n");
-    write_log(0, "running as a daemon, only the serial number or name can be specified; an\n");
-    write_log(0, "error is printed and execution is aborted if an attempt to match a watch\n");
-    write_log(0, "by index is performed when starting the daemon.\n");
+    write_log(0, "The --device (-d) option takes a string. The string can match either the\n");
+    write_log(0, "serial number or the name of the watch. Both are also printed out by the\n");
+    write_log(0, "--devices option.\n");
 #ifdef UNSAFE
     write_log(0, "\n");
     write_log(0, "Read and Write commands require the file ID to be specified. Available\n");
@@ -1879,7 +1897,7 @@ int main(int argc, char *argv[])
 
     if (ttwatch_open(options->select_device ? options->device : 0, &watch) != TTWATCH_NoError)
     {
-        write_log(1, "Unable to open USB device\n");
+        write_log(1, "Unable to open watch\n");
         free_options(options);
         return 1;
     }

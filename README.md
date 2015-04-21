@@ -96,22 +96,20 @@ Multiple Watches
 
 The ttwatch program has support for multiple watches. When running from the
 command line a list of available watches can be displayed using the `--devices`
-option. A particular watch can be selected using the `-d` option with three
+option. A particular watch can be selected using the `-d` option with two
 different parameters possible:
 
-1. a 0-based index into the device list
-2. a string that matches the watch serial number
-3. a string that matches the watch name
+1. a string that matches the watch serial number
+2. a string that matches the watch name
 
-All three pieces of information are displayed when listing available watches
+Both pieces of information are displayed when listing available watches
 with the `--devices` option.
 
-When running as a daemon the device cannot be specifed by index, as the list
-of devices will change over time, so this index is meaningless. However, if
-the watch serial number or name are specified, the daemon will only process
-that particular watch. This can be used to store the activities from multiple
-watches in different users' home areas by starting multiple instances of the
-daemon running as different users, specifying different watches.
+When running as a daemon and the watch serial number or name are specified,
+the daemon will only process that particular watch. This can be used to store
+the activities from multiple watches in different users' home areas by
+starting multiple instances of the daemon running as different users,
+specifying different watches.
 
 Unsafe Functions
 ================
