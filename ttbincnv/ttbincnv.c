@@ -30,6 +30,7 @@ void do_replace_lap_list(TTBIN_FILE *ttbin, const char *laps)
 
         token = strtok(NULL, seps);
     }
+    free(tlaps);
 
     replace_lap_list(ttbin, distances, count);
 }
