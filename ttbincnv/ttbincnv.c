@@ -16,20 +16,21 @@ void do_replace_lap_list(TTBIN_FILE *ttbin, const char *laps)
     float distance = 0;
     float *distances = 0;
     unsigned count = 0;
+    char *tlaps;
+    char *token;
+    const char seps[] = " ,";
 
-    while (*laps)
+    tlaps = strdup(laps);
+    token = strtok(tlaps, seps);
+    while (token != NULL)
     {
-        /* find the first lap distance */
-        if (sscanf(laps, "%f", &distance) != 1)
-            return;
-
+        sscanf(token, "%f", &distance);
         distances = (float*)realloc(distances, (count + 1) * sizeof(float));
         distances[count++] = distance;
 
-        /* scan the next lap distance */
-        while (*laps && (*laps != ','))
-            ++laps;
+        token = strtok(NULL, seps);
     }
+    free(tlaps);
 
     replace_lap_list(ttbin, distances, count);
 }
