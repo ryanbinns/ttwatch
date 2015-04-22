@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define LIBTTWATCH_VERSION  (0x000100)  /* version 0.1.0 */
+#define LIBTTWATCH_VERSION  (0x000101)  /* version 0.1.1 */
 
 /*****************************************************************************/
 typedef struct
@@ -386,6 +386,12 @@ int ttwatch_clear_data(TTWATCH *watch);
 /******************************************************************************
 * Preferences file functions                                                  *
 ******************************************************************************/
+
+/******************************************************************************
+* Creates a new blank user preferences file. Sets the preferences_changed     *
+* flag so the file is automatically written when the watch is closed.         *
+******************************************************************************/
+int ttwatch_create_default_preferences_file(TTWATCH *watch);
 
 /******************************************************************************
 * Reloads the user preferences file from the watch. This file is XML and is   *

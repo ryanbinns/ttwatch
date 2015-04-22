@@ -14,6 +14,7 @@ typedef struct
     int list_files;
     int read_file;
     int write_file;
+    int delete_file;
     uint32_t file_id;
 #endif
     int select_device;

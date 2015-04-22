@@ -133,6 +133,13 @@ void do_write_file(TTWATCH *watch, uint32_t id, FILE *file)
 }
 
 /*****************************************************************************/
+void do_delete_file(TTWATCH *watch, uint32_t id)
+{
+    if (ttwatch_delete_file(watch, id) != TTWATCH_NoError)
+        write_log(1, "Unable to delete file\n");
+}
+
+/*****************************************************************************/
 void read_all_files_callback(uint32_t id, uint32_t length, void *data)
 {
     char filename[16];
@@ -542,12 +549,6 @@ void do_update_firmware(TTWATCH *watch)
     }
     latest_ble_version = strtoul(ptr + 14, NULL, 0);
 
-    if (current_ble_version < latest_ble_version)
-    {
-        write_log(1, "Sorry, BLE firmware updating not supported yet\n");
-        goto cleanup;
-    }
-
     /* check to see if we need to update the firmware */
     if (latest_version <= current_version)
         write_log(1, "Current firmware is already at latest version\n");
@@ -609,6 +610,12 @@ void do_update_firmware(TTWATCH *watch)
         write_log(0, "\n");
 
         write_log(0, "Firmware updated\n");
+    }
+
+    if (current_ble_version < latest_ble_version)
+    {
+        write_log(1, "Sorry, BLE firmware updating not supported yet\n");
+        goto cleanup;
     }
 
 #if 0
@@ -1491,6 +1498,9 @@ void help(char *argv[])
     write_log(0, "      --clear-data           Delete all activities and history data from the\n");
     write_log(0, "                               watch. Does NOT save the data before deleting it\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
+#ifdef UNSAFE
+    write_log(0, "      --delete               Deletes a single file from the device\n");
+#endif
     write_log(0, "      --delete-history=[ENTRY] Deletes a single history entry from the watch\n");
     write_log(0, "  -d, --device=STRING        Specify which device to use (see below)\n");
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
@@ -1664,6 +1674,7 @@ int main(int argc, char *argv[])
         { "list",           no_argument,       0, 'l' },
         { "read",           required_argument, 0, 'r' },
         { "write",          required_argument, 0, 'w' },
+        { "delete",         required_argument, 0, 7   },
 #endif
         {0}
     };
@@ -1711,6 +1722,7 @@ int main(int argc, char *argv[])
                 free(options->setting_spec);
             options->setting_spec = strdup(optarg);
             break;
+
         case 'a':   /* auto mode */
             options->update_firmware = 1;
             options->update_gps      = 1;
@@ -1718,6 +1730,11 @@ int main(int argc, char *argv[])
             options->set_time        = 1;
             break;
 #ifdef UNSAFE
+        case 7:
+            options->delete_file = 1;
+            if (optarg)
+                options->file_id = strtoul(optarg, NULL, 0);
+            break;
         case 'l':   /* list files */
             options->list_files = 1;
             break;
@@ -1765,13 +1782,13 @@ int main(int argc, char *argv[])
         options->file = strdup(argv[optind]);
 
     /* make sure we've got compatible command-line options */
-    if (options->read_file && options->write_file)
+    if ((options->read_file + options->write_file + options->delete_file) > 1)
     {
-        write_log(1, "Cannot read and write a file at the same time\n");
+        write_log(1, "Read, Write and Delete files are mutually exclusive\n");
         free_options(options);
         return 1;
     }
-    if (options->file && !(options->read_file || options->write_file))
+    if (options->file && !(options->read_file || options->write_file || options->delete_file))
     {
         write_log(1, "File argument is only used to read/write files\n");
         free_options(options);
@@ -1869,7 +1886,7 @@ int main(int argc, char *argv[])
     /* we need to do something, otherwise just show the help */
     if (
 #ifdef UNSAFE
-        !options->read_file && !options->write_file && !options->list_files &&
+        !options->read_file && !options->write_file && !options->delete_file && !options->list_files &&
 #endif
         !options->update_firmware && !options->update_gps && !options->show_versions &&
         !options->get_activities && !options->get_time && !options->set_time &&
@@ -1951,6 +1968,14 @@ int main(int argc, char *argv[])
                     fclose(f);
             }
         }
+    }
+
+    if (options->delete_file)
+    {
+        if (options->file_id == 0)
+            write_log(1, "File ID must be non-zero when writing a file\n");
+        else
+            do_delete_file(watch, options->file_id);
     }
 #endif
 

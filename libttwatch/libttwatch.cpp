@@ -374,15 +374,18 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
     if (ttwatch_get_watch_name(*watch, name, sizeof(name)) != TTWATCH_NoError)
         name[0] = 0;
 
-    ttwatch_get_product_id(*watch, &(*watch)->product_id);
-    ttwatch_get_firmware_version(*watch, &(*watch)->firmware_version);
-    ttwatch_get_ble_version(*watch, &(*watch)->ble_version);
-
-    // see if we can match the device serial number, name or index
+    // see if we can match the watch serial number or name
     if (!serial_or_name ||
         (strcasecmp(serial_or_name, serial) == 0) ||
         (strcasecmp(serial_or_name, name) == 0))
     {
+        ttwatch_get_product_id(*watch, &(*watch)->product_id);
+        ttwatch_get_firmware_version(*watch, &(*watch)->firmware_version);
+        ttwatch_get_ble_version(*watch, &(*watch)->ble_version);
+
+        if (!(*watch)->preferences_file)
+            ttwatch_create_default_preferences_file(*watch);
+
         return TTWATCH_NoError;
     }
     else
@@ -847,6 +850,35 @@ int ttwatch_clear_data(TTWATCH *watch)
 
 //------------------------------------------------------------------------------
 // preferences file functions
+int ttwatch_create_default_preferences_file(TTWATCH *watch)
+{
+    static const char *DEFAULT_PREFERENCES_FILE =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
+        "<preferences version=\"1\" modified=\"\">\r\n"
+        "    <watchName></watchName>\r\n"
+        "    <SyncTimeToPC>1</SyncTimeToPC>\r\n"
+        "    <SendAnonymousData>0</SendAnonymousData>\r\n"
+        "    <WatchWindowMinimized>0</WatchWindowMinimized>\r\n"
+        "    <ConfigURL>https://mysports.tomtom.com/service/config/config.json</ConfigURL>\r\n"
+        "    <exporters>\r\n"
+        "        <offline>\r\n"
+        "        </offline>\r\n"
+        "    </exporters>\r\n"
+        "</preferences>\r\n";
+
+    if (!watch)
+        return TTWATCH_InvalidParameter;
+
+    if (watch->preferences_file)
+        free(watch->preferences_file);
+
+    watch->preferences_file = strdup(DEFAULT_PREFERENCES_FILE);
+    watch->preferences_changed = true;
+
+    return ttwatch_update_preferences_modified_time(watch);
+}
+
+//------------------------------------------------------------------------------
 int ttwatch_reload_preferences(TTWATCH *watch)
 {
     void *data;
@@ -866,6 +898,11 @@ int ttwatch_reload_preferences(TTWATCH *watch)
 //------------------------------------------------------------------------------
 int ttwatch_write_preferences(TTWATCH *watch)
 {
+    if (!watch)
+        return TTWATCH_InvalidParameter;
+    if (!watch->preferences_file)
+        return TTWATCH_NoData;
+
     RETURN_ERROR(ttwatch_write_whole_file(watch, TTWATCH_FILE_PREFERENCES_XML,
         (uint8_t*)watch->preferences_file, strlen(watch->preferences_file)));
     watch->preferences_changed = false;
@@ -884,6 +921,8 @@ int ttwatch_update_preferences_modified_time(TTWATCH *watch)
 
     if (!watch)
         return TTWATCH_InvalidParameter;
+    if (!watch->preferences_file)
+        return TTWATCH_NoData;
 
     std::string file = watch->preferences_file;
 
