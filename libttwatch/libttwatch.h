@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define LIBTTWATCH_VERSION  (0x000101)  /* version 0.1.1 */
+#define LIBTTWATCH_VERSION  (0x000102)  /* version 0.1.2 */
 
 /*****************************************************************************/
 typedef struct
@@ -30,7 +30,9 @@ typedef struct
     uint32_t    current_file;
 
     char       *preferences_file;
+    size_t      preferences_file_length;
     uint8_t    *manifest_file;
+    size_t      manifest_file_length;
 
     int         preferences_changed;
     int         manifest_changed;

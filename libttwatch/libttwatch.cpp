@@ -873,6 +873,7 @@ int ttwatch_create_default_preferences_file(TTWATCH *watch)
         free(watch->preferences_file);
 
     watch->preferences_file = strdup(DEFAULT_PREFERENCES_FILE);
+    watch->preferences_file_length = strlen(DEFAULT_PREFERENCES_FILE);
     watch->preferences_changed = true;
 
     return ttwatch_update_preferences_modified_time(watch);
@@ -890,6 +891,7 @@ int ttwatch_reload_preferences(TTWATCH *watch)
 
     watch->preferences_file         = (char*)realloc(data, length + 1);
     watch->preferences_file[length] = 0;
+    watch->preferences_file_length  = length;
     watch->preferences_changed      = false;
 
     return TTWATCH_NoError;
@@ -904,7 +906,7 @@ int ttwatch_write_preferences(TTWATCH *watch)
         return TTWATCH_NoData;
 
     RETURN_ERROR(ttwatch_write_whole_file(watch, TTWATCH_FILE_PREFERENCES_XML,
-        (uint8_t*)watch->preferences_file, strlen(watch->preferences_file)));
+        (uint8_t*)watch->preferences_file, watch->preferences_file_length));
     watch->preferences_changed = false;
     return TTWATCH_NoError;
 }
@@ -924,7 +926,7 @@ int ttwatch_update_preferences_modified_time(TTWATCH *watch)
     if (!watch->preferences_file)
         return TTWATCH_NoData;
 
-    std::string file = watch->preferences_file;
+    std::string file(watch->preferences_file, watch->preferences_file_length);
 
     size_t start = file.find("modified=\"");
     if (start == std::string::npos)
@@ -945,7 +947,10 @@ int ttwatch_update_preferences_modified_time(TTWATCH *watch)
     file.replace(start, end - start, timestr);
 
     free(watch->preferences_file);
-    watch->preferences_file = strdup(file.c_str());
+    watch->preferences_file = (char*)malloc(file.length() + 1);
+    memcpy(watch->preferences_file, file.data(), file.length());
+    watch->preferences_file[watch->preferences_file_length] = 0;
+    watch->preferences_file_length = file.length();
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -960,7 +965,7 @@ int ttwatch_get_watch_name(TTWATCH *watch, char *name, size_t max_length)
     if (!watch->preferences_file)
         RETURN_ERROR(ttwatch_reload_preferences(watch));
 
-    std::string file = watch->preferences_file;
+    std::string file(watch->preferences_file, watch->preferences_file_length);
 
     size_t start = file.find("<watchName>");
     if (start == std::string::npos)
@@ -991,7 +996,7 @@ int ttwatch_set_watch_name(TTWATCH *watch, const char *name)
     if (!watch->preferences_file)
         RETURN_ERROR(ttwatch_reload_preferences(watch));
 
-    std::string file = watch->preferences_file;
+    std::string file(watch->preferences_file, watch->preferences_file_length);
 
     size_t start = file.find("<watchName>");
     if (start == std::string::npos)
@@ -1016,7 +1021,10 @@ int ttwatch_set_watch_name(TTWATCH *watch, const char *name)
     }
 
     free(watch->preferences_file);
-    watch->preferences_file = strdup(file.c_str());
+    watch->preferences_file = (char*)malloc(file.length() + 1);
+    memcpy(watch->preferences_file, file.data(), file.length());
+    watch->preferences_file[watch->preferences_file_length] = 0;
+    watch->preferences_file_length = file.length();
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -1031,7 +1039,7 @@ int ttwatch_enumerate_offline_formats(TTWATCH *watch, TTWATCH_FORMAT_ENUMERATOR 
     if (!watch->preferences_file)
         RETURN_ERROR(ttwatch_reload_preferences(watch));
 
-    std::string file = watch->preferences_file;
+    std::string file(watch->preferences_file, watch->preferences_file_length);
 
     size_t start = file.find("<exporters>");
     if (start == std::string::npos)
@@ -1089,7 +1097,7 @@ int ttwatch_add_offline_format(TTWATCH *watch, const char *format, int auto_open
     if (!watch->preferences_file)
         RETURN_ERROR(ttwatch_reload_preferences(watch));
 
-    std::string file = watch->preferences_file;
+    std::string file(watch->preferences_file, watch->preferences_file_length);
 
     size_t start = file.find("<exporters>");
     size_t end;
@@ -1145,7 +1153,10 @@ int ttwatch_add_offline_format(TTWATCH *watch, const char *format, int auto_open
     }
 
     free(watch->preferences_file);
-    watch->preferences_file = strdup(file.c_str());
+    watch->preferences_file = (char*)malloc(file.length() + 1);
+    memcpy(watch->preferences_file, file.data(), file.length());
+    watch->preferences_file[watch->preferences_file_length] = 0;
+    watch->preferences_file_length = file.length();
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -1160,7 +1171,7 @@ int ttwatch_remove_offline_format(TTWATCH *watch, const char *format)
     if (!watch->preferences_file)
         RETURN_ERROR(ttwatch_reload_preferences(watch));
 
-    std::string file = watch->preferences_file;
+    std::string file(watch->preferences_file, watch->preferences_file_length);
 
     size_t start = file.find("<exporters>");
     size_t end;
@@ -1207,7 +1218,10 @@ int ttwatch_remove_offline_format(TTWATCH *watch, const char *format)
     file.erase(start, end - start);
 
     free(watch->preferences_file);
-    watch->preferences_file = strdup(file.c_str());
+    watch->preferences_file = (char*)malloc(file.length() + 1);
+    memcpy(watch->preferences_file, file.data(), file.length());
+    watch->preferences_file[watch->preferences_file_length] = 0;
+    watch->preferences_file_length = file.length();
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -1228,6 +1242,7 @@ int ttwatch_reload_manifest(TTWATCH *watch)
         free(watch->manifest_file);
 
     watch->manifest_file = (uint8_t*)data;
+    watch->manifest_file_length = length;
     watch->manifest_changed = false;
 
     return TTWATCH_NoError;
@@ -1241,10 +1256,8 @@ int ttwatch_write_manifest(TTWATCH *watch)
     if (!watch->manifest_file)
         return TTWATCH_NoData;
 
-    TTWATCH_MANIFEST_FILE *manifest = (TTWATCH_MANIFEST_FILE*)watch->manifest_file;
-
-    uint32_t length = 8 + (6 * manifest->entry_count);
-    RETURN_ERROR(ttwatch_write_whole_file(watch, TTWATCH_FILE_MANIFEST1, watch->manifest_file, length));
+    RETURN_ERROR(ttwatch_write_whole_file(watch, TTWATCH_FILE_MANIFEST1,
+        watch->manifest_file, watch->manifest_file_length));
     watch->manifest_changed = false;
 
     return TTWATCH_NoError;
