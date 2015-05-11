@@ -219,7 +219,10 @@ void do_update_gps(TTWATCH *watch)
 
     write_log(0, "Writing file to watch...\n");
     if (ttwatch_write_verify_whole_file(watch, TTWATCH_FILE_GPSQUICKFIX_DATA, download.data, download.length) == TTWATCH_NoError)
+    {
         write_log(0, "GPSQuickFix data updated\n");
+        ttwatch_reset_gps_processor(watch);
+    }
     else
         write_log(1, "GPSQuickFix update failed\n");
 
