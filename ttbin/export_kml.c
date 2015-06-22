@@ -250,8 +250,7 @@ void export_kml(TTBIN_FILE *ttbin, FILE *file)
         fputs(        "                        <gx:SimpleArrayData name=\"heartrate\">\r\n", file);
         for (i = 0; i < ttbin->heart_rate_records.count; ++i)
         {
-            if ((ttbin->gps_records.records[i]->gps.timestamp != 0) &&
-                !((ttbin->gps_records.records[i]->gps.latitude == 0) && (ttbin->gps_records.records[i]->gps.longitude == 0)))
+            if (ttbin->heart_rate_records.records[i]->heart_rate.heart_rate != 0)
             {
                 fprintf(file, "                            <gx:value>%d</gx:value>\r\n", ttbin->heart_rate_records.records[i]->heart_rate.heart_rate);
             }
