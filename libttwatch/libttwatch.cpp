@@ -432,7 +432,7 @@ int ttwatch_open_file(TTWATCH *watch, uint32_t id, int read, TTWATCH_FILE **file
         return TTWATCH_FileOpen;
 
     TXFileOperationPacket request = { htobe32(id) };
-    RXFileOperationPacket response = { 0, 0, 0, 0, 0 };
+    RXFileOperationPacket response = { 0, 0, { 0, 0 }, 0 };
     RETURN_ERROR(send_packet(watch, read ? MSG_OPEN_FILE_READ : MSG_OPEN_FILE_WRITE,
             sizeof(request), (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
 
@@ -456,7 +456,7 @@ int ttwatch_close_file(TTWATCH_FILE *file)
         return TTWATCH_FileNotOpen;
 
     TXFileOperationPacket request = { htobe32(file->file_id) };
-    RXFileOperationPacket response = { 0, 0, 0, 0, 0 };
+    RXFileOperationPacket response = { 0, 0, { 0, 0 }, 0 };
     RETURN_ERROR(send_packet(file->watch, MSG_CLOSE_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
 
@@ -473,7 +473,7 @@ int ttwatch_delete_file(TTWATCH *watch, uint32_t id)
         return TTWATCH_FileOpen;
 
     TXFileOperationPacket request = { htobe32(id) };
-    RXFileOperationPacket response = { 0, 0, 0, 0, 0 };
+    RXFileOperationPacket response = { 0, 0, { 0, 0 }, 0 };
     return send_packet(watch, MSG_DELETE_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response);
 }
@@ -504,7 +504,7 @@ int ttwatch_read_file_data(TTWATCH_FILE *file, void *data, uint32_t length)
         return TTWATCH_FileNotOpen;
 
     TXReadFileDataPacket request = { htobe32(file->file_id), htobe32(length) };
-    RXReadFileDataPacket response = { 0, 0, 0 };
+    RXReadFileDataPacket response = { 0, 0, { 0 } };
     RETURN_ERROR(send_packet(file->watch, MSG_READ_FILE_DATA_REQUEST, sizeof(request),
         (uint8_t*)&request, length + 8, (uint8_t*)&response));
 
@@ -523,8 +523,8 @@ int ttwatch_write_file_data(TTWATCH_FILE *file, const void *data, uint32_t lengt
     if (!file->watch->current_file)
         return TTWATCH_FileNotOpen;
 
-    TXWriteFileDataPacket request = { htobe32(file->file_id), 0 };
-    RXWriteFileDataPacket response = { 0, 0, 0 };
+    TXWriteFileDataPacket request = { htobe32(file->file_id), { 0 } };
+    RXWriteFileDataPacket response = { 0, 0, { 0 } };
     memcpy(request.data, data, length);
     RETURN_ERROR(send_packet(file->watch, MSG_WRITE_FILE_DATA, length + 4,
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
@@ -540,7 +540,7 @@ int ttwatch_find_first_file(TTWATCH *watch, uint32_t *file_id, uint32_t *length)
     if (watch->current_file)
         return TTWATCH_FileOpen;
 
-    TXFindFirstFilePacket request = {0};
+    TXFindFirstFilePacket request = { { 0, 0 }};
     RXFindFilePacket response = { 0, 0, 0, 0, 0 };
     RETURN_ERROR(send_packet(watch, MSG_FIND_FIRST_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
@@ -672,7 +672,7 @@ int ttwatch_reset_gps_processor(TTWATCH *watch)
     if (watch->current_file)
         return TTWATCH_FileOpen;
 
-    RXRebootWatchPacket response = {0};
+    RXRebootWatchPacket response = { { 0 } };
     return send_packet(watch, MSG_RESET_GPS_PROCESSOR, 0, 0, 60, (uint8_t*)&response);
 }
 
@@ -697,7 +697,7 @@ int ttwatch_get_watch_time(TTWATCH *watch, time_t *time)
     if (watch->current_file)
         return TTWATCH_FileOpen;
 
-    RXGetCurrentTimePacket response = { 0, 0 };
+    RXGetCurrentTimePacket response = { 0, { 0 } };
     RETURN_ERROR(send_packet(watch, MSG_GET_CURRENT_TIME, 0, 0, sizeof(response), (uint8_t*)&response));
 
     *time = be32toh(response.utc_time);

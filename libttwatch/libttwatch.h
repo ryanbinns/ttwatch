@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define LIBTTWATCH_VERSION  (0x000102)  /* version 0.1.2 */
+#define LIBTTWATCH_VERSION  (0x000103)  /* version 0.1.3 */
 
 /*****************************************************************************/
 typedef struct
