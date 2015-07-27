@@ -33,6 +33,9 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_step_count;
     float cadence_avg = 0.0f;
     const char *trigger_method = "Manual";
+    float smooth_cadence = 0.0f;
+    int smooth_cadence_count = 0;
+    time_t smooth_cadence_lt;
 
     if (!ttbin->gps_records.count)
         return;
@@ -82,7 +85,12 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
         case TAG_STATUS:
             if ((record->status.status == 2) && (lap_state == 0))
+            {
                 insert_pause = 1;
+                /* reset cadence to avoid spikes when pausing */
+                smooth_cadence = 0.0f;
+                smooth_cadence_count = 0;
+            }
             break;
 
         case TAG_GPS:
@@ -94,6 +102,19 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 max_speed = record->gps.instant_speed;
             total_speed += record->gps.instant_speed;
             ++gps_count;
+
+            /* low-pass filter the course cadence values (1, 2, 3 steps/sec), with RC=20
+               based on: https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter */
+            if (ttbin->activity==ACTIVITY_RUNNING)
+            {
+                float dt = smooth_cadence_count == 0 ? 1.0f : record->gps.timestamp - smooth_cadence_lt;
+                float rc = smooth_cadence_count < 20 ? (float)smooth_cadence_count : 20.0f;
+                float alpha = dt / (rc + dt);
+                int coarse_cadence = 30*(int)record->gps.cycles;
+                smooth_cadence += alpha * (coarse_cadence - smooth_cadence);
+                smooth_cadence_count++;
+                smooth_cadence_lt = record->gps.timestamp;
+            }
 
             if (lap_state == 0 && insert_pause)
             {
@@ -132,10 +153,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             fprintf(file, "                                <Speed>%.2f</Speed>\r\n", record->gps.instant_speed);
             if (ttbin->activity==ACTIVITY_RUNNING)
             {
-                /* use an exponential moving average to smooth cadence data */
-                if ((int)record->gps.cycles <= 4) // max 4 * 60 = 240 spm
-                    cadence_avg = (0.05 * 30 * (int)record->gps.cycles) + (1.0 - 0.05) * cadence_avg;
-                fprintf(file, "                                <RunCadence>%d</RunCadence>\r\n", (int)cadence_avg);
+                fprintf(file, "                                <RunCadence>%d</RunCadence>\r\n", (int)smooth_cadence);
                 total_step_count += record->gps.cycles;
             }
             fputs(        "                            </TPX>\r\n"
