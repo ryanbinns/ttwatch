@@ -32,6 +32,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_max_heart_rate;
     unsigned lap_step_count;
     float cadence_avg = 0.0f;
+    const char *trigger_method = "Manual";
 
     if (!ttbin->gps_records.count)
         return;
@@ -62,7 +63,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
     fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
     fputs(        "                <Intensity>Active</Intensity>\r\n"
-                  "                <TriggerMethod>Manual</TriggerMethod>\r\n"
                   "                <Track>\r\n", file);
 
     heart_rate = 0;
@@ -72,6 +72,14 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     {
         switch (record->tag)
         {
+        case TAG_TRAINING_SETUP:
+            switch (record->training_setup.type)
+            {
+            case 7: trigger_method="Time";     break;
+            case 8: trigger_method="Distance"; break;
+            }
+            break;
+
         case TAG_STATUS:
             if ((record->status.status == 2) && (lap_state == 0))
                 insert_pause = 1;
@@ -99,7 +107,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             {
                 fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
                 fputs(        "                <Intensity>Active</Intensity>\r\n"
-                              "                <TriggerMethod>Manual</TriggerMethod>\r\n"
                               "                <Track>\r\n", file);
                 lap_state = 0;
             }
@@ -145,6 +152,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 fputs(        "                       </LX>\r\n"
                               "                    </Extensions>\r\n", file);
                 fputs(        "                </Track>\r\n", file);
+                fprintf(file, "                <TriggerMethod>%s</TriggerMethod>\r\n", trigger_method);
                 fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap_time);
                 fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap_distance);
                 fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", lap_max_speed);
@@ -223,6 +231,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         fputs(        "                       </LX>\r\n"
                       "                    </Extensions>\r\n", file);
         fputs(        "                </Track>\r\n", file);
+        fprintf(file, "                <TriggerMethod>%s</TriggerMethod>\r\n", trigger_method);
         fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap_time);
         fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap_distance);
         fprintf(file, "                <MaximumSpeed>%.2f</MaximumSpeed>\r\n", lap_max_speed);
