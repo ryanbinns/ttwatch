@@ -6,19 +6,19 @@ Linux TomTom GPS Watch Utilities
 Provides programs for communicating with TomTom GPS watches and processing
 the data they collect.
 
-1. ttwatch - USB communications program for performing various operations
-             with the watch, including downloading activity data, updating
-             GPS data, and updating firmware.
-2. ttbincnv - Post-processor allowing conversion of the ttbin file formats
-              to either (currently) csv, gpx, kml or tcx  files, using broadly
-              similar formats to the official TomTom file formats.
-3. ttbinmod - Post-processor allowing modifications to be made to the ttbin
-              file. Currently, adding/modifying lap markers and truncating the
-              file at the end of the workout (last lap, goal completion etc)
-              are supported.
-4. ttbin2mysports.sh - script that enabled uploading to a MapMyFitness account
-                       that is linked to a MySports account. Automatically
-                       converts the ttbin file to a TCX file before uploading.
+1. `ttwatch` - USB communications program for performing various operations
+               with the watch, including downloading activity data, updating
+               GPS data, and updating firmware.
+2. `ttbincnv` - Post-processor allowing conversion of the ttbin file formats
+                to either (currently) csv, gpx, kml or tcx  files, using broadly
+                similar formats to the official TomTom file formats.
+3. `ttbinmod` - Post-processor allowing modifications to be made to the ttbin
+                file. Currently, adding/modifying lap markers and truncating the
+                file at the end of the workout (last lap, goal completion etc)
+                are supported.
+4. `ttbin2mysports.sh` - script that enabled uploading to a MapMyFitness account
+                         that is linked to a MySports account. Automatically
+                         converts the ttbin file to a TCX file before uploading.
 
 System Requirements
 ===================
@@ -26,11 +26,11 @@ System Requirements
 This program requires the following libraries to be compiled and installed
 before attempting to build it.
 
-1. openssl (tested against version 1.0.1f, other versions may work).
+1. `openssl` (tested against version 1.0.1f, other versions may work).
    Available from http://www.openssl.org, or with your linux distribution
-1. curl (tested against version 7.38.0, other versions may work).
+1. `curl` (tested against version 7.38.0, other versions may work).
    Available from http://curl.haxx.se/download.html
-2. libusb 1.0.16 or later (tested against version 1.0.19).
+2. `libusb` 1.0.16 or later (tested against version 1.0.19).
    Available from http://sourceforge.net/projects/libusb/
 
 Build Instructions
@@ -87,7 +87,7 @@ one of them must be specified to start the daemon:
 
 All four options can be specified with the `-a` (or `--auto`) option
 
-The daemon must be started as root (run by init or sudo), but the `--runas`
+The daemon must be started as root (run by `init` or `sudo`), but the `--runas`
 parameter can be specified to provide an alternative user (and optionally
 a group - such as the usb group mentioned above) to run as.
 
@@ -117,7 +117,7 @@ Unsafe Functions
 There are various options that can be given to the ttwatch program that read
 and write raw data to/from the watch. Used incorrectly, these could destroy
 the contents of the watch. For this reason, they are disabled by default. To
-enable these options, run `configure` with the `--with-unsafe` option. Note that
+enable these options, run configure with the `--with-unsafe` option. Note that
 I don't guarantee what will happen if you use these options without really
 knowing what you are doing.
 
@@ -185,3 +185,10 @@ The following options only take effect when running as a daemon:
 Boolean values can have a value of ('y', 'yes', 'true', 'n', 'no' or 'false').
 These values are *not* case-sensitive.
 
+Recovery
+========
+
+It *may* be possible to reset a watch with damaged firmware or file structure
+using the Recovery Mode, which requires TomTom's official MySports Connect
+software (Windows or Mac only): [information from TomTom support]
+(http://us.support.tomtom.com/app/answers/detail/a_id/17394).
