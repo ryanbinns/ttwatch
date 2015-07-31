@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
 import btle, struct, collections, random, time, sys
 import requests
@@ -30,10 +31,6 @@ def rda(p, handle=None, data=None, idata=None, timeout=1.0):
     return h_d_id(h,d,id)
 
 ########################################
-
-def tt_wait(p):
-    p.wr(0x2e, '\1\0\0\0') # some kind of wait sequence
-    rda(p, 0x25, idata=0)
 
 def tt_send_command(p, cmdno):
     for tries in range(0,10):
@@ -157,19 +154,9 @@ def tt_write_file(p, fileno, buf, expect_end=True, debug=False):
                 print "expecting counter %d <- handle 0x2e (pos=%d, done=%s)" % (counter, pos, done)
             if not done or expect_end:
                 rda(p, 0x2e, idata=counter, timeout=20)
-#            h, d, id = rda(p)
-#            if h!=0x2e or id!=counter:
-#               print "expected 0x2e,%d but got %s" % (counter, (hnone(h),repr(d),hnone(id)))
-
 
     if expect_end:
         rda(p, 0x25, idata=0)
-#    while True:
-#        h, d, id = rda(p)
-#        if not (h==0x25 and id==0):
-#            print "expected 0x25,0 but got %s" % str((hnone(h),repr(d),hnone(id)))
-#        else:
-#            break
 
 def tt_list_sub_files(p, fileno):
     # strange ordering: file 0x001234ab (ttwatch naming) becomes 0012ab34
@@ -205,6 +192,18 @@ def tt_delete_file(p, fileno):
     return buf
 
 ########################################
+
+if len(sys.argv)!=3:
+    print '''Need two arguments:
+          ttblue.py <bluetooth-address> <pairing-code>
+    OR    ttblue.py <bluetooth-address> pair
+
+    Where bluetooth-address is the twelve-digit address
+    of your TomTom GPS (E4:04:39:__:__:__) and
+    pairing-code is either the previously established
+    code used to pair a phone, or the string "pair"
+    to create a new pairing.'''
+    raise SystemExit
 
 p = None
 while p is None:
@@ -256,23 +255,9 @@ try:
         tt_delete_file(p, 0x00020002)
         tt_write_file(p, 0x00020002, 'Syncing…')
 
-    if 0:
-        print "Reading manifest files..."
-        for fileno in (0x00850000,):
-            f = StringIO.StringIO() #with open('/tmp/manifest_0x%08x.bin'%fileno, 'wb') as f:
-            tt_read_file(p, fileno, f)
-            print "Got %d bytes for 0x%08x" % (f.tell(),fileno)
-            f.seek(0x1f8,0); alarmtime = struct.unpack('<L',f.read(4))[0]
-            f.seek(0x1f8,0); f.write(struct.pack('<L',alarmtime+3600))
-            print "Advancing alarm by 3600s"
-            tt_write_file(p, fileno, f.getvalue())
-
     if 1:
-#        print "Writing XML prefs..."
-#        tt_delete_file(p, 0x00f20000)
-#        tt_write_file(p, 0x00f20000, open('/tmp/pref_start.xml', 'rb').read(), debug=True)
-        print "Reading XML prefs (file 0x00f20000) ..."
-        with open('/tmp/pref_start.xml', 'wb') as f:
+        print "Reading XML preferences (file 0x00f20000) ..."
+        with open('preferences.xml', 'wb') as f:
             tt_read_file(p, 0x00f20000, f)
             print "Got %d bytes" % f.tell()
 
@@ -285,9 +270,9 @@ try:
             tt_delete_file(p, 0x00020002)
             tt_write_file(p, 0x00020002, 'Activity %d/%d…' % (ii+1, len(files)))
 
-            print "Saving activity file 0x%08x..." % fn
-            with open('/tmp/0x%08x.ttbin'%fn, 'wb') as f:
-                tt_read_file(p, fn, f)
+            print "Saving activity file 0x%08x.ttbin..." % fn
+            with open('0x%08x.ttbin'%fn, 'wb') as f:
+                tt_read_file(p, fn, f, debug=True)
                 print "  got %d bytes." % f.tell()
             print "  saved to %s" % f.name
 
