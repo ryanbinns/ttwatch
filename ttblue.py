@@ -4,6 +4,7 @@ import btle, struct, collections, random, time, sys
 import requests
 import cStringIO as StringIO
 from binascii import hexlify, unhexlify
+from datetime import datetime
 from crc16_modbus import crc16_modbus as tt_crc16_streamer, _crc16_modbus as tt_crc16
 
 class MyDelegate(btle.DefaultDelegate):
@@ -266,27 +267,28 @@ try:
         files = tt_list_sub_files(p, 0x00910000)
         print "Got %d activities: %s" % (len(files), files)
 
-        for ii,fn in enumerate(files):
+        filetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+        for ii,fileno in enumerate(files):
             tt_delete_file(p, 0x00020002)
             tt_write_file(p, 0x00020002, 'Activity %d/%d…' % (ii+1, len(files)))
 
-            print "Saving activity file 0x%08x.ttbin..." % fn
-            with open('0x%08x.ttbin'%fn, 'wb') as f:
-                tt_read_file(p, fn, f, debug=True)
+            print "Saving activity file 0x%08x.ttbin..." % fileno
+            with open('%08x_%s.ttbin' % ( fileno, filetime), 'wb') as f:
+                tt_read_file(p, fileno, f, debug=True)
                 print "  got %d bytes." % f.tell()
             print "  saved to %s" % f.name
 
-            print "Deleting activity file 0x%08x..." % fn
-            print repr( tt_delete_file(p, fn) )
-
             tt_delete_file(p, 0x00020002)
             tt_write_file(p, 0x00020002, '%d/%d synced.' % (ii+1, len(files)))
+
+            print "Deleting activity file 0x%08x..." % fileno
+            print tt_delete_file(p, fileno)
 
     if 1:
         gqf = requests.get('http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee').content
         print "Updating QuickGPSFix..."
         tt_delete_file(p, 0x00020002)
-        tt_write_file(p, 0x00020002, 'QuickGPSFix-ing')
+        tt_write_file(p, 0x00020002, 'GPSQuickFix…')
         tt_delete_file(p, 0x00010100)
         tt_write_file(p, 0x00010100, gqf, debug=True, expect_end=True)
 #        p.disconnect()
