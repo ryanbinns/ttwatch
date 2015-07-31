@@ -1,0 +1,67 @@
+$ python show_gatt.py "E4:04:39:__:__:__"
+
+Service: UUID=1801 (Generic Attribute), handles=0x0c to 0x0f
+  Char: UUID=2a05 (Service Changed), handle=0x0e
+    properties => INDICATE
+Service: UUID=1800 (Generic Access), handles=0x01 to 0x0b
+  Char: UUID=2a00 (Device Name), handle=0x03
+    properties => READ
+    read => 'MyWatch'
+  Char: UUID=2a01 (Appearance), handle=0x05
+    properties => READ
+    read => '\x11\x00' # not defined at https://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.gap.appearance.xml
+  Char: UUID=2a02 (Peripheral Privacy Flag), handle=0x07
+    properties => READ
+    read => '\x00'
+  Char: UUID=2a03 (Reconnection Address), handle=0x09
+    properties => WRITE
+  Char: UUID=2a04 (Peripheral Preferred Connection Parameters), handle=0x0b
+    properties => READ
+    read => 'P\x00\xa0\x00\x00\x00\xe8\x03'
+Service: UUID=b993bf91-81e1-11e4-b4a9-0800200c9a66, handles=0x30 to 0xffff
+  Char: UUID=b993bf92-81e1-11e4-b4a9-0800200c9a66, handle=0x32
+    properties => NOTIFY,WRITE NO RESPONSE,WRITE
+  Char: UUID=b993bf93-81e1-11e4-b4a9-0800200c9a66, handle=0x35
+    properties => WRITE NO RESPONSE,WRITE
+Service: UUID=b993bf90-81e1-11e4-b4a9-0800200c9a66, handles=0x23 to 0x2f
+  Char: UUID=170d0d31-4213-11e3-aa6e-0800200c9a66, handle=0x25 # command/status register (<L)?
+    properties => NOTIFY,READ,WRITE NO RESPONSE,WRITE
+    read => '\x00\x00\x00\x00'
+  Char: UUID=170d0d32-4213-11e3-aa6e-0800200c9a66, handle=0x28 # length register (<L)?
+    properties => NOTIFY,READ,WRITE NO RESPONSE
+    read => '\x00\x00\x00\x00'
+  Char: UUID=170d0d33-4213-11e3-aa6e-0800200c9a66, handle=0x2b # data stream (bytes)?
+    properties => NOTIFY,READ,WRITE NO RESPONSE
+    read => '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+  Char: UUID=170d0d34-4213-11e3-aa6e-0800200c9a66, handle=0x2e # counter-ish thingy (<L)?
+    properties => NOTIFY,READ,WRITE NO RESPONSE
+    read => '\x00\x00\x00\x00'
+Service: UUID=180a (Device Information), handles=0x10 to 0x22
+  Char: UUID=2a23 (System ID), handle=0x12
+    properties => READ
+    read => '\x00\x00\x00\x00\x00\x00\x00\x00'
+  Char: UUID=2a24 (Model Number String), handle=0x14
+    properties => READ
+    read => 'Runner\x00\x00\x00\x00'
+  Char: UUID=2a25 (Serial Number String), handle=0x16
+    properties => READ
+    read => 'HC4354G00150'
+  Char: UUID=2a26 (Firmware Revision String), handle=0x18
+    properties => READ
+    read => 'Firmware Revision\x00'
+  Char: UUID=2a27 (Hardware Revision String), handle=0x1a
+    properties => READ
+    read => '1001\x00\x00\x00\x00\x00\x00'
+  Char: UUID=2a28 (Software Revision String), handle=0x1c
+    properties => READ
+    read => '1.8.42\x00\x00\x00\x00'
+  Char: UUID=2a29 (Manufacturer Name String), handle=0x1e
+    properties => READ
+    read => 'TomTom Fitness\x00'
+  Char: UUID=2a2a (IEEE 11073-20601 Regulatory Cert. Data List), handle=0x20
+    properties => READ
+    read => '\xfe\x00experimental'
+  Char: UUID=2a50 (PnP ID), handle=0x22
+    properties => READ
+    read => '\x01\r\x00\x00\x00\x10\x01' # Vendor 0xd=TexInst, Product=0, Revision=0x1001
+
