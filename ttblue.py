@@ -175,7 +175,7 @@ def tt_list_sub_files(p, fileno):
     # first uint16 is length, subsequent are file numbers offset from base
     subfiles = struct.unpack('<%dH'%(len(buf)/2), buf)
     assert subfiles[0]+1==len(subfiles)
-    return tuple(fileno&0x00ff0000 + sf for sf in subfiles[1:])
+    return tuple((fileno&0x00ff0000)+sf for sf in subfiles[1:])
 
 def tt_delete_file(p, fileno):
     # strange ordering: file 0x001234ab (ttwatch naming) becomes 0012ab34
