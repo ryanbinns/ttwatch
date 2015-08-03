@@ -52,60 +52,36 @@ def tt_read_file(p, fileno, outf, limit=None, debug=False):
     tt_send_command(p, cmdno)
     l = rda(p, 0x28).idata      # 0x28 = length in/out
 
-    checker = tt_crc16_streamer()
-    left = l
-    packets = counter = 0
-    checkit = done = False
+    counter = 0
     startat = time.time()
-    while not done:
-        h,d,id = rda(p)
-
-        if h!=0x2b: raise AssertionError, (hnone(h),d,hnone(id))
-        elif h==0x2b:
-            packets += 1
-            out = d[:-2]
-            if packets%256==0:
-                out = d[:-2]
-                left -= len(d)-2
-                if debug:
-                    print "bytes left to read: %d of %d (%d/sec)" % (left, l, (packets*20) // (time.time()-startat))
-                checkit = True
-            elif left==0: # 1-2 straggler checksum byte(s)
-                out = ''
-                checkit = done = True
-            elif left==len(d)-2: # remaining data + 2 checksum bytes
-                out = d[:-2]
-                left = 0
-                checkit = done = True
-            elif left==len(d)-1: # remaining data + 1 checksum byte to follow
-                out = d[:-1]
-                left = 0
+    checker = tt_crc16_streamer()
+    for ii in range(0, l, 256*20-2):
+        # read up to 256*20-2 data bytes in 20B chunks
+        end = min(l, ii+256*20-2)
+        for jj in range(ii, end, 20):
+            d = rda(p, 0x2b).data
+            if 18 <= (end-jj) <= 20:
+                outf.write( d[ : end-jj] )
+                if end-jj in (19, 20):
+                    d += rda(p, 0x2b).data # tack on CRC16 straggler byte(s)
             else:
-                out = d
-                left -= len(d)
-
-            if debug>1:
-                print "%s %s %d %d %d" % (hexlify(d), repr(d), left, checkit, done)
-            outf.write(out)
+                outf.write( d )
             checker.update(d)
 
-        if checkit:
-            if checker.digest()!=0:
-                raise AssertionError, checker.hexdigest()
-            checker.reset()
-            checkit = False
-            if limit is not None and l-left>=limit:
-                if debug:
-                    print "prematurely ending file read after %d bytes" % (l-left)
-                p.wr(0x2e, '\0\0\0\0', False)
-                done = True
-            else:
-                counter += 1 # some sort of counter/pause added every 256 packets (otherwise a mega-slowdown occurs)
-                if debug:
-                    print "inserting counter %d -> handle 0x2e" % counter
-                p.wr(0x2e, struct.pack('<L', counter), False)
+            if debug>1:
+                print "%04x: %s %s" % (jj, hexlify(d), repr(d))
+
+        # check CRC16 and ack
+        if checker.digest()!=0:
+            raise AssertionError, checker.hexdigest()
+        checker.reset()
+        counter += 1
+        p.wr(0x2e, struct.pack('<L', counter), False)
+        if debug:
+            print "%d: read %d/%d bytes so far (%d/sec)" % (counter, end, l, end // (time.time()-startat))
 
     rda(p, 0x25, idata=0)
+    return end
 
 def tt_write_file(p, fileno, buf, expect_end=True, debug=False):
     # strange ordering: file 0x001234ab (ttwatch naming) becomes 0012ab34
@@ -113,51 +89,37 @@ def tt_write_file(p, fileno, buf, expect_end=True, debug=False):
     cmdno = bytearray((0, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff))
 
     tt_send_command(p, cmdno)
-
     l = len(buf)
     p.wr(0x28, struct.pack('<L', len(buf)))     # 0x28 = length in/out
 
-    builder = tt_crc16_streamer()
-    pos = packets = counter = 0
-    checkit = done = False
+    counter = 0
     startat = time.time()
-    while not done:
-        packets += 1
-        if packets%256==0:
-            out = buf[pos:pos+18]
-            pos += 18
-            if debug:
-                print "bytes left to write: %d of %d (%d/sec)" % (l-pos, l, (packets*20) // (time.time()-startat))
-            checkit = True
-        elif pos+20>=l:
-            out = buf[pos:]
-            pos = l
-            checkit = done = True
-        else:
-            out = buf[pos:pos+20]
-            pos += 20
+    checker = tt_crc16_streamer()
+    for ii in range(0, l, 256*20-2):
+        # write up to 256*20-2 data bytes in 20B chunks
+        end = min(l, ii+256*20-2)
+        for jj in range(ii, end, 20):
+            out = buf[jj : min(jj+20, end)]
+            checker.update(out)
 
-        builder.update(out)
-        if checkit==True:
-            out += struct.pack('<H', builder.digest())
-            builder.reset()
+            if jj+20>=end:
+                out += struct.pack('<H', checker.digest())
+            p.wr(0x2b, out[:20])
+            if len(out)>20: p.wr(0x2b, out[20:])
 
-        if debug>1:
-            print "%s %s %d %d %d" % (hexlify(out), repr(out), pos, checkit, done)
-        p.wr(0x2b, out[:20])
-        if len(out)>20: # what if last "out" has length>18?
-            p.wr(0x2b, out[20:])
+            if debug>1:
+                print "%04x: %s %s" % (jj, hexlify(out), repr(out))
 
-        if checkit==True:
-            counter += 1
-            checkit = False
-            if debug:
-                print "expecting counter %d <- handle 0x2e (pos=%d, done=%s)" % (counter, pos, done)
-            if not done or expect_end:
-                rda(p, 0x2e, idata=counter, timeout=20)
+        # check CRC16 and ack
+        checker.reset()
+        counter += 1
+        if end<l or expect_end:
+            rda(p, 0x2e, idata=counter, timeout=20)
+        if debug:
+            print "%d: wrote %d/%d bytes so far (%d/sec)" % (counter, end, l, end // (time.time()-startat))
 
-    if expect_end:
-        rda(p, 0x25, idata=0)
+    rda(p, 0x25, idata=0)
+    return end
 
 def tt_list_sub_files(p, fileno):
     # strange ordering: file 0x001234ab (ttwatch naming) becomes 0012ab34
@@ -185,7 +147,7 @@ def tt_delete_file(p, fileno):
     tt_send_command(p, cmdno)
     buf = bytearray()
     while True:
-        h, d, id = rda(p, timeout=10)
+        h, d, id = rda(p, timeout=20)
         if h==0x2b: buf.extend(d)
         elif h==0x25 and id==0: break
         else: raise AssertionError, (hnone(h),d,hnone(id))
@@ -206,16 +168,20 @@ if len(sys.argv)!=3:
     to create a new pairing.'''
     raise SystemExit
 
-p = None
-while p is None:
-    try:
-        p=btle.Peripheral(sys.argv[1], btle.ADDR_TYPE_RANDOM)
-    except btle.BTLEException as e:
-        print e
-        time.sleep(1)
-d = MyDelegate()
-p.setDelegate(d)
-p.wr = p.writeCharacteristic
+def setup(addr):
+    p = None
+    while p is None:
+        try:
+            p=btle.Peripheral(addr, btle.ADDR_TYPE_RANDOM)
+        except btle.BTLEException as e:
+            print e
+            time.sleep(1)
+    d = MyDelegate()
+    p.setDelegate(d)
+    p.wr = p.writeCharacteristic
+    return p
+
+p = setup(sys.argv[1])
 
 try:
     # magic initialization/authentication sequence...
