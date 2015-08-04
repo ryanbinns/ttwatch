@@ -153,6 +153,7 @@ att_read(int fd, uint16_t handle, uint8_t *buf)
     if (result<0)
         return result;
 
+    memset(rbuf, 0, sizeof rbuf);
     result = recv(fd, rbuf, sizeof(rbuf), 0);
     struct { uint8_t opcode; uint8_t buf[]; } __attribute__((packed)) *rpkt = (void *)rbuf;
 
@@ -201,6 +202,7 @@ att_read_not(int fd, size_t *length, uint8_t *buf)
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int result, handle;
 
+    memset(rbuf, 0, sizeof rbuf);
     result = recv(fd, rbuf, sizeof(rbuf), 0);
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[]; } __attribute__((packed)) *rpkt = (void *)rbuf;
 
@@ -223,7 +225,7 @@ int main(int argc, const char **argv)
 
     uint8_t dst_type = BDADDR_LE_RANDOM;
     bdaddr_t src_addr, dst_addr;
-    int sec = BT_SECURITY_LOW /* MEDIUM is also supported */;
+    int sec = BT_SECURITY_MEDIUM;
 
     /* also from btgatt-client.c */
     str2ba(argv[1], &dst_addr);
@@ -238,7 +240,7 @@ int main(int argc, const char **argv)
 
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     size_t length;
-    uint16_t handle;
+    int handle;
 
     length = att_read(fd, 0x0003, rbuf);
     printf("Device name: %.*s\n", (int)length, rbuf);
@@ -248,7 +250,7 @@ int main(int argc, const char **argv)
     uint32_t code = htobl( atoi( argv[2] ) );
     att_wrreq(fd, 0x0032, (uint8_t*)&code, sizeof code);
 
-    for(int ii=0; ii<10; ii++) {
+    for(int ii=0; ii<3; ii++) {
         handle = att_read_not(fd, &length, rbuf);
         if (handle<0) {
             perror("recv");
@@ -260,5 +262,6 @@ int main(int argc, const char **argv)
         }
     }
 
+    close(fd);
     return 0;
 }
