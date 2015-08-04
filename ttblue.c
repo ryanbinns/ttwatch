@@ -143,36 +143,79 @@ att_send(int fd, uint8_t opcode, uint16_t handle, const uint8_t *buf, size_t len
     return send(fd, &pkt, sizeof(pkt), 0);
 }
 
-typedef struct {
-    uint8_t opcode;
-    uint16_t handle;
-    size_t length;
-    const uint8_t *buf;
-} dpkt;
-
-unsigned int
-att_decode(dpkt *pkt, const uint8_t *buf, size_t length)
+int
+att_read(int fd, uint16_t handle, uint8_t *buf)
 {
-    memset(pkt, 0, sizeof(pkt));
-    pkt->opcode = buf[0];
+    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    int result;
 
-    switch (pkt->opcode) {
-    case BT_ATT_OP_READ_RSP:
-    case BT_ATT_OP_WRITE_RSP:
-        pkt->length = length-1;
-        pkt->buf = buf+1;
-        break;
-    case BT_ATT_OP_HANDLE_VAL_NOT:
-        pkt->handle = btohs( *((uint16_t *)(buf+1)) );
-        pkt->length = length - sizeof(uint16_t) - 1;
-        pkt->buf = buf + sizeof(uint16_t) + 1;
-        break;
-    default:
-        break;
+    result = att_send(fd, BT_ATT_OP_READ_REQ, handle, NULL, 0);
+    if (result<0)
+        return result;
+
+    result = recv(fd, rbuf, sizeof(rbuf), 0);
+    struct { uint8_t opcode; uint8_t buf[]; } __attribute__((packed)) *rpkt = (void *)rbuf;
+
+    if (result<0)
+        return result;
+    else if (rpkt->opcode != BT_ATT_OP_READ_RSP)
+        return -2;
+    else {
+        memcpy(buf, rpkt->buf, result-1);
     }
-
-    return (int)pkt->opcode;
+    return result-1;
 }
+
+int
+att_write(int fd, uint16_t handle, uint8_t *buf, size_t length)
+{
+    int result;
+    uint8_t conf;
+
+    result = att_send(fd, BT_ATT_OP_WRITE_CMD, handle, buf, length);
+    if (result<0)
+        return result;
+    return length;
+}
+
+int
+att_wrreq(int fd, uint16_t handle, uint8_t *buf, size_t length)
+{
+    int result;
+    uint8_t conf;
+
+    result = att_send(fd, BT_ATT_OP_WRITE_REQ, handle, buf, length);
+    if (result<0)
+        return result;
+
+    result = recv(fd, &conf, 1, 0);
+    if (conf != BT_ATT_OP_WRITE_RSP)
+        return -2;
+
+    return length;
+}
+
+int
+att_read_not(int fd, size_t *length, uint8_t *buf)
+{
+    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    int result, handle;
+
+    result = recv(fd, rbuf, sizeof(rbuf), 0);
+    struct { uint8_t opcode; uint16_t handle; uint8_t buf[]; } __attribute__((packed)) *rpkt = (void *)rbuf;
+
+    if (result<0)
+        return result;
+    else if (rpkt->opcode != BT_ATT_OP_HANDLE_VAL_NOT)
+        return -2;
+    else {
+        *length = result-3;
+        memcpy(buf, rpkt->buf, *length);
+        return rpkt->handle;
+    }
+}
+
+/****************************************************************************/
 
 int main(int argc, const char **argv)
 {
@@ -194,26 +237,25 @@ int main(int argc, const char **argv)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    dpkt rpkt;
+    size_t length;
+    uint16_t handle;
 
-    att_send(fd, BT_ATT_OP_READ_REQ, 0x0003, NULL, 0);
-    att_send(fd, BT_ATT_OP_WRITE_CMD, 0x0033, (uint8_t[]){0x01, 0}, 2);
-    att_send(fd, BT_ATT_OP_WRITE_REQ, 0x0035, (uint8_t[]){0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0}, 8);
-    att_send(fd, BT_ATT_OP_WRITE_CMD, 0x0026, (uint8_t[]){0x01, 0}, 2);
-    uint32_t code = htobl( 363366 );
-    att_send(fd, BT_ATT_OP_WRITE_REQ, 0x0032, (uint8_t*)&code, sizeof code);
+    length = att_read(fd, 0x0003, rbuf);
+    printf("Device name: %.*s\n", (int)length, rbuf);
+    att_write(fd, 0x0033, (uint8_t[]){0x01, 0}, 2);
+    att_wrreq(fd, 0x0035, (uint8_t[]){0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0}, 8);
+    att_write(fd, 0x0026, (uint8_t[]){0x01, 0}, 2);
+    uint32_t code = htobl( atoi( argv[2] ) );
+    att_wrreq(fd, 0x0032, (uint8_t*)&code, sizeof code);
 
-    printf("Receiving...\n");
     for(int ii=0; ii<10; ii++) {
-        int length = recv(fd, rbuf, sizeof rbuf, 0);
-        if (length<0) {
+        handle = att_read_not(fd, &length, rbuf);
+        if (handle<0) {
             perror("recv");
         } else {
-            att_decode(&rpkt, rbuf, length);
-            printf("%2.2X %4.4X: ", rpkt.opcode, rpkt.handle);
-            for(int jj=0; jj<rpkt.length; jj++) {
-                printf("%2.2X", rpkt.buf[jj]);
-            }
+            printf("notify %4.4X: ", handle);
+            for(int jj=0; jj<length; jj++)
+                printf("%2.2X", rbuf[jj]);
             printf("\n");
         }
     }
