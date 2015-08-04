@@ -60,12 +60,10 @@ def tt_read_file(p, fileno, outf, limit=None, debug=False):
         end = min(l, ii+256*20-2)
         for jj in range(ii, end, 20):
             d = rda(p, 0x2b).data
-            if 18 <= (end-jj) <= 20:
-                outf.write( d[ : end-jj] )
-                if end-jj in (19, 20):
-                    d += rda(p, 0x2b).data # tack on CRC16 straggler byte(s)
-            else:
-                outf.write( d )
+            if (end-jj-len(d)) in (-1, 0):
+                d += rda(p, 0x2b).data # tack on CRC16 straggler byte(s)
+
+            outf.write( d[ : min(end-jj,20) ] )
             checker.update(d)
 
             if debug>1:
