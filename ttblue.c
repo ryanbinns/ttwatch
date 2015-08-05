@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -204,50 +205,229 @@ att_read_not(int fd, size_t *length, uint8_t *buf)
 
 /****************************************************************************/
 
+static uint32_t
+crc16(uint8_t *buf, size_t len, uint32_t start)
+{
+    uint32_t crc = start;		        // should be 0xFFFF first time
+    for (size_t pos = 0; pos < len; pos++) {
+        crc ^= (uint)buf[pos];          // XOR byte into least sig. byte of crc
+
+        for (int i = 8; i != 0; i--) {  // Loop over each bit
+            if ((crc & 0x0001) != 0) {  // If the LSB is set
+                crc >>= 1;              // Shift right and XOR 0xA001
+                crc ^= 0xA001;
+            }
+            else                        // Else LSB is not set
+                crc >>= 1;              // Just shift right
+        }
+    }
+    return crc;
+}
+
+void
+hexlify(FILE *where, uint8_t *buf, size_t len)
+{
+    while (len--) {
+        fprintf(where, "%2.2x", (int)*buf++);
+    }
+    fputc('\n', where);
+}
+
+int
+tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
+{
+    *buf = NULL;
+    if (fileno>>24)
+        return -1;
+
+    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU*2];
+    size_t rlen;
+    uint8_t cmd[4] = {1, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+
+    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
+    int handle = att_read_not(fd, &rlen, rbuf);
+    if (rlen!=4 || handle != 0x0025 || btohl(*((uint32_t*)(rbuf)))!=1) {
+        if (debug) {
+            printf("expected 0x25->01000000: got 0x%04x->", handle);
+            hexlify(stdout, rbuf, rlen);
+        }
+        return -1;
+    }
+
+    handle = att_read_not(fd, &rlen, rbuf);
+    if (rlen!=4 || handle != 0x0028) {
+        if (debug) {
+            printf("expected 0x28->uint32_t: got 0x%04x->", handle);
+            hexlify(stdout, rbuf, rlen);
+        }
+        return -1;
+    }
+
+    uint32_t flen = btohl(*((uint32_t*)(rbuf)));
+    uint8_t *obuf = *buf = malloc(flen);
+
+    int counter = 0;
+    time_t startat, current; time(&startat);
+    uint32_t check = 0xffff;
+    int end;
+
+    for (int ii=0; ii<flen; ii+=256*20-2) {
+        // read up to 256*20-2 data bytes in 20B chunks
+        end = ii+256*20-2;
+        if (end>flen)
+            end=flen;
+
+        for(int jj=ii; jj<end; jj+=20) {
+            handle = att_read_not(fd, &rlen, rbuf);
+            if (handle != 0x002b) {
+                if (debug) {
+                    printf("expected 0x2b->uint8_t[]: got 0x%04x->", handle);
+                    hexlify(stdout, rbuf, rlen);
+                }
+                return -1;
+            }
+
+            if ((end-jj-rlen)==-1 || (end-jj-rlen)==0){
+                // tack on CRC16 straggler byte(s)
+                size_t rlen2;
+                handle = att_read_not(fd, &rlen2, rbuf+rlen);
+                if (handle != 0x002b) {
+                    if (debug) {
+                        printf("expected 0x2b->uint8_t[]: got 0x%04x->", handle);
+                        hexlify(stdout, rbuf, rlen);
+                    }
+                    return -1;
+                }
+                rlen += rlen2;
+            }
+
+            memcpy(obuf+jj, rbuf, (rlen<end-jj) ? rlen : (end-jj));
+            check = crc16(rbuf, rlen, check);
+
+            if (debug>1) {
+                printf("%04x: ", jj);
+                hexlify(stdout, rbuf, rlen);
+            }
+        }
+
+        if (check!=0) {
+            if (debug)
+                printf("wrong crc16 sum: expected 0, got 0x%04x\n", check);
+            return -1;
+        }
+        check = 0xffff;
+
+        uint32_t c = htobl(++counter);
+        att_write(fd, 0x002e, (uint8_t*)&c, sizeof c);
+        if (debug) {
+            time(&current);
+            printf("%d: read %d/%d bytes so far (%d/sec)\n", counter, end, flen, (int)(end / (current-startat)) );
+        }
+    }
+
+    handle = att_read_not(fd, &rlen, rbuf);
+    if (rlen!=4 || handle != 0x0025 || btohl(*((uint32_t*)(rbuf)))!=0) {
+        if (debug) {
+            printf("expected 0x25->00000000: got 0x%04x->", handle);
+            hexlify(stdout, rbuf, rlen);
+        }
+        return -1;
+    }
+
+    return end;
+}
+
+/****************************************************************************/
+
 #define BARRAY(...) (uint8_t[]){ __VA_ARGS__ }
 
 int main(int argc, const char **argv)
 {
-    int fd;
+    int did, dd, fd;
 
     uint8_t dst_type = BDADDR_LE_RANDOM;
     bdaddr_t src_addr, dst_addr;
     int sec = BT_SECURITY_MEDIUM;
 
-    /* also from btgatt-client.c */
+    // setup HCI and L2CAP sockets
+    did = hci_get_route(NULL);
+    if (did < 0) {
+        perror("hci_get_route");
+        return 1;
+    }
+    dd = hci_open_dev(did);
+    if (dd < 0) {
+        perror("hci_open_dev");
+        return 1;
+    }
+
     str2ba(argv[1], &dst_addr);
     bacpy(&src_addr, BDADDR_ANY);
     fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_type, sec, true);
     if (fd < 0)
         return 1;
 
+    // try to coax this thing to connect more frequently
+    /************************************************************************/
+    /* lecup <handle> <min> <max> <latency> <timeout>					    */
+    /* Options:															    */
+    /*     -H, --handle <0xXXXX>  LE connection handle					    */
+    /*     -m, --min <interval>   Range: 0x0006 to 0x0C80				    */
+    /*     -M, --max <interval>   Range: 0x0006 to 0x0C80				    */
+    /*     -l, --latency <range>  Slave latency. Range: 0x0000 to 0x03E8    */
+    /*     -t, --timeout  <time>  N * 10ms. Range: 0x000A to 0x0C80		    */
+    /************************************************************************/
+
+    struct l2cap_conninfo l2cci;
+    int length = sizeof l2cci;
+    int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
+    if (result < 0) {
+        perror("getsockopt");
+        return 1;
+    }
+
+    result = hci_le_conn_update(dd, l2cci.hci_handle,
+                                0x0006 /* min_interval */,
+                                0x0006 /* max_interval */,
+                                0 /* latency */,
+                                200 /* supervision_timeout */,
+                                2000);
+    if (result < 0) {
+        perror("hci_le_conn_update");
+        printf("connection may be slow!\n");
+    }
+
+    // set timeout to 2 seconds
     struct timeval to = {.tv_sec=2, .tv_usec=0};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
+    // communicate with the device
+
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    size_t length;
     int handle;
 
     length = att_read(fd, 0x0003, rbuf);
-    printf("Device name: %.*s\n", (int)length, rbuf);
+    printf("Device name: %.*s\n", length, rbuf);
     att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
     att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
     att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
     uint32_t code = htobl( atoi( argv[2] ) );
     att_wrreq(fd, 0x0032, (uint8_t*)&code, sizeof code);
 
-    for(int ii=0; ii<3; ii++) {
-        handle = att_read_not(fd, &length, rbuf);
-        if (handle<0) {
-            perror("recv");
-        } else {
-            printf("notify %4.4X: ", handle);
-            for(int jj=0; jj<length; jj++)
-                printf("%2.2X", rbuf[jj]);
-            printf("\n");
-        }
+    handle = att_read_not(fd, (size_t*)&length, rbuf);
+    if (handle<0) {
+        perror("recv");
+        return -1;
     }
+
+    uint8_t *fbuf;
+    length = tt_read_file(fd, 0x00910000, 1, &fbuf);
+    FILE *f = fopen("0x00910000.ttbin", "w");
+    fwrite(fbuf, 1, length, f);
+    fclose(f);
+    printf("saved %d bytes to file\n", length);
+    free(fbuf);
 
     close(fd);
     return 0;
