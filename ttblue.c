@@ -349,7 +349,11 @@ int main(int argc, const char **argv)
     bdaddr_t src_addr, dst_addr;
     int sec = BT_SECURITY_MEDIUM;
 
-    // setup HCI and L2CAP sockets
+    // source and dest addresses
+    str2ba(argv[1], &dst_addr);
+    bacpy(&src_addr, BDADDR_ANY);
+
+    // setup HCI BLE socket
     did = hci_get_route(NULL);
     if (did < 0) {
         perror("hci_get_route");
@@ -361,41 +365,36 @@ int main(int argc, const char **argv)
         return 1;
     }
 
+    // modeled after how hciconfig does it
+    // try to coax this thing to connect more frequently
+    /************************************************************************/
+    /* lecup <handle> <min> <max> <latency> <timeout>                       */
+    /* Options:                                                             */
+    /*     -H, --handle <0xXXXX>  LE connection handle                      */
+    /*     -m, --min <interval>   Range: 0x0006 to 0x0C80                   */
+    /*     -M, --max <interval>   Range: 0x0006 to 0x0C80                   */
+    /*     -l, --latency <range>  Slave latency. Range: 0x0000 to 0x03E8    */
+    /*     -t, --timeout  <time>  N * 10ms. Range: 0x000A to 0x0C80         */
+    /************************************************************************/
+    uint16_t hci_handle;
+    int result = hci_le_create_conn(dd, htobs(0x0004) /*interval*/,  htobs(0x0004) /*window*/,
+                                    0 /*initiator_filter, use peer address*/,
+                                    LE_RANDOM_ADDRESS /*peer_bdaddr_type*/, dst_addr /*bdaddr*/,
+                                    LE_PUBLIC_ADDRESS /*own_bdaddr_type*/,
+                                    htobs(0x0006) /*min_interval*/, htobs(0x0006) /*max_interval*/,
+                                    htobs(0) /*latency*/, htobs(200) /*supervision_timeout*/,
+                                    htobs(0x0001) /*min_ce_length*/, htobs(0x0001) /*max_ce_length*/, &hci_handle, 25000);
+    if (result < 0) {
+        perror("hci_le_create_conn");
+        printf("connection may be slow!\n");
+    }
+
+    // create "normal" L2CAP socket
     str2ba(argv[1], &dst_addr);
     bacpy(&src_addr, BDADDR_ANY);
     fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_type, sec, true);
     if (fd < 0)
         return 1;
-
-    // try to coax this thing to connect more frequently
-    /************************************************************************/
-    /* lecup <handle> <min> <max> <latency> <timeout>					    */
-    /* Options:															    */
-    /*     -H, --handle <0xXXXX>  LE connection handle					    */
-    /*     -m, --min <interval>   Range: 0x0006 to 0x0C80				    */
-    /*     -M, --max <interval>   Range: 0x0006 to 0x0C80				    */
-    /*     -l, --latency <range>  Slave latency. Range: 0x0000 to 0x03E8    */
-    /*     -t, --timeout  <time>  N * 10ms. Range: 0x000A to 0x0C80		    */
-    /************************************************************************/
-
-    struct l2cap_conninfo l2cci;
-    int length = sizeof l2cci;
-    int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
-    if (result < 0) {
-        perror("getsockopt");
-        return 1;
-    }
-
-    result = hci_le_conn_update(dd, l2cci.hci_handle,
-                                0x0006 /* min_interval */,
-                                0x0006 /* max_interval */,
-                                0 /* latency */,
-                                200 /* supervision_timeout */,
-                                2000);
-    if (result < 0) {
-        perror("hci_le_conn_update");
-        printf("connection may be slow!\n");
-    }
 
     // set timeout to 2 seconds
     struct timeval to = {.tv_sec=2, .tv_usec=0};
@@ -403,7 +402,6 @@ int main(int argc, const char **argv)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
     // communicate with the device
-
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int handle;
 
