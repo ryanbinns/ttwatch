@@ -128,41 +128,24 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 /****************************************************************************/
 
 /* manually assemble ATT packets */
-ssize_t
-att_send(int fd, uint8_t opcode, uint16_t handle, const uint8_t *buf, size_t length)
-{
-    struct {
-        uint8_t opcode;
-        uint16_t handle;
-        uint8_t buf[length];
-    }  __attribute__((packed)) pkt;
-
-    pkt.opcode = opcode;
-    pkt.handle = htobs(handle);
-    memcpy(pkt.buf, buf, length);
-    return send(fd, &pkt, sizeof(pkt), 0);
-}
-
 int
 att_read(int fd, uint16_t handle, uint8_t *buf)
 {
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int result;
 
-    result = att_send(fd, BT_ATT_OP_READ_REQ, handle, NULL, 0);
+    struct { uint8_t opcode; uint16_t handle; } __attribute__((packed)) pkt = { BT_ATT_OP_READ_REQ, handle };
+    result = send(fd, &pkt, sizeof(pkt), 0);
     if (result<0)
         return result;
 
-    memset(rbuf, 0, sizeof rbuf);
-    result = recv(fd, rbuf, sizeof(rbuf), 0);
-    struct { uint8_t opcode; uint8_t buf[]; } __attribute__((packed)) *rpkt = (void *)rbuf;
-
+    struct { uint8_t opcode; uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; } __attribute__((packed)) rpkt = {0};
+    result = recv(fd, &rpkt, sizeof rpkt, 0);
     if (result<0)
         return result;
-    else if (rpkt->opcode != BT_ATT_OP_READ_RSP)
+    else if (rpkt.opcode != BT_ATT_OP_READ_RSP)
         return -2;
     else {
-        memcpy(buf, rpkt->buf, result-1);
+        memcpy(buf, rpkt.buf, result-1);
     }
     return result-1;
 }
@@ -170,25 +153,31 @@ att_read(int fd, uint16_t handle, uint8_t *buf)
 int
 att_write(int fd, uint16_t handle, uint8_t *buf, size_t length)
 {
-    int result;
-    uint8_t conf;
+    struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
+    pkt.opcode = BT_ATT_OP_WRITE_CMD;
+    pkt.handle = handle;
+    memcpy(pkt.buf, buf, length);
 
-    result = att_send(fd, BT_ATT_OP_WRITE_CMD, handle, buf, length);
+    int result = send(fd, &pkt, sizeof(pkt), 0);
     if (result<0)
         return result;
+
     return length;
 }
 
 int
 att_wrreq(int fd, uint16_t handle, uint8_t *buf, size_t length)
 {
-    int result;
-    uint8_t conf;
+    struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
+    pkt.opcode = BT_ATT_OP_WRITE_REQ;
+    pkt.handle = handle;
+    memcpy(pkt.buf, buf, length);
 
-    result = att_send(fd, BT_ATT_OP_WRITE_REQ, handle, buf, length);
+    int result = send(fd, &pkt, sizeof(pkt), 0);
     if (result<0)
         return result;
 
+    uint8_t conf;
     result = recv(fd, &conf, 1, 0);
     if (conf != BT_ATT_OP_WRITE_RSP)
         return -2;
@@ -199,25 +188,23 @@ att_wrreq(int fd, uint16_t handle, uint8_t *buf, size_t length)
 int
 att_read_not(int fd, size_t *length, uint8_t *buf)
 {
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    int result, handle;
-
-    memset(rbuf, 0, sizeof rbuf);
-    result = recv(fd, rbuf, sizeof(rbuf), 0);
-    struct { uint8_t opcode; uint16_t handle; uint8_t buf[]; } __attribute__((packed)) *rpkt = (void *)rbuf;
+    struct { uint8_t opcode; uint16_t handle; uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; } __attribute__((packed)) rpkt;
+    int result = recv(fd, &rpkt, sizeof rpkt, 0);
 
     if (result<0)
         return result;
-    else if (rpkt->opcode != BT_ATT_OP_HANDLE_VAL_NOT)
+    else if (rpkt.opcode != BT_ATT_OP_HANDLE_VAL_NOT)
         return -2;
     else {
         *length = result-3;
-        memcpy(buf, rpkt->buf, *length);
-        return rpkt->handle;
+        memcpy(buf, rpkt.buf, *length);
+        return rpkt.handle;
     }
 }
 
 /****************************************************************************/
+
+#define BARRAY(...) (uint8_t[]){ __VA_ARGS__ }
 
 int main(int argc, const char **argv)
 {
@@ -244,9 +231,9 @@ int main(int argc, const char **argv)
 
     length = att_read(fd, 0x0003, rbuf);
     printf("Device name: %.*s\n", (int)length, rbuf);
-    att_write(fd, 0x0033, (uint8_t[]){0x01, 0}, 2);
-    att_wrreq(fd, 0x0035, (uint8_t[]){0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0}, 8);
-    att_write(fd, 0x0026, (uint8_t[]){0x01, 0}, 2);
+    att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
+    att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
+    att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
     uint32_t code = htobl( atoi( argv[2] ) );
     att_wrreq(fd, 0x0032, (uint8_t*)&code, sizeof code);
 
