@@ -334,9 +334,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
     uint8_t *checkpoint;
     int counter = 0;
 
-    time_t startat, current;
-    time(&startat);
-
+    time_t startat=time(NULL);
     while (optr < end) {
         // checkpoint occurs every (256*20-2) data bytes and at EOF
         checkpoint = optr + (256*20-2);
@@ -369,7 +367,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         uint32_t c = htobl(++counter);
         att_write(fd, 0x002e, &c, sizeof c);
         if (debug) {
-            time(&current);
+            time_t current = time(NULL);
             int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
             printf("%d: read %d/%d bytes so far (%d/sec)\n", counter, (int)(optr-*buf), (int)(end-*buf), rate);
         }
