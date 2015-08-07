@@ -158,7 +158,7 @@ static int l2cap_le_att_connect_fast(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_t
 
 /* manually assemble ATT packets */
 int
-att_read(int fd, uint16_t handle, uint8_t *buf)
+att_read(int fd, uint16_t handle, void *buf)
 {
     int result;
 
@@ -180,7 +180,7 @@ att_read(int fd, uint16_t handle, uint8_t *buf)
 }
 
 int
-att_write(int fd, uint16_t handle, const uint8_t *buf, size_t length)
+att_write(int fd, uint16_t handle, const void *buf, size_t length)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_CMD;
@@ -195,7 +195,7 @@ att_write(int fd, uint16_t handle, const uint8_t *buf, size_t length)
 }
 
 int
-att_wrreq(int fd, uint16_t handle, const uint8_t *buf, size_t length)
+att_wrreq(int fd, uint16_t handle, const void *buf, size_t length)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_REQ;
@@ -215,7 +215,7 @@ att_wrreq(int fd, uint16_t handle, const uint8_t *buf, size_t length)
 }
 
 int
-att_read_not(int fd, size_t *length, uint8_t *buf)
+att_read_not(int fd, size_t *length, void *buf)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; } __attribute__((packed)) rpkt;
     int result = recv(fd, &rpkt, sizeof rpkt, 0);
@@ -367,7 +367,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         }
 
         uint32_t c = htobl(++counter);
-        att_write(fd, 0x002e, (uint8_t*)&c, sizeof c);
+        att_write(fd, 0x002e, &c, sizeof c);
         if (debug) {
             time(&current);
             int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
@@ -399,10 +399,10 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
         return -EBADMSG;
     int n_files = btohs(*(uint16_t*)rbuf);
     uint16_t *list = *outlist = calloc(sizeof(uint16_t), n_files);
-    uint8_t *optr = mempcpy(list, rbuf+2, rlen-2);
+    void *optr = mempcpy(list, rbuf+2, rlen-2);
 
     // read rest of packets (if we have a long file list?)
-    for (; optr < (uint8_t*)(list+n_files); optr += rlen) {
+    for (; optr < (void *)(list+n_files); optr += rlen) {
         rlen=EXPECT_BYTES(fd, optr);
         hexlify(stdout, optr, rlen, true);
         if (rlen<0)
@@ -455,7 +455,7 @@ int main(int argc, const char **argv)
     att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
     att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
     uint32_t code = htobl( atoi( argv[2] ) );
-    att_wrreq(fd, 0x0032, (uint8_t*)&code, sizeof code);
+    att_wrreq(fd, 0x0032, &code, sizeof code);
     if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
         printf("Device didn't accept auth code %d.\n", code);
         goto fail;
