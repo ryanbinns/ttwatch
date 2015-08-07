@@ -2,9 +2,6 @@
  *
  */
 
-#define _BSD_SOURCE
-#include <endian.h>
-
 #include <errno.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -12,6 +9,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -23,14 +21,15 @@
 
 /**
  * taken from bluez/tools/btgatt-client.c
+ *   added hci LE interval customization
  *
  */
 
 #define ATT_CID 4
-static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
-                                int sec, int verbose)
+static int l2cap_le_att_connect_fast(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
+                                     int sec, int verbose)
 {
-    int sock;
+    int devid, dd, sock, result;
     struct sockaddr_l2 srcaddr, dstaddr;
     struct bt_security btsec;
 
@@ -45,7 +44,32 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
                     srcaddr_str, dstaddr_str);
     }
 
+    // setup HCI BLE socket
+    devid = hci_get_route(NULL);
+    if (devid < 0) {
+        perror("Failed to get default hci device");
+        return -1;
+    }
+    dd = hci_open_dev(devid);
+    if (dd < 0) {
+        perror("Failed to open hci device");
+        return -1;
+    }
+
+    // customize HCI socket to connect tocoax this thing to connect more frequently
+    result = hci_le_create_conn(dd, htobs(0x0004) /*scan interval*/,  htobs(0x0004) /*scan window*/,
+                                0 /*initiator_filter, use peer address*/,
+                                LE_RANDOM_ADDRESS /*peer_bdaddr_type*/, *dst /*bdaddr*/,
+                                LE_PUBLIC_ADDRESS /*own_bdaddr_type*/,
+                                htobs(0x0006) /*min_interval / 1.25 ms*/, htobs(0x0006) /*max_interval / 1.25ms*/,
+                                htobs(0) /*latency*/, htobs(200) /*supervision_timeout*/,
+                                htobs(0x0001) /*min_ce_length*/, htobs(0x0001) /*max_ce_length*/, NULL, 25000);
+    if (result < 0 && verbose) {
+        printf("Could not customize LE connection interval; transfer will be slow!\n");
+    }
+
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+    hci_close_dev(dd);
     if (sock < 0) {
         perror("Failed to create L2CAP socket");
         return -1;
@@ -128,6 +152,8 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
 /****************************************************************************/
 
+#define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
+
 /* manually assemble ATT packets */
 int
 att_read(int fd, uint16_t handle, uint8_t *buf)
@@ -152,7 +178,7 @@ att_read(int fd, uint16_t handle, uint8_t *buf)
 }
 
 int
-att_write(int fd, uint16_t handle, uint8_t *buf, size_t length)
+att_write(int fd, uint16_t handle, const uint8_t *buf, size_t length)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_CMD;
@@ -167,7 +193,7 @@ att_write(int fd, uint16_t handle, uint8_t *buf, size_t length)
 }
 
 int
-att_wrreq(int fd, uint16_t handle, uint8_t *buf, size_t length)
+att_wrreq(int fd, uint16_t handle, const uint8_t *buf, size_t length)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_REQ;
@@ -210,7 +236,7 @@ crc16(uint8_t *buf, size_t len, uint32_t start)
 {
     uint32_t crc = start;		        // should be 0xFFFF first time
     for (size_t pos = 0; pos < len; pos++) {
-        crc ^= (uint)buf[pos];          // XOR byte into least sig. byte of crc
+        crc ^= (uint32_t)buf[pos];          // XOR byte into least sig. byte of crc
 
         for (int i = 8; i != 0; i--) {  // Loop over each bit
             if ((crc & 0x0001) != 0) {  // If the LSB is set
@@ -225,12 +251,64 @@ crc16(uint8_t *buf, size_t len, uint32_t start)
 }
 
 void
-hexlify(FILE *where, uint8_t *buf, size_t len)
+hexlify(FILE *where, uint8_t *buf, size_t len, bool newl)
 {
     while (len--) {
         fprintf(where, "%2.2x", (int)*buf++);
     }
-    fputc('\n', where);
+    if (newl)
+        fputc('\n', where);
+}
+
+static inline int
+EXPECT_BYTES(int fd, uint8_t *buf)
+{
+    size_t length;
+    uint16_t handle = att_read_not(fd, &length, buf);
+    if (handle < 0)
+        return handle;
+    else if (handle != 0x2b)
+        return -EBADMSG;
+    return (int)length;
+}
+
+static inline int
+EXPECT_LENGTH(int fd)
+{
+    size_t length;
+    uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
+    uint16_t handle = att_read_not(fd, &length, buf);
+    if (handle < 0)
+        return handle;
+    else if ((handle != 0x28) || (length != 4))
+        return -EBADMSG;
+    return btohl(*((uint32_t*)buf));
+}
+
+static inline int
+EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
+{
+    size_t length;
+    uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
+    uint16_t h = att_read_not(fd, &length, buf);
+    if (h < 0)
+        return h;
+    else if ((h != handle) || (length != 4) || (btohl(*((uint32_t*)buf))!=val))
+        return -EBADMSG;
+    return 0;
+}
+
+static inline int
+EXPECT_uint8(int fd, uint16_t handle, uint8_t val)
+{
+    size_t length;
+    uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
+    uint16_t h = att_read_not(fd, &length, buf);
+    if (h < 0)
+        return h;
+    else if ((h != handle) || (length != 1) || (*buf!=val))
+        return -EBADMSG;
+    return 0;
 }
 
 int
@@ -238,108 +316,69 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 {
     *buf = NULL;
     if (fileno>>24)
-        return -1;
+        return -EINVAL;
 
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU*2];
-    size_t rlen;
-    uint8_t cmd[4] = {1, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
-
+    uint8_t cmd[] = {1, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(fd, 0x0025, cmd, sizeof cmd);
-    int handle = att_read_not(fd, &rlen, rbuf);
-    if (rlen!=4 || handle != 0x0025 || btohl(*((uint32_t*)(rbuf)))!=1) {
-        if (debug) {
-            printf("expected 0x25->01000000: got 0x%04x->", handle);
-            hexlify(stdout, rbuf, rlen);
-        }
-        return -1;
-    }
+    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+        return -EBADMSG;
 
-    handle = att_read_not(fd, &rlen, rbuf);
-    if (rlen!=4 || handle != 0x0028) {
-        if (debug) {
-            printf("expected 0x28->uint32_t: got 0x%04x->", handle);
-            hexlify(stdout, rbuf, rlen);
-        }
-        return -1;
-    }
+    int flen = EXPECT_LENGTH(fd);
+    if (flen < 0)
+        return -EBADMSG;
 
-    uint32_t flen = btohl(*((uint32_t*)(rbuf)));
-    uint8_t *obuf = *buf = malloc(flen);
-
+    uint8_t *optr = *buf = malloc(flen + BT_ATT_DEFAULT_LE_MTU);
+    uint8_t *end = optr+flen;
+    uint8_t *checkpoint;
     int counter = 0;
-    time_t startat, current; time(&startat);
-    uint32_t check = 0xffff;
-    int end;
 
-    for (int ii=0; ii<flen; ii+=256*20-2) {
-        // read up to 256*20-2 data bytes in 20B chunks
-        end = ii+256*20-2;
-        if (end>flen)
-            end=flen;
+    time_t startat, current;
+    time(&startat);
 
-        for(int jj=ii; jj<end; jj+=20) {
-            handle = att_read_not(fd, &rlen, rbuf);
-            if (handle != 0x002b) {
-                if (debug) {
-                    printf("expected 0x2b->uint8_t[]: got 0x%04x->", handle);
-                    hexlify(stdout, rbuf, rlen);
-                }
-                return -1;
-            }
+    while (optr < end) {
+        // checkpoint occurs every (256*20-2) data bytes and at EOF
+        checkpoint = optr + (256*20-2);
+        if (checkpoint>end)
+            checkpoint = end;
 
-            if ((end-jj-rlen)==-1 || (end-jj-rlen)==0){
-                // tack on CRC16 straggler byte(s)
-                size_t rlen2;
-                handle = att_read_not(fd, &rlen2, rbuf+rlen);
-                if (handle != 0x002b) {
-                    if (debug) {
-                        printf("expected 0x2b->uint8_t[]: got 0x%04x->", handle);
-                        hexlify(stdout, rbuf, rlen);
-                    }
-                    return -1;
-                }
-                rlen += rlen2;
-            }
-
-            memcpy(obuf+jj, rbuf, (rlen<end-jj) ? rlen : (end-jj));
-            check = crc16(rbuf, rlen, check);
+        // checkpoint is followed by 2 bytes for CRC16_modbus
+        uint32_t check = 0xffff;
+        while (optr < checkpoint+2) {
+            int rlen = EXPECT_BYTES(fd, optr);
+            if (rlen < 0)
+                return -EBADMSG;
+            check = crc16(optr, rlen, check); // update CRC
 
             if (debug>1) {
-                printf("%04x: ", jj);
-                hexlify(stdout, rbuf, rlen);
+                printf("%04x: ", (int)(optr-*buf));
+                hexlify(stdout, optr, rlen, true);
             }
+
+            optr += rlen;
         }
+        optr = checkpoint; // trim CRC bytes from output
 
         if (check!=0) {
             if (debug)
                 printf("wrong crc16 sum: expected 0, got 0x%04x\n", check);
-            return -1;
+            return -EBADMSG;
         }
-        check = 0xffff;
 
         uint32_t c = htobl(++counter);
         att_write(fd, 0x002e, (uint8_t*)&c, sizeof c);
         if (debug) {
             time(&current);
-            printf("%d: read %d/%d bytes so far (%d/sec)\n", counter, end, flen, (int)(end / (current-startat)) );
+            int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
+            printf("%d: read %d/%d bytes so far (%d/sec)\n", counter, (int)(optr-*buf), (int)(end-*buf), rate);
         }
     }
 
-    handle = att_read_not(fd, &rlen, rbuf);
-    if (rlen!=4 || handle != 0x0025 || btohl(*((uint32_t*)(rbuf)))!=0) {
-        if (debug) {
-            printf("expected 0x25->00000000: got 0x%04x->", handle);
-            hexlify(stdout, rbuf, rlen);
-        }
-        return -1;
-    }
-
-    return end;
+    if (EXPECT_uint32(fd, 0x25, 0) < 0)
+        return -EBADMSG;
+    return optr-*buf;
 }
 
 /****************************************************************************/
-
-#define BARRAY(...) (uint8_t[]){ __VA_ARGS__ }
 
 int main(int argc, const char **argv)
 {
@@ -353,80 +392,57 @@ int main(int argc, const char **argv)
     str2ba(argv[1], &dst_addr);
     bacpy(&src_addr, BDADDR_ANY);
 
-    // setup HCI BLE socket
-    did = hci_get_route(NULL);
-    if (did < 0) {
-        perror("hci_get_route");
-        return 1;
-    }
-    dd = hci_open_dev(did);
-    if (dd < 0) {
-        perror("hci_open_dev");
-        return 1;
-    }
-
-    // modeled after how hciconfig does it
-    // try to coax this thing to connect more frequently
-    /************************************************************************/
-    /* lecup <handle> <min> <max> <latency> <timeout>                       */
-    /* Options:                                                             */
-    /*     -H, --handle <0xXXXX>  LE connection handle                      */
-    /*     -m, --min <interval>   Range: 0x0006 to 0x0C80                   */
-    /*     -M, --max <interval>   Range: 0x0006 to 0x0C80                   */
-    /*     -l, --latency <range>  Slave latency. Range: 0x0000 to 0x03E8    */
-    /*     -t, --timeout  <time>  N * 10ms. Range: 0x000A to 0x0C80         */
-    /************************************************************************/
-    uint16_t hci_handle;
-    int result = hci_le_create_conn(dd, htobs(0x0004) /*interval*/,  htobs(0x0004) /*window*/,
-                                    0 /*initiator_filter, use peer address*/,
-                                    LE_RANDOM_ADDRESS /*peer_bdaddr_type*/, dst_addr /*bdaddr*/,
-                                    LE_PUBLIC_ADDRESS /*own_bdaddr_type*/,
-                                    htobs(0x0006) /*min_interval*/, htobs(0x0006) /*max_interval*/,
-                                    htobs(0) /*latency*/, htobs(200) /*supervision_timeout*/,
-                                    htobs(0x0001) /*min_ce_length*/, htobs(0x0001) /*max_ce_length*/, &hci_handle, 25000);
-    if (result < 0) {
-        perror("hci_le_create_conn");
-        printf("connection may be slow!\n");
-    }
-
-    // create "normal" L2CAP socket
+    // create L2CAP socket with minimum connection interval
     str2ba(argv[1], &dst_addr);
     bacpy(&src_addr, BDADDR_ANY);
-    fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_type, sec, true);
+    fd = l2cap_le_att_connect_fast(&src_addr, &dst_addr, dst_type, sec, true);
     if (fd < 0)
-        return 1;
+        goto fail;
 
     // set timeout to 2 seconds
     struct timeval to = {.tv_sec=2, .tv_usec=0};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
-    // communicate with the device
+    // authorize with the device
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int handle;
 
-    length = att_read(fd, 0x0003, rbuf);
+    int length = att_read(fd, 0x0003, rbuf);
     printf("Device name: %.*s\n", length, rbuf);
     att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
     att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
     att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
     uint32_t code = htobl( atoi( argv[2] ) );
     att_wrreq(fd, 0x0032, (uint8_t*)&code, sizeof code);
-
-    handle = att_read_not(fd, (size_t*)&length, rbuf);
-    if (handle<0) {
-        perror("recv");
-        return -1;
+    if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
+        printf("Device didn't accept auth code %d.\n", code);
+        goto fail;
     }
 
+    // transfer files
     uint8_t *fbuf;
-    length = tt_read_file(fd, 0x00910000, 1, &fbuf);
-    FILE *f = fopen("0x00910000.ttbin", "w");
+    FILE *f;
+
+    printf("Reading 0x00f20000.xml ...\n");
+    length = tt_read_file(fd, 0x00f20000, 2, &fbuf);
+    f = fopen("0x00f20000.xml", "w");
     fwrite(fbuf, 1, length, f);
     fclose(f);
-    printf("saved %d bytes to file\n", length);
+    printf("saved %d bytes to 0x00f20000.xml\n", length);
+    free(fbuf);
+
+    printf("Reading first activity file ...\n");
+    length = tt_read_file(fd, 0x00910000, 1, &fbuf);
+    f = fopen("0x00910000.ttbin", "w");
+    fwrite(fbuf, 1, length, f);
+    fclose(f);
+    printf("saved %d bytes to 0x00910000.ttbin\n", length);
     free(fbuf);
 
     close(fd);
     return 0;
+
+fail:
+    return 1;
 }
