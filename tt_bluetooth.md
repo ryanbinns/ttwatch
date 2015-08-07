@@ -346,8 +346,8 @@ Here is what the Android app does in normal operation:
    appear to be related to the GPS firmware revision strings that also
    appear in the TTBIN header: e.g. `5xp__5.5.116-
    R32+5xpt_5.5.116-R32` and `EGSD5xp` for my watch.
-9. App deletes then writes the file `0x00010100`, which is
-   31088&nbsp;B long and is a GPSQuickFix update file (GPS ephemeris
+9. App deletes then writes the file `0x00010100`, which is about
+   32&nbsp;KiB long and is a GPSQuickFix update file (GPS ephemeris
    data). This always comes from
    `gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee` for my
    device, although the
