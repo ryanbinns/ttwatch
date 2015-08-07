@@ -2,6 +2,8 @@
  *
  */
 
+#define _GNU_SOURCE
+#include <string.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -251,7 +253,7 @@ crc16(uint8_t *buf, size_t len, uint32_t start)
 }
 
 void
-hexlify(FILE *where, uint8_t *buf, size_t len, bool newl)
+hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl)
 {
     while (len--) {
         fprintf(where, "%2.2x", (int)*buf++);
@@ -378,6 +380,45 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
     return optr-*buf;
 }
 
+int
+tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
+{
+    *outlist = NULL;
+    if (fileno>>24)
+        return -EINVAL;
+
+    uint8_t cmd[] = {3, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+        return -EBADMSG;
+
+    // read first packet (normally there's only one)
+    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    int rlen = EXPECT_BYTES(fd, rbuf);
+    if (rlen<2)
+        return -EBADMSG;
+    int n_files = btohs(*(uint16_t*)rbuf);
+    uint16_t *list = *outlist = calloc(sizeof(uint16_t), n_files);
+    uint8_t *optr = mempcpy(list, rbuf+2, rlen-2);
+
+    // read rest of packets (if we have a long file list?)
+    for (; optr < (uint8_t*)(list+n_files); optr += rlen) {
+        rlen=EXPECT_BYTES(fd, optr);
+        hexlify(stdout, optr, rlen, true);
+        if (rlen<0)
+            return -EBADMSG;
+    }
+
+    // fix endianness
+    for (int ii; ii<n_files; ii++)
+        list[ii] = btohs(list[ii]);
+
+    if (EXPECT_uint32(fd, 0x0025, 0) < 0)
+        return -EBADMSG;
+
+    return n_files;
+}
+
 /****************************************************************************/
 
 int main(int argc, const char **argv)
@@ -432,13 +473,22 @@ int main(int argc, const char **argv)
     printf("saved %d bytes to 0x00f20000.xml\n", length);
     free(fbuf);
 
-    printf("Reading first activity file ...\n");
-    length = tt_read_file(fd, 0x00910000, 1, &fbuf);
-    f = fopen("0x00910000.ttbin", "w");
-    fwrite(fbuf, 1, length, f);
-    fclose(f);
-    printf("saved %d bytes to 0x00910000.ttbin\n", length);
-    free(fbuf);
+    uint16_t *list;
+    int n_files = tt_list_sub_files(fd, 0x00910000, &list);
+    char fn[] = "0x000910000.ttbin";
+    printf("Found %d activity files.\n", n_files);
+    for (int ii=0; ii<n_files; ii++) {
+        uint32_t fileno = 0x00910000 + list[ii];
+        printf("Reading activity file 0x%08X ...\n", fileno);
+        length = tt_read_file(fd, fileno, 1, &fbuf);
+
+        sprintf(fn, "0x%08X.ttbin", fileno);
+        f = fopen(fn, "w");
+        fwrite(fbuf, 1, length, f);
+        fclose(f);
+        printf("saved %d bytes to %s\n", length, fn);
+        free(fbuf);
+    }
 
     close(fd);
     return 0;
