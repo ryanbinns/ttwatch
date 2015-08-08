@@ -21,6 +21,8 @@
 #include <bluetooth/l2cap.h>
 #include "att-types.h"
 
+#include <curl/curl.h>
+
 /**
  * taken from bluez/tools/btgatt-client.c
  *   added hci LE interval customization
@@ -615,20 +617,37 @@ int main(int argc, const char **argv)
         tt_delete_file(fd, fileno);
     }
 
-    printf("Updating QuickFixGPS from /tmp/qfg.bin...\n");
-    if ((f = fopen("/tmp/qfg.bin", "r")) == NULL)
-        printf("could not open\n");
-    else {
-        fseek (f, 0, SEEK_END);
-        length = ftell (f);
-        fseek (f, 0, SEEK_SET);
-        fbuf = malloc(length);
-        fread (fbuf, 1, length, f);
-        fclose (f);
-        printf("will write %d bytes...\n", length);
-        tt_delete_file(fd, 0x00020002);
-        if (tt_write_file(fd, 0x00020002, 1, fbuf, length) < 0)
-            printf("FAILED!\n");
+    printf("Downloading QuickFixGPS update...\n");
+    CURLcode res;
+    char curlerr[CURL_ERROR_SIZE];
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        printf(" Could not start curl");
+    } else {
+        char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
+        sprintf(url+strlen(url), "%ld", (long)time(NULL));
+
+        f = tmpfile();
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+        if (res != 0) {
+            printf(" Download failed: %s\n", curlerr);
+        } else {
+            length = ftell(f);
+            printf("Sending QuickFixGPS update (%d bytes)...\n", length);
+            fseek (f, 0, SEEK_SET);
+            fbuf = malloc(length);
+            fread (fbuf, 1, length, f);
+            fclose (f);
+
+            tt_delete_file(fd, 0x00020002);
+            if (tt_write_file(fd, 0x00020002, 1, fbuf, length) < 0)
+                printf(" Update FAILED!\n");
+        }
     }
 
     close(fd);
