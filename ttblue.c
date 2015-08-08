@@ -356,7 +356,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 
             optr += rlen;
         }
-        optr = checkpoint; // trim CRC bytes from output
+        optr = checkpoint; // trim CRC bytes from output position
 
         if (check!=0) {
             if (debug)
