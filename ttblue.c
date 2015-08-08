@@ -590,42 +590,54 @@ int main(int argc, const char **argv)
 
     printf("Setting peer name to '%s'...\n", hciname);
     tt_delete_file(fd, 0x00020002);
-    tt_write_file(fd, 0x00020002, 1, hciname, strlen(hciname));
+    tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
 
-    printf("Reading 0x00f20000.xml ...\n");
-    length = tt_read_file(fd, 0x00f20000, 1, &fbuf);
-    f = fopen("0x00f20000.xml", "w");
-    fwrite(fbuf, 1, length, f);
-    fclose(f);
-    printf("saved %d bytes to 0x00f20000.xml\n", length);
-    free(fbuf);
+    printf("Reading preferences.xml ...\n");
+    if ((length = tt_read_file(fd, 0x00f20000, 1, &fbuf)) < 0) {
+        fprintf(stderr, " Could not read file 0x00F20000 on watch!\n");
+    } else {
+        if ((f = fopen("preferences.xml", "w")) == NULL) {
+            fprintf(stderr, " Could not open: %s (%d)\n", strerror(errno), errno);
+        } else {
+            fwrite(fbuf, 1, length, f);
+            fclose(f);
+            printf(" Saved %d bytes to 0x00f20000.xml\n", length);
+        }
+        free(fbuf);
+    }
 
     uint16_t *list;
     int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-    printf("Found %d activity files.\n", n_files);
+    printf("Found %d activity files on watch.\n", n_files);
     for (int ii=0; ii<n_files; ii++) {
         uint32_t fileno = 0x00910000 + list[ii];
 
-        printf("Reading activity file 0x%08X ...\n", fileno);
-        length = tt_read_file(fd, fileno, 1, &fbuf);
+        printf(" Reading activity file 0x%08X ...\n", fileno);
+        if ((length = tt_read_file(fd, fileno, 1, &fbuf)) < 0) {
+            fprintf(stderr, " Could not read file 0x%08X on watch!\n", fileno);
+        } else {
+            char filename[32], filetime[16];
+            time_t t = time(NULL);
+            struct tm *tmp = localtime(&t);
+            strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+            sprintf(filename, "0x%08X_%s.ttbin", fileno, filetime);
 
-        char filename[32], filetime[16];
-        time_t t = time(NULL);
-        struct tm *tmp = localtime(&t);
-        strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-        sprintf(filename, "0x%08X_%s.ttbin", fileno, filetime);
-
-        f = fopen(filename, "w");
-        fwrite(fbuf, 1, length, f);
-        fclose(f);
-        printf("saved %d bytes to %s\n", length, filename);
-        free(fbuf);
-
-        printf("Deleting activity file 0x%08X ...\n", fileno);
-        tt_delete_file(fd, fileno);
+            if ((f = fopen(filename, "w")) == NULL) {
+                fprintf(stderr, "  Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+            } else {
+                if (fwrite(fbuf, 1, length, f) < length) {
+                    fprintf(stderr, "  Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                } else {
+                    printf("  Saved %d bytes to %s\n", length, filename);
+                    free(fbuf);
+                    printf("  Deleting activity file 0x%08X ...\n", fileno);
+                    tt_delete_file(fd, fileno);
+                }
+                fclose(f);
+            }
+        }
     }
 
-    printf("Downloading QuickFixGPS update...\n");
     CURLcode res;
     char curlerr[CURL_ERROR_SIZE];
     CURL *curl = curl_easy_init();
@@ -634,6 +646,7 @@ int main(int argc, const char **argv)
     } else {
         char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
         sprintf(url+strlen(url), "%ld", (long)time(NULL));
+        printf("Downloading QuickFixGPS update...\n %s\n", url);
 
         f = tmpfile();
         curl_easy_setopt(curl, CURLOPT_URL, url);
