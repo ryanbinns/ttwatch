@@ -30,17 +30,14 @@ the string `pair` to create a new pairing.
   with a few buttons.
 
 It will download your `preferences.xml` (file `0x00F20000` on the
-watch), your activity files (files `0x00910000.xml`), and update
-QuickGPSFix.
-
-Note that downloads will proceed **much faster** (about 1800&nbsp;B/s
-vs. 500&nbsp;B/s for me) if you run as `root` or if you
-[give the `ttblue` binary elevated capabilities](http://unix.stackexchange.com/a/182559/58453),
-because the transfer rate is
-[limited by the BLE connection interval](https://www.safaribooksonline.com/library/view/getting-started-with/9781491900550/ch01.html#_data_throughput),
-and elevated permissions are required to configure this. If you think this needs to be fixed, please [chime in on this thread on the BlueZ mailing list](http://thread.gmane.org/gmane.linux.bluez.kernel/63778) :-D
+watch), your activity files (saved as `0x0091000n_YYYYMMDD_HHmmSS.ttbin`), and attempt to download the
+QuickGPSFix update and send it to the watch. (You can then use
+[`ttbincnv`](https://github.com/ryanbinns/ttwatch/tree/master/ttbincnv) to convert
+the TTBIN files to GPX/TCX format.)
 
 ```none
+$ ./ttblue E4:04:39:17:62:B1 123456
+
 Opening L2CAP LE connection on ATT channel:
 	 src: 00:00:00:00:00:00
 	dest: E4:04:39:17:62:B1
@@ -50,7 +47,7 @@ Connected device name: Lenski
 Setting peer name to 'dlenski-ultra-0'...
 Reading preferences.xml ...
 1: read 886 bytes from watch (886/sec)
- Saved 886 bytes to 0x00f20000.xml
+ Saved 886 bytes to preferences.xml
 Found 1 activity files on watch.
  Reading activity file 0x00910000 ...
 11: read 55000 bytes from watch (500/sec)
@@ -61,6 +58,16 @@ Downloading QuickFixGPS update...
 Sending QuickFixGPS update (32150 bytes)...
 7: wrote 32150 bytes to watch (846/sec)
 ```
+
+# Why so slow?
+
+By default, Linux (as of 3.19.0) specifies a very intermitten connection interval for BLE devices. This makes sense for things like beacons and thermometers, but it is bad for devices that use BLE to transfer large files because the transfer rate is directly [limited by the BLE connection interval](https://www.safaribooksonline.com/library/view/getting-started-with/9781491900550/ch01.html#_data_throughput).
+ 
+If you run as `root` or if you
+[give the `ttblue` binary elevated capabilities](http://unix.stackexchange.com/a/182559/58453), it will attempt to set the minimum connection interval (7.5&nbsp;ms) and activity file downloads will proceed **much faster** (about 1800&nbsp;B/s
+vs. 500&nbsp;B/s for me).
+
+Unfortunately, elevated permissions are required to configure this feature of a BLE connection. If you think this needs to be fixed, please [chime in on this thread on the BlueZ mailing list](http://thread.gmane.org/gmane.linux.bluez.kernel/63778) :-D
 
 # TODO
 
