@@ -43,7 +43,7 @@ static int l2cap_le_att_connect_fast(int dd, bdaddr_t *src, bdaddr_t *dst, uint8
         ba2str(src, srcaddr_str);
         ba2str(dst, dstaddr_str);
 
-        printf("btgatt-client: Opening L2CAP LE connection on ATT "
+        printf("Opening L2CAP LE connection on ATT "
                     "channel:\n\t src: %s\n\tdest: %s\n",
                     srcaddr_str, dstaddr_str);
     }
@@ -62,7 +62,6 @@ static int l2cap_le_att_connect_fast(int dd, bdaddr_t *src, bdaddr_t *dst, uint8
         printf(" Could not set (transfer will be slow!)\n");
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
-    hci_close_dev(dd);
     if (sock < 0) {
         perror("Failed to create L2CAP socket");
         return -1;
@@ -533,33 +532,49 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
 
-    uint8_t dst_type = BDADDR_LE_RANDOM;
-    bdaddr_t src_addr, dst_addr;
-    char hciname[64];
-    int sec = BT_SECURITY_MEDIUM;
+    // parse args
+    if (argc!=3) {
+        fputs("Need two arguments:\n"
+              "          ttblue <bluetooth-address> <pairing-code>\n"
+              "    OR    ttblue <bluetooth-address> pair\n\n"
+              "Where bluetooth-address is the twelve-digit address\n"
+              "of your TomTom GPS watch (E4:04:39:__:__:__) and\n"
+              "pairing-code is either the previously established\n"
+              "code used to pair a phone, or the string \"pair\"\n"
+              "to create a new pairing.\n", stderr);
+        return 1;
+    }
+    uint32_t code;
+    bdaddr_t dst_addr;
+    if (str2ba(argv[1], &dst_addr) < 0) {
+        fprintf(stderr, "could not understand Bluetooth device address: %s\n", argv[1]);
+        goto preopen_fail;
+    }
+    if (!strcasecmp(argv[2], "pair")) {
+        code = 0xffff;
+    } else if (sscanf(argv[2], "%6d", &code)<1) {
+        fprintf(stderr, "Pairing code should be 6-digit number, not %s\n", argv[2]);
+    }
 
     // setup HCI BLE socket
     devid = hci_get_route(NULL);
     dd = hci_open_dev(devid);
     if (dd < 0) {
         fprintf(stderr, "Can't open hci%d: %s (%d)\n", devid, strerror(errno), errno);
-        return -1;
+        goto preopen_fail;
     }
 
     // get host name
+    char hciname[64];
     if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0) {
         fprintf(stderr, "Can't get hci%d name: %s (%d)\n", devid, strerror(errno), errno);
-        return -1;
+        hci_close_dev(dd);
+        goto preopen_fail;
     }
 
-    // source and dest addresses
-    str2ba(argv[1], &dst_addr);
-    bacpy(&src_addr, BDADDR_ANY);
-
     // create L2CAP socket with minimum connection interval
-    str2ba(argv[1], &dst_addr);
-    bacpy(&src_addr, BDADDR_ANY);
-    fd = l2cap_le_att_connect_fast(dd, &src_addr, &dst_addr, dst_type, sec, true);
+    fd = l2cap_le_att_connect_fast(dd, BDADDR_ANY, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
+    hci_close_dev(dd);
     if (fd < 0)
         goto fail;
 
@@ -569,20 +584,36 @@ int main(int argc, const char **argv)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
     // authorize with the device
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    int handle;
-
-    int length = att_read(fd, 0x0003, rbuf);
-    printf("Device name: %.*s\n", length, rbuf);
-    att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
-    att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
-    att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
-    uint32_t code = htobl( atoi( argv[2] ) );
-    att_wrreq(fd, 0x0032, &code, sizeof code);
-    if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
-        printf("Device didn't accept auth code %d.\n", code);
-        goto fail;
+    if (code != 0xffff) {
+        att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
+        att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
+        att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
+        att_wrreq(fd, 0x0032, &code, sizeof code);
+        if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
+            fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
+            goto fail;
+        }
+    } else {
+        printf("Enter 6-digit pairing code shown on device: ");
+        if (scanf("%d", &code) < 1) {
+            fprintf(stderr, "Pairing code should be 6-digit number.\n");
+            goto fail;
+        }
+        att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
+        att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
+        att_write(fd, 0x0029, BARRAY(0x01, 0), 2);
+        att_write(fd, 0x003c, BARRAY(0x01, 0), 2);
+        att_write(fd, 0x002c, BARRAY(0x01, 0), 2);
+        att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
+        att_wrreq(fd, 0x0032, &code, sizeof code);
+        if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
+            printf("Device didn't accept auth code %d.\n", code);
+            goto fail;
+        }
     }
+    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    int length = att_read(fd, 0x0003, rbuf);
+    printf("Connected device name: %.*s\n", length, rbuf);
 
     // transfer files
     uint8_t *fbuf;
@@ -601,7 +632,7 @@ int main(int argc, const char **argv)
         } else {
             fwrite(fbuf, 1, length, f);
             fclose(f);
-            printf(" Saved %d bytes to 0x00f20000.xml\n", length);
+            printf(" Saved %d bytes to preferences.xml\n", length);
         }
         free(fbuf);
     }
@@ -675,5 +706,7 @@ int main(int argc, const char **argv)
     return 0;
 
 fail:
+    close(fd);
+preopen_fail:
     return 1;
 }
