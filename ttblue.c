@@ -28,10 +28,10 @@
  */
 
 #define ATT_CID 4
-static int l2cap_le_att_connect_fast(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
+static int l2cap_le_att_connect_fast(int dd, bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
                                      int sec, int verbose)
 {
-    int devid, dd, sock, result;
+    int sock, result;
     struct sockaddr_l2 srcaddr, dstaddr;
     struct bt_security btsec;
 
@@ -46,19 +46,9 @@ static int l2cap_le_att_connect_fast(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_t
                     srcaddr_str, dstaddr_str);
     }
 
-    // setup HCI BLE socket
-    devid = hci_get_route(NULL);
-    if (devid < 0) {
-        perror("Failed to get default hci device");
-        return -1;
-    }
-    dd = hci_open_dev(devid);
-    if (dd < 0) {
-        perror("Failed to open hci device");
-        return -1;
-    }
-
     // customize HCI socket to connect tocoax this thing to connect more frequently
+    printf("Setting minimum BLE connection interval...");
+    fflush(stdout);
     result = hci_le_create_conn(dd, htobs(0x0004) /*scan interval*/,  htobs(0x0004) /*scan window*/,
                                 0 /*initiator_filter, use peer address*/,
                                 LE_RANDOM_ADDRESS /*peer_bdaddr_type*/, *dst /*bdaddr*/,
@@ -66,9 +56,8 @@ static int l2cap_le_att_connect_fast(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_t
                                 htobs(0x0006) /*min_interval / 1.25 ms*/, htobs(0x0006) /*max_interval / 1.25ms*/,
                                 htobs(0) /*latency*/, htobs(200) /*supervision_timeout*/,
                                 htobs(0x0001) /*min_ce_length*/, htobs(0x0001) /*max_ce_length*/, NULL, 25000);
-    if (result < 0 && verbose) {
-        printf("Could not customize LE connection interval; transfer will be slow!\n");
-    }
+    if (result < 0 && verbose)
+        printf(" Could not set (transfer will be slow!)\n");
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
     hci_close_dev(dd);
@@ -532,11 +521,26 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
 
 int main(int argc, const char **argv)
 {
-    int did, dd, fd;
+    int devid, dd, fd;
 
     uint8_t dst_type = BDADDR_LE_RANDOM;
     bdaddr_t src_addr, dst_addr;
+    char hciname[64];
     int sec = BT_SECURITY_MEDIUM;
+
+    // setup HCI BLE socket
+    devid = hci_get_route(NULL);
+    dd = hci_open_dev(devid);
+    if (dd < 0) {
+        fprintf(stderr, "Can't open hci%d: %s (%d)\n", devid, strerror(errno), errno);
+        return -1;
+    }
+
+    // get host name
+    if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0) {
+        fprintf(stderr, "Can't get hci%d name: %s (%d)\n", devid, strerror(errno), errno);
+        return -1;
+    }
 
     // source and dest addresses
     str2ba(argv[1], &dst_addr);
@@ -545,7 +549,7 @@ int main(int argc, const char **argv)
     // create L2CAP socket with minimum connection interval
     str2ba(argv[1], &dst_addr);
     bacpy(&src_addr, BDADDR_ANY);
-    fd = l2cap_le_att_connect_fast(&src_addr, &dst_addr, dst_type, sec, true);
+    fd = l2cap_le_att_connect_fast(dd, &src_addr, &dst_addr, dst_type, sec, true);
     if (fd < 0)
         goto fail;
 
@@ -574,13 +578,12 @@ int main(int argc, const char **argv)
     uint8_t *fbuf;
     FILE *f;
 
-    printf("Setting peer name ...\n");
-    const char peer[] = "ttblue.c";
+    printf("Setting peer name to '%s'...\n", hciname);
     tt_delete_file(fd, 0x00020002);
-    tt_write_file(fd, 0x00020002, 2, peer, sizeof peer);
+    tt_write_file(fd, 0x00020002, 1, hciname, strlen(hciname));
 
     printf("Reading 0x00f20000.xml ...\n");
-    length = tt_read_file(fd, 0x00f20000, 2, &fbuf);
+    length = tt_read_file(fd, 0x00f20000, 1, &fbuf);
     f = fopen("0x00f20000.xml", "w");
     fwrite(fbuf, 1, length, f);
     fclose(f);
@@ -589,19 +592,27 @@ int main(int argc, const char **argv)
 
     uint16_t *list;
     int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-    char fn[] = "0x000910000.ttbin";
     printf("Found %d activity files.\n", n_files);
     for (int ii=0; ii<n_files; ii++) {
         uint32_t fileno = 0x00910000 + list[ii];
+
         printf("Reading activity file 0x%08X ...\n", fileno);
         length = tt_read_file(fd, fileno, 1, &fbuf);
 
-        sprintf(fn, "0x%08X.ttbin", fileno);
-        f = fopen(fn, "w");
+        char filename[32], filetime[16];
+        time_t t = time(NULL);
+        struct tm *tmp = localtime(&t);
+        strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+        sprintf(filename, "0x%08X_%s.ttbin", fileno, filetime);
+
+        f = fopen(filename, "w");
         fwrite(fbuf, 1, length, f);
         fclose(f);
-        printf("saved %d bytes to %s\n", length, fn);
+        printf("saved %d bytes to %s\n", length, filename);
         free(fbuf);
+
+        printf("Deleting activity file 0x%08X ...\n", fileno);
+        tt_delete_file(fd, fileno);
     }
 
     printf("Updating QuickFixGPS from /tmp/qfg.bin...\n");
