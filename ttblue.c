@@ -185,6 +185,9 @@ att_write(int fd, uint16_t handle, const void *buf, size_t length)
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_CMD;
     pkt.handle = handle;
+
+    if (sizeof pkt > BT_ATT_DEFAULT_LE_MTU)
+        return -1;
     memcpy(pkt.buf, buf, length);
 
     int result = send(fd, &pkt, sizeof(pkt), 0);
@@ -200,6 +203,9 @@ att_wrreq(int fd, uint16_t handle, const void *buf, size_t length)
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_REQ;
     pkt.handle = handle;
+
+    if (sizeof pkt > BT_ATT_DEFAULT_LE_MTU)
+        return -1;
     memcpy(pkt.buf, buf, length);
 
     int result = send(fd, &pkt, sizeof(pkt), 0);
