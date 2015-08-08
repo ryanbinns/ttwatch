@@ -370,7 +370,11 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         if (debug) {
             time_t current = time(NULL);
             int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
-            printf("%d: read %d/%d bytes so far (%d/sec)\n", counter, (int)(optr-*buf), (int)(end-*buf), rate);
+            if (optr<end)
+                printf("%d: read %d/%d bytes so far (%d/sec)\r", counter, (int)(optr-*buf), (int)(end-*buf), rate);
+            else
+                printf("%d: read %d bytes from watch (%d/sec)      \n", counter, flen, rate);
+            fflush(stdout);
         }
     }
 
@@ -442,7 +446,11 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
         else if (debug) {
             time_t current = time(NULL);
             int rate = current-startat ? (iptr-buf)/(current-startat) : 9999;
-            printf("%d: wrote %d/%d bytes so far (%d/sec)\n", counter, (int)(iptr-buf), (int)(end-buf), rate);
+            if (iptr<end)
+                printf("%d: wrote %d/%d bytes so far (%d/sec)\r", counter, (int)(iptr-buf), (int)(end-buf), rate);
+            else
+                printf("%d: wrote %d bytes to watch (%d/sec)       \n", counter, flen, rate);
+            fflush(stdout);
         }
     }
 
