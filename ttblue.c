@@ -206,10 +206,14 @@ att_wrreq(int fd, uint16_t handle, const void *buf, size_t length)
     if (result<0)
         return result;
 
-    uint8_t conf;
+    uint8_t conf = 0;
     result = recv(fd, &conf, 1, 0);
-    if (conf != BT_ATT_OP_WRITE_RSP)
+    if (result < 0)
+        return result;
+    else if (conf != BT_ATT_OP_WRITE_RSP) {
+        printf("got wrong opcode response: %02x\n", conf);
         return -2;
+    }
 
     return length;
 }
@@ -234,7 +238,7 @@ att_read_not(int fd, size_t *length, void *buf)
 /****************************************************************************/
 
 static uint32_t
-crc16(uint8_t *buf, size_t len, uint32_t start)
+crc16(const uint8_t *buf, size_t len, uint32_t start)
 {
     uint32_t crc = start;		        // should be 0xFFFF first time
     for (size_t pos = 0; pos < len; pos++) {
@@ -330,8 +334,8 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         return -EBADMSG;
 
     uint8_t *optr = *buf = malloc(flen + BT_ATT_DEFAULT_LE_MTU);
-    uint8_t *end = optr+flen;
-    uint8_t *checkpoint;
+    const uint8_t *end = optr+flen;
+    const uint8_t *checkpoint;
     int counter = 0;
 
     time_t startat=time(NULL);
@@ -356,7 +360,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 
             optr += rlen;
         }
-        optr = checkpoint; // trim CRC bytes from output position
+        optr = (void*)checkpoint; // trim CRC bytes from output position
 
         if (check!=0) {
             if (debug)
@@ -376,6 +380,107 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
     if (EXPECT_uint32(fd, 0x25, 0) < 0)
         return -EBADMSG;
     return optr-*buf;
+}
+
+int
+tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length)
+{
+    if (fileno>>24)
+        return -EINVAL;
+
+    uint8_t cmd[] = {0, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+       return -EBADMSG;
+
+    uint32_t flen = htobl(length);
+    att_wrreq(fd, 0x0028, &flen, sizeof flen);
+
+    const uint8_t *iptr = buf;
+    const uint8_t *end = iptr+length;
+    const uint8_t *checkpoint;
+    uint8_t temp[22];
+    int counter = 0;
+
+    time_t startat = time(NULL);
+    while (iptr < end) {
+        // checkpoint occurs every (256*20-2) data bytes and at EOF
+        checkpoint = iptr + (256*20-2);
+        if (checkpoint>end)
+            checkpoint = end;
+
+        // checkpoint is followed by 2 bytes for CRC16_modbus
+        uint32_t check = 0xffff;
+        while (iptr < checkpoint) {
+            int wlen = (iptr+20 < checkpoint) ? 20 : (checkpoint-iptr);
+            check = crc16(iptr, wlen, check); // update CRC with data bytes
+
+            uint8_t *out;
+            if (wlen==20) {
+                out = (void*)iptr;
+            } else {
+                uint16_t c = btohs(check);
+                memcpy( mempcpy(out=temp, iptr, wlen),
+                        &c, sizeof c); // output is data bytes + CRC16
+                wlen += 2;
+            }
+
+            if (att_write(fd, 0x002b, out, (wlen<20) ? wlen : 20) < 0)
+                goto fail_write;
+            if (wlen>20)
+                if (att_wrreq(fd, 0x002b, out+20, wlen-20) < 0)
+                    goto fail_write;
+
+            if (debug>1) {
+                printf("%04x: ", (int)(iptr-buf));
+                hexlify(stdout, out, wlen, true);
+            }
+
+            iptr += wlen;
+        }
+        iptr = checkpoint; // trim CRC bytes from input position
+
+        if (EXPECT_uint32(fd, 0x002e, ++counter) < 0) // didn't get expected counter
+            return -EBADMSG;
+        else if (debug) {
+            time_t current = time(NULL);
+            int rate = current-startat ? (iptr-buf)/(current-startat) : 9999;
+            printf("%d: wrote %d/%d bytes so far (%d/sec)\n", counter, (int)(iptr-buf), (int)(end-buf), rate);
+        }
+    }
+
+    if (EXPECT_uint32(fd, 0x25, 0) < 0)
+        return -EBADMSG;
+    return iptr-buf;
+
+fail_write:
+    printf("at file position 0x%04x", (int)(iptr-buf));
+    perror("fail");
+    return -EBADMSG;
+}
+
+int
+tt_delete_file(int fd, uint32_t fileno)
+{
+    if (fileno>>24)
+        return -EINVAL;
+
+    uint8_t cmd[] = {4, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+        return -EBADMSG;
+
+    // discard 0x2b packets which I don't understand until we get 0x25<-0
+    size_t rlen;
+    int handle;
+    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    for (;;) {
+        int handle = att_read_not(fd, &rlen, rbuf);
+        if (handle==0x25 && rlen==4 && (*(uint32_t*)rbuf==0))
+            return 0;
+        else if (handle!=0x2b)
+            return -EBADMSG;
+    }
 }
 
 int
@@ -438,8 +543,8 @@ int main(int argc, const char **argv)
     if (fd < 0)
         goto fail;
 
-    // set timeout to 2 seconds
-    struct timeval to = {.tv_sec=2, .tv_usec=0};
+    // set timeout to 20 seconds
+    struct timeval to = {.tv_sec=20, .tv_usec=0};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
@@ -462,6 +567,11 @@ int main(int argc, const char **argv)
     // transfer files
     uint8_t *fbuf;
     FILE *f;
+
+    printf("Setting peer name ...\n");
+    const char peer[] = "ttblue.c";
+    tt_delete_file(fd, 0x00020002);
+    tt_write_file(fd, 0x00020002, 2, peer, sizeof peer);
 
     printf("Reading 0x00f20000.xml ...\n");
     length = tt_read_file(fd, 0x00f20000, 2, &fbuf);
@@ -486,6 +596,22 @@ int main(int argc, const char **argv)
         fclose(f);
         printf("saved %d bytes to %s\n", length, fn);
         free(fbuf);
+    }
+
+    printf("Updating QuickFixGPS from /tmp/qfg.bin...\n");
+    if ((f = fopen("/tmp/qfg.bin", "r")) == NULL)
+        printf("could not open\n");
+    else {
+        fseek (f, 0, SEEK_END);
+        length = ftell (f);
+        fseek (f, 0, SEEK_SET);
+        fbuf = malloc(length);
+        fread (fbuf, 1, length, f);
+        fclose (f);
+        printf("will write %d bytes...\n", length);
+        tt_delete_file(fd, 0x00020002);
+        if (tt_write_file(fd, 0x00020002, 1, fbuf, length) < 0)
+            printf("FAILED!\n");
     }
 
     close(fd);
