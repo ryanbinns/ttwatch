@@ -696,9 +696,10 @@ int main(int argc, const char **argv)
             fread (fbuf, 1, length, f);
             fclose (f);
 
-            tt_delete_file(fd, 0x00020002);
-            if (tt_write_file(fd, 0x00020002, 1, fbuf, length) < 0)
+            tt_delete_file(fd, 0x00010100);
+            if (tt_write_file(fd, 0x00010100, 1, fbuf, length) < 0)
                 printf(" Update FAILED!\n");
+            att_write(fd, 0x0025, BARRAY(0x05, 0x01, 0x00, 0x01), 2); // update magic?
         }
     }
 
