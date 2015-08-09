@@ -702,7 +702,8 @@ int main(int argc, const char **argv)
             printf("Sending QuickFixGPS update (%d bytes)...\n", length);
             fseek (f, 0, SEEK_SET);
             fbuf = malloc(length);
-            fread (fbuf, 1, length, f);
+            if (fread (fbuf, 1, length, f) < length)
+                goto fail;
             fclose (f);
 
             tt_delete_file(fd, 0x00010100);
