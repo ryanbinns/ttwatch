@@ -403,6 +403,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     int counter = 0;
 
     time_t startat = time(NULL);
+    struct timeval now, lastpkt = { -1, -1 }; //yes, that's a fake/invalid time-of-day
     while (iptr < end) {
         // checkpoint occurs every (256*20-2) data bytes and at EOF
         checkpoint = iptr + (256*20-2);
@@ -428,7 +429,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
             if (att_write(fd, 0x002b, out, (wlen<20) ? wlen : 20) < 0)
                 goto fail_write;
             if (wlen>20)
-                if (att_wrreq(fd, 0x002b, out+20, wlen-20) < 0)
+                if (att_write(fd, 0x002b, out+20, wlen-20) < 0)
                     goto fail_write;
 
             if (debug>1) {
@@ -437,12 +438,20 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
             }
 
             iptr += wlen;
+
+            // wait at least 20 ms between packets, because the devices
+            // don't like having them spit out at max speed with min
+            // connection interval
+            gettimeofday(&now, NULL);
+            if (now.tv_sec==lastpkt.tv_sec && now.tv_usec-lastpkt.tv_usec < 20000)
+                usleep(20000);
+            memcpy(&lastpkt, &now, sizeof now);
         }
         iptr = checkpoint; // trim CRC bytes from input position
 
         if (EXPECT_uint32(fd, 0x002e, ++counter) < 0) // didn't get expected counter
-            return -EBADMSG;
-        else if (debug) {
+            goto fail_write;
+        if (debug) {
             time_t current = time(NULL);
             int rate = current-startat ? (iptr-buf)/(current-startat) : 9999;
             if (iptr<end)
@@ -458,7 +467,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     return iptr-buf;
 
 fail_write:
-    printf("at file position 0x%04x", (int)(iptr-buf));
+    printf("at file position 0x%04x\n", (int)(iptr-buf));
     perror("fail");
     return -EBADMSG;
 }
@@ -699,7 +708,8 @@ int main(int argc, const char **argv)
             tt_delete_file(fd, 0x00010100);
             if (tt_write_file(fd, 0x00010100, 1, fbuf, length) < 0)
                 printf(" Update FAILED!\n");
-            att_write(fd, 0x0025, BARRAY(0x05, 0x01, 0x00, 0x01), 2); // update magic?
+            else
+                att_write(fd, 0x0025, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
         }
     }
 
