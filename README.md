@@ -9,14 +9,14 @@ Requires [BlueZ](http://www.bluez.org/) `libbluetooth` and
 Bluetooth **4.0** (BLE-capable) Bluetooth adapter:
 
 ```bash
-$ gcc ttblue.c -lbluetooth -lcurl -o ttblue --std=c99
+$ make
 ```
 
 # Run it
 
 ```
-    ttblue <bluetooth-address> <pairing-code>
-OR  ttblue <bluetooth-address> pair
+    ./ttblue <bluetooth-address> <pairing-code>
+OR  ./ttblue <bluetooth-address> pair
 ```
 
 Where `bluetooth-address` is the twelve-digit address of your TomTom
@@ -71,7 +71,6 @@ Unfortunately, elevated permissions are required to configure this feature of a 
 
 # TODO
 
-* An actual `Makefile`?
 * Command line options, config file, etc.
 
 # Credits

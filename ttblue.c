@@ -19,9 +19,12 @@
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 #include <bluetooth/l2cap.h>
-#include "att-types.h"
 
 #include <curl/curl.h>
+
+#include "bbatt.h"
+
+#define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
 
 /**
  * taken from bluez/tools/btgatt-client.c
@@ -111,126 +114,6 @@ static int l2cap_le_att_connect_fast(int dd, bdaddr_t *src, bdaddr_t *dst, uint8
     return sock;
 }
 
-/* ATT protocol opcodes from bluez/src/shared/att-types.h */
-
-#define BT_ATT_OP_ERROR_RSP			0x01
-#define BT_ATT_OP_MTU_REQ			0x02
-#define BT_ATT_OP_MTU_RSP			0x03
-#define BT_ATT_OP_FIND_INFO_REQ			0x04
-#define BT_ATT_OP_FIND_INFO_RSP			0x05
-#define BT_ATT_OP_FIND_BY_TYPE_VAL_REQ		0x06
-#define BT_ATT_OP_FIND_BY_TYPE_VAL_RSP		0x07
-#define BT_ATT_OP_READ_BY_TYPE_REQ		0x08
-#define BT_ATT_OP_READ_BY_TYPE_RSP		0x09
-#define BT_ATT_OP_READ_REQ			0x0a
-#define BT_ATT_OP_READ_RSP			0x0b
-#define BT_ATT_OP_READ_BLOB_REQ			0x0c
-#define BT_ATT_OP_READ_BLOB_RSP			0x0d
-#define BT_ATT_OP_READ_MULT_REQ			0x0e
-#define BT_ATT_OP_READ_MULT_RSP			0x0f
-#define BT_ATT_OP_READ_BY_GRP_TYPE_REQ		0x10
-#define BT_ATT_OP_READ_BY_GRP_TYPE_RSP		0x11
-#define BT_ATT_OP_WRITE_REQ			0x12
-#define BT_ATT_OP_WRITE_RSP			0x13
-#define BT_ATT_OP_WRITE_CMD			0x52
-#define BT_ATT_OP_SIGNED_WRITE_CMD		0xD2
-#define BT_ATT_OP_PREP_WRITE_REQ		0x16
-#define BT_ATT_OP_PREP_WRITE_RSP		0x17
-#define BT_ATT_OP_EXEC_WRITE_REQ		0x18
-#define BT_ATT_OP_EXEC_WRITE_RSP		0x19
-#define BT_ATT_OP_HANDLE_VAL_NOT		0x1B
-#define BT_ATT_OP_HANDLE_VAL_IND		0x1D
-#define BT_ATT_OP_HANDLE_VAL_CONF		0x1E
-
-/****************************************************************************/
-
-#define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
-
-/* manually assemble ATT packets */
-int
-att_read(int fd, uint16_t handle, void *buf)
-{
-    int result;
-
-    struct { uint8_t opcode; uint16_t handle; } __attribute__((packed)) pkt = { BT_ATT_OP_READ_REQ, handle };
-    result = send(fd, &pkt, sizeof(pkt), 0);
-    if (result<0)
-        return result;
-
-    struct { uint8_t opcode; uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; } __attribute__((packed)) rpkt = {0};
-    result = recv(fd, &rpkt, sizeof rpkt, 0);
-    if (result<0)
-        return result;
-    else if (rpkt.opcode != BT_ATT_OP_READ_RSP)
-        return -2;
-    else {
-        memcpy(buf, rpkt.buf, result-1);
-    }
-    return result-1;
-}
-
-int
-att_write(int fd, uint16_t handle, const void *buf, size_t length)
-{
-    struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
-    pkt.opcode = BT_ATT_OP_WRITE_CMD;
-    pkt.handle = handle;
-
-    if (sizeof pkt > BT_ATT_DEFAULT_LE_MTU)
-        return -1;
-    memcpy(pkt.buf, buf, length);
-
-    int result = send(fd, &pkt, sizeof(pkt), 0);
-    if (result<0)
-        return result;
-
-    return length;
-}
-
-int
-att_wrreq(int fd, uint16_t handle, const void *buf, size_t length)
-{
-    struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
-    pkt.opcode = BT_ATT_OP_WRITE_REQ;
-    pkt.handle = handle;
-
-    if (sizeof pkt > BT_ATT_DEFAULT_LE_MTU)
-        return -1;
-    memcpy(pkt.buf, buf, length);
-
-    int result = send(fd, &pkt, sizeof(pkt), 0);
-    if (result<0)
-        return result;
-
-    uint8_t conf = 0;
-    result = recv(fd, &conf, 1, 0);
-    if (result < 0)
-        return result;
-    else if (conf != BT_ATT_OP_WRITE_RSP) {
-        printf("got wrong opcode response: %02x\n", conf);
-        return -2;
-    }
-
-    return length;
-}
-
-int
-att_read_not(int fd, size_t *length, void *buf)
-{
-    struct { uint8_t opcode; uint16_t handle; uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; } __attribute__((packed)) rpkt;
-    int result = recv(fd, &rpkt, sizeof rpkt, 0);
-
-    if (result<0)
-        return result;
-    else if (rpkt.opcode != BT_ATT_OP_HANDLE_VAL_NOT)
-        return -2;
-    else {
-        *length = result-3;
-        memcpy(buf, rpkt.buf, *length);
-        return rpkt.handle;
-    }
-}
-
 /****************************************************************************/
 
 static uint32_t
@@ -262,11 +145,13 @@ hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl)
         fputc('\n', where);
 }
 
+/****************************************************************************/
+
 static inline int
 EXPECT_BYTES(int fd, uint8_t *buf)
 {
-    size_t length;
-    uint16_t handle = att_read_not(fd, &length, buf);
+    uint16_t handle;
+    int length = att_read_not(fd, &handle, buf);
     if (handle < 0)
         return handle;
     else if (handle != 0x2b)
@@ -277,9 +162,9 @@ EXPECT_BYTES(int fd, uint8_t *buf)
 static inline int
 EXPECT_LENGTH(int fd)
 {
-    size_t length;
     uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
-    uint16_t handle = att_read_not(fd, &length, buf);
+    uint16_t handle;
+    int length = att_read_not(fd, &handle, buf);
     if (handle < 0)
         return handle;
     else if ((handle != 0x28) || (length != 4))
@@ -290,9 +175,9 @@ EXPECT_LENGTH(int fd)
 static inline int
 EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
 {
-    size_t length;
     uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
-    uint16_t h = att_read_not(fd, &length, buf);
+    uint16_t h;
+    int length = att_read_not(fd, &h, buf);
     if (h < 0)
         return h;
     else if ((h != handle) || (length != 4) || (btohl(*((uint32_t*)buf))!=val))
@@ -303,9 +188,9 @@ EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
 static inline int
 EXPECT_uint8(int fd, uint16_t handle, uint8_t val)
 {
-    size_t length;
     uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
-    uint16_t h = att_read_not(fd, &length, buf);
+    uint16_t h;
+    int length = att_read_not(fd, &h, buf);
     if (h < 0)
         return h;
     else if ((h != handle) || (length != 1) || (*buf!=val))
@@ -484,11 +369,11 @@ tt_delete_file(int fd, uint32_t fileno)
         return -EBADMSG;
 
     // discard 0x2b packets which I don't understand until we get 0x25<-0
-    size_t rlen;
-    int handle;
+    uint16_t handle;
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    int rlen;
     for (;;) {
-        int handle = att_read_not(fd, &rlen, rbuf);
+        rlen = att_read_not(fd, &handle, rbuf);
         if (handle==0x25 && rlen==4 && (*(uint32_t*)rbuf==0))
             return 0;
         else if (handle!=0x2b)
@@ -540,6 +425,7 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
 int main(int argc, const char **argv)
 {
     int devid, dd, fd;
+    char ch;
 
     // parse args
     if (argc!=3) {
@@ -561,8 +447,9 @@ int main(int argc, const char **argv)
     }
     if (!strcasecmp(argv[2], "pair")) {
         code = 0xffff;
-    } else if (sscanf(argv[2], "%6d", &code)<1) {
+    } else if (sscanf(argv[2], "%6d%c", &code, &ch)!=1) {
         fprintf(stderr, "Pairing code should be 6-digit number, not %s\n", argv[2]);
+        goto preopen_fail;
     }
 
     // setup HCI BLE socket
@@ -604,7 +491,7 @@ int main(int argc, const char **argv)
         }
     } else {
         printf("Enter 6-digit pairing code shown on device: ");
-        if (scanf("%d", &code) < 1) {
+        if (scanf("%d%c", &code, &ch) != 1) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
         }
