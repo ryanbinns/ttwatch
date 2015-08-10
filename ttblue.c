@@ -604,14 +604,15 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "    Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
             } else {
                 if (fwrite(fbuf, 1, length, f) < length) {
+                    fclose(f);
                     fprintf(stderr, "    Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                 } else {
-                    printf("    Saved %d bytes to %s\n", length, filename);
+                    fclose(f);
                     free(fbuf);
+                    printf("    Saved %d bytes to %s\n", length, filename);
                     printf("    Deleting activity file 0x%08X ...\n", fileno);
                     tt_delete_file(fd, fileno);
                 }
-                fclose(f);
             }
         }
     }
