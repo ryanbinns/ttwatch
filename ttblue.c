@@ -479,15 +479,48 @@ int main(int argc, const char **argv)
                                 200 /* supervision_timeout */,
                                 2000);
     if (result < 0) {
-        perror("hci_le_conn_update");
-        printf("connection may be slow!\n");
+        if (errno==EPERM) {
+            fputs("----------------------------------------------------------\n"
+                  "NOTE: This program lacks the permissions necessary for\n"
+                  "  manipulating the raw Bluetooth HCI socket, which\n"
+                  "  is required to set the minimum connection inverval\n"
+                  "  and speed up data transfer.\n\n"
+                  "  To fix this, run it as root or, better yet, set the\n"
+                  "  following capabilities on the ttblue executable:\n\n"
+                  "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
+                  "  Also please feel free to chime in on the BlueZ list\n"
+                  "  and complain about this situation with me :-D. This is,\n"
+                  "  in my opinion, something that programs should be able to\n"
+                  "  set without additional permissions:\n\n"
+                  "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
+                  "----------------------------------------------------------\n",
+                  stderr);
+        } else {
+            perror("hci_le_conn_update");
+            goto fail;
+        }
     }
     hci_close_dev(dd);
 
-    // set timeout to 20 seconds
-    struct timeval to = {.tv_sec=20, .tv_usec=0};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
+    // show device identifiers
+    struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU]; int len; } info[] = {
+        { 0x001e, "maker" },
+        { 0x0014, "model_name" },
+        { 0x001a, "model_num" },
+        { 0x001c, "firmware" },
+        { 0x0016, "serial" },
+        { 0x0003, "user_name" },
+        { 0 }
+    };
+    printf("Connected device information:\n");
+    for (struct tt_dev_info *p = info; p->handle; p++) {
+        p->len = att_read(fd, p->handle, p->buf);
+        printf("  %-10.10s: %.*s\n", p->name, p->len, p->buf);
+    }
+    if (strcmp(info[0].buf, "TomTom Fitness") != 0) {
+        printf("Not a TomTom device, exiting!\n");
+        goto fail;
+    }
 
     // authorize with the device
     if (code != 0xffff) {
@@ -513,9 +546,11 @@ int main(int argc, const char **argv)
         fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
         goto fail;
     }
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    int length = att_read(fd, 0x0003, rbuf);
-    printf("Connected device name: %.*s\n", length, rbuf);
+
+    // set timeout to 20 seconds (delete and write operations can be slow)
+    struct timeval to = {.tv_sec=20, .tv_usec=0};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
     // transfer files
     uint8_t *fbuf;
