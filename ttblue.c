@@ -28,13 +28,12 @@
 
 /**
  * taken from bluez/tools/btgatt-client.c
- *   added hci LE interval customization
  *
  */
 
 #define ATT_CID 4
-static int l2cap_le_att_connect_fast(int dd, bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
-                                     int sec, int verbose)
+static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
+                                int sec, int verbose)
 {
     int sock, result;
     struct sockaddr_l2 srcaddr, dstaddr;
@@ -50,19 +49,6 @@ static int l2cap_le_att_connect_fast(int dd, bdaddr_t *src, bdaddr_t *dst, uint8
                     "channel:\n\t src: %s\n\tdest: %s\n",
                     srcaddr_str, dstaddr_str);
     }
-
-    // customize HCI socket to connect tocoax this thing to connect more frequently
-    printf("Setting minimum BLE connection interval...");
-    fflush(stdout);
-    result = hci_le_create_conn(dd, htobs(0x0004) /*scan interval*/,  htobs(0x0004) /*scan window*/,
-                                0 /*initiator_filter, use peer address*/,
-                                LE_RANDOM_ADDRESS /*peer_bdaddr_type*/, *dst /*bdaddr*/,
-                                LE_PUBLIC_ADDRESS /*own_bdaddr_type*/,
-                                htobs(0x0006) /*min_interval / 1.25 ms*/, htobs(0x0006) /*max_interval / 1.25ms*/,
-                                htobs(0) /*latency*/, htobs(200) /*supervision_timeout*/,
-                                htobs(0x0001) /*min_ce_length*/, htobs(0x0001) /*max_ce_length*/, NULL, 25000);
-    if (result < 0 && verbose)
-        printf(" Could not set (transfer will be slow!)\n");
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
     if (sock < 0) {
@@ -439,6 +425,7 @@ int main(int argc, const char **argv)
               "to create a new pairing.\n", stderr);
         return 1;
     }
+
     uint32_t code;
     bdaddr_t dst_addr;
     if (str2ba(argv[1], &dst_addr) < 0) {
@@ -452,7 +439,7 @@ int main(int argc, const char **argv)
         goto preopen_fail;
     }
 
-    // setup HCI BLE socket
+    // setup HCI and L2CAP sockets
     devid = hci_get_route(NULL);
     dd = hci_open_dev(devid);
     if (dd < 0) {
@@ -468,11 +455,34 @@ int main(int argc, const char **argv)
         goto preopen_fail;
     }
 
-    // create L2CAP socket with minimum connection interval
-    fd = l2cap_le_att_connect_fast(dd, BDADDR_ANY, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
-    hci_close_dev(dd);
-    if (fd < 0)
+    // create L2CAP socket
+    fd = l2cap_le_att_connect(BDADDR_ANY, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
+    if (fd < 0) {
+        hci_close_dev(dd);
         goto fail;
+    }
+
+    // request minimum connection interval
+    struct l2cap_conninfo l2cci;
+    int length = sizeof l2cci;
+    int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
+    if (result < 0) {
+        perror("getsockopt");
+        hci_close_dev(dd);
+        goto fail;
+    }
+
+    result = hci_le_conn_update(dd, l2cci.hci_handle,
+                                0x0006 /* min_interval */,
+                                0x0006 /* max_interval */,
+                                0 /* latency */,
+                                200 /* supervision_timeout */,
+                                2000);
+    if (result < 0) {
+        perror("hci_le_conn_update");
+        printf("connection may be slow!\n");
+    }
+    hci_close_dev(dd);
 
     // set timeout to 20 seconds
     struct timeval to = {.tv_sec=20, .tv_usec=0};
@@ -485,10 +495,6 @@ int main(int argc, const char **argv)
         att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
         att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
         att_wrreq(fd, 0x0032, &code, sizeof code);
-        if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
-            fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
-            goto fail;
-        }
     } else {
         printf("Enter 6-digit pairing code shown on device: ");
         if (scanf("%d%c", &code, &ch) != 1) {
@@ -502,10 +508,10 @@ int main(int argc, const char **argv)
         att_write(fd, 0x002c, BARRAY(0x01, 0), 2);
         att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
         att_wrreq(fd, 0x0032, &code, sizeof code);
-        if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
-            printf("Device didn't accept auth code %d.\n", code);
-            goto fail;
-        }
+    }
+    if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
+        fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
+        goto fail;
     }
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int length = att_read(fd, 0x0003, rbuf);
@@ -604,6 +610,8 @@ int main(int argc, const char **argv)
     close(fd);
     return 0;
 
+fail_close_dd:
+    hci_close_dev(dd);
 fail:
     close(fd);
 preopen_fail:
