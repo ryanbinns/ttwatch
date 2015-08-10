@@ -512,7 +512,7 @@ int main(int argc, const char **argv)
         { 0x0003, "user_name" },
         { 0 }
     };
-    printf("Connected device information:\n");
+    printf("\nConnected device information:\n");
     for (struct tt_dev_info *p = info; p->handle; p++) {
         p->len = att_read(fd, p->handle, p->buf);
         printf("  %-10.10s: %.*s\n", p->name, p->len, p->buf);
@@ -529,7 +529,7 @@ int main(int argc, const char **argv)
         att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
         att_wrreq(fd, 0x0032, &code, sizeof code);
     } else {
-        printf("Enter 6-digit pairing code shown on device: ");
+        printf("\nEnter 6-digit pairing code shown on device: ");
         if (scanf("%d%c", &code, &ch) != 1) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
@@ -556,31 +556,33 @@ int main(int argc, const char **argv)
     uint8_t *fbuf;
     FILE *f;
 
-    printf("Setting peer name to '%s'...\n", hciname);
+    printf("\nSetting PHONE menu to '%s'.\n", hciname);
     tt_delete_file(fd, 0x00020002);
     tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
 
-    printf("Reading preferences.xml ...\n");
-    if ((length = tt_read_file(fd, 0x00f20000, 1, &fbuf)) < 0) {
-        fprintf(stderr, " Could not read file 0x00F20000 on watch!\n");
-    } else {
-        if ((f = fopen("preferences.xml", "w")) == NULL) {
-            fprintf(stderr, " Could not open: %s (%d)\n", strerror(errno), errno);
+    if (false) {
+        printf("\nReading preferences.xml ...\n");
+        if ((length = tt_read_file(fd, 0x00f20000, 1, &fbuf)) < 0) {
+            fprintf(stderr, "  Could not read file 0x00F20000 on watch!\n");
         } else {
-            fwrite(fbuf, 1, length, f);
-            fclose(f);
-            printf(" Saved %d bytes to preferences.xml\n", length);
+            if ((f = fopen("preferences.xml", "w")) == NULL) {
+                fprintf(stderr, "  Could not open: %s (%d)\n", strerror(errno), errno);
+            } else {
+                fwrite(fbuf, 1, length, f);
+                fclose(f);
+                printf("  Saved %d bytes to preferences.xml\n", length);
+            }
+            free(fbuf);
         }
-        free(fbuf);
     }
 
     uint16_t *list;
     int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-    printf("Found %d activity files on watch.\n", n_files);
+    printf("\nFound %d activity files on watch.\n", n_files);
     for (int ii=0; ii<n_files; ii++) {
         uint32_t fileno = 0x00910000 + list[ii];
 
-        printf(" Reading activity file 0x%08X ...\n", fileno);
+        printf("  Reading activity file 0x%08X ...\n", fileno);
         if ((length = tt_read_file(fd, fileno, 1, &fbuf)) < 0) {
             fprintf(stderr, " Could not read file 0x%08X on watch!\n", fileno);
         } else {
@@ -591,14 +593,14 @@ int main(int argc, const char **argv)
             sprintf(filename, "0x%08X_%s.ttbin", fileno, filetime);
 
             if ((f = fopen(filename, "w")) == NULL) {
-                fprintf(stderr, "  Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+                fprintf(stderr, "    Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
             } else {
                 if (fwrite(fbuf, 1, length, f) < length) {
-                    fprintf(stderr, "  Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                    fprintf(stderr, "    Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                 } else {
-                    printf("  Saved %d bytes to %s\n", length, filename);
+                    printf("    Saved %d bytes to %s\n", length, filename);
                     free(fbuf);
-                    printf("  Deleting activity file 0x%08X ...\n", fileno);
+                    printf("    Deleting activity file 0x%08X ...\n", fileno);
                     tt_delete_file(fd, fileno);
                 }
                 fclose(f);
@@ -610,11 +612,12 @@ int main(int argc, const char **argv)
     char curlerr[CURL_ERROR_SIZE];
     CURL *curl = curl_easy_init();
     if (!curl) {
-        printf(" Could not start curl");
+        fprintf(stderr, "Could not start curl");
+        goto fail;
     } else {
         char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
         sprintf(url+strlen(url), "%ld", (long)time(NULL));
-        printf("Downloading QuickFixGPS update...\n %s\n", url);
+        printf("\nUpdating QuickFixGPS...\n  Downloading %s\n", url);
 
         f = tmpfile();
         curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -624,10 +627,10 @@ int main(int argc, const char **argv)
         res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
         if (res != 0) {
-            printf(" Download failed: %s\n", curlerr);
+            printf("  Download failed: %s\n", curlerr);
         } else {
             length = ftell(f);
-            printf("Sending QuickFixGPS update (%d bytes)...\n", length);
+            printf("  Sending update to watch (%d bytes)...\n", length);
             fseek (f, 0, SEEK_SET);
             fbuf = malloc(length);
             if (fread (fbuf, 1, length, f) < length)
@@ -636,7 +639,7 @@ int main(int argc, const char **argv)
 
             tt_delete_file(fd, 0x00010100);
             if (tt_write_file(fd, 0x00010100, 1, fbuf, length) < 0)
-                printf(" Update FAILED!\n");
+                printf("    Update FAILED!\n");
             else
                 att_write(fd, 0x0025, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
         }
