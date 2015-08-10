@@ -25,6 +25,12 @@
 #include "bbatt.h"
 
 #define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
+#define H_PASSCODE 0x0032
+#define H_MAGIC 0x0035
+#define H_CMD_STATUS 0x0025
+#define H_LENGTH 0x0028
+#define H_TRANSFER 0x002b
+#define H_CHECK 0x002e
 
 /**
  * taken from bluez/tools/btgatt-client.c
@@ -140,7 +146,7 @@ EXPECT_BYTES(int fd, uint8_t *buf)
     int length = att_read_not(fd, &handle, buf);
     if (handle < 0)
         return handle;
-    else if (handle != 0x2b)
+    else if (handle != H_TRANSFER)
         return -EBADMSG;
     return (int)length;
 }
@@ -153,7 +159,7 @@ EXPECT_LENGTH(int fd)
     int length = att_read_not(fd, &handle, buf);
     if (handle < 0)
         return handle;
-    else if ((handle != 0x28) || (length != 4))
+    else if ((handle != H_LENGTH) || (length != 4))
         return -EBADMSG;
     return btohl(*((uint32_t*)buf));
 }
@@ -192,8 +198,8 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         return -EINVAL;
 
     uint8_t cmd[] = {1, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
-    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
-    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+    att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
         return -EBADMSG;
 
     int flen = EXPECT_LENGTH(fd);
@@ -236,7 +242,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         }
 
         uint32_t c = htobl(++counter);
-        att_write(fd, 0x002e, &c, sizeof c);
+        att_write(fd, H_CHECK, &c, sizeof c);
         if (debug) {
             time_t current = time(NULL);
             int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
@@ -248,7 +254,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         }
     }
 
-    if (EXPECT_uint32(fd, 0x25, 0) < 0)
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
         return -EBADMSG;
     return optr-*buf;
 }
@@ -260,12 +266,12 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
         return -EINVAL;
 
     uint8_t cmd[] = {0, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
-    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
-    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+    att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
        return -EBADMSG;
 
     uint32_t flen = htobl(length);
-    att_wrreq(fd, 0x0028, &flen, sizeof flen);
+    att_wrreq(fd, H_LENGTH, &flen, sizeof flen);
 
     const uint8_t *iptr = buf;
     const uint8_t *end = iptr+length;
@@ -297,10 +303,10 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
                 wlen += 2;
             }
 
-            if (att_write(fd, 0x002b, out, (wlen<20) ? wlen : 20) < 0)
+            if (att_write(fd, H_TRANSFER, out, (wlen<20) ? wlen : 20) < 0)
                 goto fail_write;
             if (wlen>20)
-                if (att_write(fd, 0x002b, out+20, wlen-20) < 0)
+                if (att_write(fd, H_TRANSFER, out+20, wlen-20) < 0)
                     goto fail_write;
 
             if (debug>1) {
@@ -320,7 +326,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
         }
         iptr = checkpoint; // trim CRC bytes from input position
 
-        if (EXPECT_uint32(fd, 0x002e, ++counter) < 0) // didn't get expected counter
+        if (EXPECT_uint32(fd, H_CHECK, ++counter) < 0) // didn't get expected counter
             goto fail_write;
         if (debug) {
             time_t current = time(NULL);
@@ -333,7 +339,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
         }
     }
 
-    if (EXPECT_uint32(fd, 0x25, 0) < 0)
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
         return -EBADMSG;
     return iptr-buf;
 
@@ -350,19 +356,19 @@ tt_delete_file(int fd, uint32_t fileno)
         return -EINVAL;
 
     uint8_t cmd[] = {4, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
-    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
-    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+    att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
         return -EBADMSG;
 
-    // discard 0x2b packets which I don't understand until we get 0x25<-0
+    // discard H_TRANSFER packets which I don't understand until we get H_CMD_STATUS<-0
     uint16_t handle;
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int rlen;
     for (;;) {
         rlen = att_read_not(fd, &handle, rbuf);
-        if (handle==0x25 && rlen==4 && (*(uint32_t*)rbuf==0))
+        if (handle==H_CMD_STATUS && rlen==4 && (*(uint32_t*)rbuf==0))
             return 0;
-        else if (handle!=0x2b)
+        else if (handle!=H_TRANSFER)
             return -EBADMSG;
     }
 }
@@ -375,8 +381,8 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
         return -EINVAL;
 
     uint8_t cmd[] = {3, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
-    att_wrreq(fd, 0x0025, cmd, sizeof cmd);
-    if (EXPECT_uint32(fd, 0x0025, 1) < 0)
+    att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
         return -EBADMSG;
 
     // read first packet (normally there's only one)
@@ -400,7 +406,7 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
     for (int ii; ii<n_files; ii++)
         list[ii] = btohs(list[ii]);
 
-    if (EXPECT_uint32(fd, 0x0025, 0) < 0)
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
         return -EBADMSG;
 
     return n_files;
@@ -523,26 +529,28 @@ int main(int argc, const char **argv)
     }
 
     // authorize with the device
+    const uint16_t auth_one = btohs(0x0001);
+    const uint8_t auth_magic[] = { 0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0 };
     if (code != 0xffff) {
-        att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
-        att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
-        att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
-        att_wrreq(fd, 0x0032, &code, sizeof code);
+        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
+        att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
+        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
+        att_wrreq(fd, H_PASSCODE, &code, sizeof code);
     } else {
         printf("\nEnter 6-digit pairing code shown on device: ");
         if (scanf("%d%c", &code, &ch) != 1) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
         }
-        att_write(fd, 0x0033, BARRAY(0x01, 0), 2);
-        att_write(fd, 0x0026, BARRAY(0x01, 0), 2);
-        att_write(fd, 0x0029, BARRAY(0x01, 0), 2);
-        att_write(fd, 0x003c, BARRAY(0x01, 0), 2);
-        att_write(fd, 0x002c, BARRAY(0x01, 0), 2);
-        att_wrreq(fd, 0x0035, BARRAY(0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0), 8);
-        att_wrreq(fd, 0x0032, &code, sizeof code);
+        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
+        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
+        att_write(fd, 0x0029, &auth_one, sizeof auth_one);
+        att_write(fd, 0x003c, &auth_one, sizeof auth_one);
+        att_write(fd, 0x002c, &auth_one, sizeof auth_one);
+        att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
+        att_wrreq(fd, H_PASSCODE, &code, sizeof code);
     }
-    if (EXPECT_uint8(fd, 0x0032, 1) < 0) {
+    if (EXPECT_uint8(fd, H_PASSCODE, 1) < 0) {
         fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
         goto fail;
     }
@@ -641,7 +649,7 @@ int main(int argc, const char **argv)
             if (tt_write_file(fd, 0x00010100, 1, fbuf, length) < 0)
                 printf("    Update FAILED!\n");
             else
-                att_write(fd, 0x0025, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
         }
     }
 
