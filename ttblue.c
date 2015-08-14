@@ -51,9 +51,9 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
         ba2str(src, srcaddr_str);
         ba2str(dst, dstaddr_str);
 
-        printf("Opening L2CAP LE connection on ATT "
-                    "channel:\n\t src: %s\n\tdest: %s\n",
-                    srcaddr_str, dstaddr_str);
+        fprintf(stderr, "Opening L2CAP LE connection on ATT "
+                        "channel:\n\t src: %s\n\tdest: %s\n",
+                srcaddr_str, dstaddr_str);
     }
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
@@ -92,7 +92,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     dstaddr.l2_bdaddr_type = dst_type;
     bacpy(&dstaddr.l2_bdaddr, dst);
 
-    printf("Connecting to device...");
+    fputs("Connecting to device...", stderr);
     fflush(stdout);
 
     if (connect(sock, (struct sockaddr *) &dstaddr, sizeof(dstaddr)) < 0) {
@@ -101,7 +101,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
         return -1;
     }
 
-    printf(" Done\n");
+    fprintf(stderr, " Done\n");
 
     return sock;
 }
@@ -227,8 +227,8 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
             check = crc16(optr, rlen, check); // update CRC
 
             if (debug>1) {
-                printf("%04x: ", (int)(optr-*buf));
-                hexlify(stdout, optr, rlen, true);
+                fprintf(stderr, "%04x: ", (int)(optr-*buf));
+                hexlify(stderr, optr, rlen, true);
             }
 
             optr += rlen;
@@ -237,7 +237,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 
         if (check!=0) {
             if (debug)
-                printf("wrong crc16 sum: expected 0, got 0x%04x\n", check);
+                fprintf(stderr, "wrong crc16 sum: expected 0, got 0x%04x\n", check);
             return -EBADMSG;
         }
 
@@ -247,9 +247,9 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
             time_t current = time(NULL);
             int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
             if (optr<end)
-                printf("%d: read %d/%d bytes so far (%d/sec)\r", counter, (int)(optr-*buf), (int)(end-*buf), rate);
+                fprintf(stderr, "%d: read %d/%d bytes so far (%d/sec)\r", counter, (int)(optr-*buf), (int)(end-*buf), rate);
             else
-                printf("%d: read %d bytes from watch (%d/sec)      \n", counter, flen, rate);
+                fprintf(stderr, "%d: read %d bytes from watch (%d/sec)      \n", counter, flen, rate);
             fflush(stdout);
         }
     }
@@ -310,8 +310,8 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
                     goto fail_write;
 
             if (debug>1) {
-                printf("%04x: ", (int)(iptr-buf));
-                hexlify(stdout, out, wlen, true);
+                fprintf(stderr, "%04x: ", (int)(iptr-buf));
+                hexlify(stderr, out, wlen, true);
             }
 
             iptr += wlen;
@@ -332,9 +332,9 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
             time_t current = time(NULL);
             int rate = current-startat ? (iptr-buf)/(current-startat) : 9999;
             if (iptr<end)
-                printf("%d: wrote %d/%d bytes so far (%d/sec)\r", counter, (int)(iptr-buf), (int)(end-buf), rate);
+                fprintf(stderr, "%d: wrote %d/%d bytes so far (%d/sec)\r", counter, (int)(iptr-buf), (int)(end-buf), rate);
             else
-                printf("%d: wrote %d bytes to watch (%d/sec)       \n", counter, flen, rate);
+                fprintf(stderr, "%d: wrote %d bytes to watch (%d/sec)       \n", counter, flen, rate);
             fflush(stdout);
         }
     }
@@ -344,7 +344,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     return iptr-buf;
 
 fail_write:
-    printf("at file position 0x%04x\n", (int)(iptr-buf));
+    fprintf(stderr, "at file position 0x%04x\n", (int)(iptr-buf));
     perror("fail");
     return -EBADMSG;
 }
@@ -518,13 +518,15 @@ int main(int argc, const char **argv)
         { 0x0003, "user_name" },
         { 0 }
     };
-    printf("\nConnected device information:\n");
+    fprintf(stderr, "\nConnected device information:\n");
     for (struct tt_dev_info *p = info; p->handle; p++) {
         p->len = att_read(fd, p->handle, p->buf);
-        printf("  %-10.10s: %.*s\n", p->name, p->len, p->buf);
+        fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
     }
+
+    // check that it's actually a TomTom device
     if (strcmp(info[0].buf, "TomTom Fitness") != 0) {
-        printf("Not a TomTom device, exiting!\n");
+        fprintf(stderr, "Not a TomTom device, exiting!\n");
         goto fail;
     }
 
@@ -538,7 +540,8 @@ int main(int argc, const char **argv)
         att_write(fd, 0x0026, &auth_one, sizeof auth_one);
         att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
     } else {
-        printf("\nEnter 6-digit pairing code shown on device: ");
+        fprintf(stderr, "\n**************************************************\n"
+                        "Enter 6-digit pairing code shown on device: ");
         if (scanf("%d%c", &code, &ch) != 1) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
@@ -566,12 +569,12 @@ int main(int argc, const char **argv)
     uint8_t *fbuf;
     FILE *f;
 
-    printf("\nSetting PHONE menu to '%s'.\n", hciname);
+    fprintf(stderr, "\nSetting PHONE menu to '%s'.\n", hciname);
     tt_delete_file(fd, 0x00020002);
     tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
 
     if (false) {
-        printf("\nReading preferences.xml ...\n");
+        fprintf(stderr, "\nReading preferences.xml ...\n");
         if ((length = tt_read_file(fd, 0x00f20000, 1, &fbuf)) < 0) {
             fprintf(stderr, "  Could not read file 0x00F20000 on watch!\n");
         } else {
@@ -580,7 +583,7 @@ int main(int argc, const char **argv)
             } else {
                 fwrite(fbuf, 1, length, f);
                 fclose(f);
-                printf("  Saved %d bytes to preferences.xml\n", length);
+                fprintf(stderr, "  Saved %d bytes to preferences.xml\n", length);
             }
             free(fbuf);
         }
@@ -588,13 +591,14 @@ int main(int argc, const char **argv)
 
     uint16_t *list;
     int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-    printf("\nFound %d activity files on watch.\n", n_files);
+    fprintf(stderr, "\nFound %d activity files on watch.\n", n_files);
     for (int ii=0; ii<n_files; ii++) {
         uint32_t fileno = 0x00910000 + list[ii];
 
-        printf("  Reading activity file 0x%08X ...\n", fileno);
+        fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
         if ((length = tt_read_file(fd, fileno, 1, &fbuf)) < 0) {
-            fprintf(stderr, " Could not read file 0x%08X on watch!\n", fileno);
+            fprintf(stderr, "Could not read file 0x%08X on watch!\n", fileno);
+            goto fail;
         } else {
             char filename[32], filetime[16];
             time_t t = time(NULL);
@@ -603,16 +607,16 @@ int main(int argc, const char **argv)
             sprintf(filename, "0x%08X_%s.ttbin", fileno, filetime);
 
             if ((f = fopen(filename, "w")) == NULL) {
-                fprintf(stderr, "    Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+                fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
             } else {
                 if (fwrite(fbuf, 1, length, f) < length) {
                     fclose(f);
-                    fprintf(stderr, "    Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                    fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                 } else {
                     fclose(f);
                     free(fbuf);
-                    printf("    Saved %d bytes to %s\n", length, filename);
-                    printf("    Deleting activity file 0x%08X ...\n", fileno);
+                    fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
+                    fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
                     tt_delete_file(fd, fileno);
                 }
             }
@@ -628,7 +632,7 @@ int main(int argc, const char **argv)
     } else {
         char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
         sprintf(url+strlen(url), "%ld", (long)time(NULL));
-        printf("\nUpdating QuickFixGPS...\n  Downloading %s\n", url);
+        fprintf(stderr, "\nUpdating QuickFixGPS...\n  Downloading %s\n", url);
 
         f = tmpfile();
         curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -638,10 +642,10 @@ int main(int argc, const char **argv)
         res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
         if (res != 0) {
-            printf("  Download failed: %s\n", curlerr);
+            fprintf(stderr, "Download failed: %s\n", curlerr);
         } else {
             length = ftell(f);
-            printf("  Sending update to watch (%d bytes)...\n", length);
+            fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
             fseek (f, 0, SEEK_SET);
             fbuf = malloc(length);
             if (fread (fbuf, 1, length, f) < length)
@@ -650,7 +654,7 @@ int main(int argc, const char **argv)
 
             tt_delete_file(fd, 0x00010100);
             if (tt_write_file(fd, 0x00010100, 1, fbuf, length) < 0)
-                printf("    Update FAILED!\n");
+                fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
             else
                 att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
         }
