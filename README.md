@@ -20,8 +20,9 @@ dongle](http://www.amazon.com/ORICO-BTA-403-Bluetooth-Adapter-Windows/dp/B00ESBC
 which works out-of-the-box with the `btusb` driver from recent Linux
 kernels.
 
-The [`libbluetooth` (BlueZ)](http://www.bluez.org/) and
-[`libcurl`](http://curl.haxx.se/libcurl) libraries are required.
+The [`libbluetooth` (BlueZ)](http://www.bluez.org/),
+[`libcurl`](http://curl.haxx.se/libcurl), and
+[`popt`](http://directory.fsf.org/wiki/Popt) libraries are required.
 
 # Compiling it
 
@@ -29,7 +30,7 @@ On Debian/Ubuntu-based systems, you can install the required libraries
 with:
 
 ```bash
-$ sudo apt-get install libbluetooth-dev libcurl4-gnutls-dev
+$ sudo apt-get install libbluetooth-dev libcurl4-gnutls-dev libpopt-dev
 ```
 
 Compilation with `gcc` should be straightforward:
@@ -48,14 +49,13 @@ sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue
 # Run it
 
 ```
-    ./ttblue <bluetooth-address> <pairing-code>
-OR  ./ttblue <bluetooth-address> pair
+./ttblue -d <bluetooth-address> [-c <pairing-code>]
 ```
 
 Where `bluetooth-address` is the twelve-digit MAC address of your
-TomTom GPS watch (`E4:04:39:__:__:__`) and pairing-code is either a
+TomTom GPS watch (`E4:04:39:__:__:__`) and pairing-code is a
 previously-used pairing code (can be from one of the "official" TomTom
-mobile apps), or the string `pair` to create a new pairing.
+mobile apps), or left blank to create a new pairing.
 
 For the time being, you can use `sudo hcitool lescan` to find your
 device's BLE MAC address.
@@ -73,7 +73,7 @@ QuickGPSFix update and send it to the watch. (You can then use
 to convert the TTBIN files to GPX/TCX format.)
 
 ```none
-$ ./ttblue E4:04:39:17:62:B1 123456
+$ ./ttblue -d E4:04:39:17:62:B1 -c 123456
 
 Opening L2CAP LE connection on ATT channel:
 	 src: 00:00:00:00:00:00
@@ -87,13 +87,14 @@ Connected device information:
   firmware  : 1.8.42
   serial    : HC4354G00150
   user_name : Lenski
+  rssi      : -75 dB
 
 Setting PHONE menu to 'dlenski-ultra'.
 
 Found 1 activity files on watch.
   Reading activity file 00910000 ...
 11: read 55000 bytes from watch (1807/sec)
-    Saved 55000 bytes to 00910000_20150801_123616.ttbin
+    Saved 55000 bytes to ./00910000_20150801_123616.ttbin
     Deleting activity file 00910000 ...
 
 Updating QuickFixGPS...
