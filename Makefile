@@ -1,5 +1,5 @@
 CFLAGS += -g -O0 --std=c99
-LDFLAGS += -lcurl -lbluetooth
+LDFLAGS += -lcurl -lbluetooth -lpopt
 
 SRC = ttblue.c \
       bbatt.c \

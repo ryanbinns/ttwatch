@@ -22,6 +22,8 @@
 
 #include <curl/curl.h>
 
+#include <popt.h>
+
 #include "bbatt.h"
 #include "ttops.h"
 
@@ -103,39 +105,64 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
 /****************************************************************************/
 
+int get_activities=0, update_gps=0, version=0, debug=1;
+uint32_t dev_code=UINT32_MAX;
+char *activity_store=".", *dev_address=NULL;
+
+struct poptOption options[] = {
+    { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps" },
+    { "get-activities", 0, POPT_ARG_NONE, &get_activities, 0, "Downloads and deletes .ttbin activity files from the watch" },
+    { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
+    { "update-gps", 0, POPT_ARG_NONE, &update_gps, 0, "Download TomTom QuickFixGPS update file and send it to the watch" },
+    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
+    { "code", 'c', POPT_ARG_INT, &dev_code, 0, "6-digit pairing code for the watch (if already paired)", "NUMBER" },
+    { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
+    { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
+    { "quiet", 'q', POPT_ARG_NONE, 0, 'q', "Suppress debugging output" },
+//    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
+    POPT_AUTOHELP
+    POPT_TABLEEND
+};
+
+/****************************************************************************/
+
 int main(int argc, const char **argv)
 {
     int devid, dd, fd;
+    bdaddr_t dst_addr;
     char ch;
+    poptContext optCon = poptGetContext(NULL, argc, argv, options, 0);
 
     // parse args
-    if (argc!=3) {
-        fputs("Need two arguments:\n"
-              "          ttblue <bluetooth-address> <pairing-code>\n"
-              "    OR    ttblue <bluetooth-address> pair\n\n"
-              "Where bluetooth-address is the twelve-digit address\n"
-              "of your TomTom GPS watch (E4:04:39:__:__:__) and\n"
-              "pairing-code is either the previously established\n"
-              "code used to pair a phone, or the string \"pair\"\n"
-              "to create a new pairing.\n", stderr);
-        return 1;
+    while ((ch=poptGetNextOpt(optCon))>=0) {
+        switch (ch) {
+        case 'D':
+            debug++;
+            break;
+        case 'q':
+            debug = 0;
+            break;
+        case 'a':
+            get_activities = update_gps = true;
+            break;
+        }
     }
-
-    uint32_t code;
-    bdaddr_t dst_addr;
-    if (str2ba(argv[1], &dst_addr) < 0) {
-        fprintf(stderr, "could not understand Bluetooth device address: %s\n", argv[1]);
-        goto preopen_fail;
+    if (ch<-1) {
+        fprintf(stderr, "%s: %s\n",
+                poptBadOption(optCon, POPT_BADOPTION_NOALIAS),
+                poptStrerror(ch));
+        return 2;
     }
-    if (!strcasecmp(argv[2], "pair")) {
-        code = 0xffff;
-    } else if (sscanf(argv[2], "%6d%c", &code, &ch)!=1) {
-        fprintf(stderr, "Pairing code should be 6-digit number, not %s\n", argv[2]);
-        goto preopen_fail;
+    if (dev_address==NULL) {
+        fprintf(stderr, "Bluetooth MAC address of device must be specified (-d)\n");
+        return 2;
+    } else if (str2ba(dev_address, &dst_addr) < 0) {
+        fprintf(stderr, "Could not understand Bluetooth device address: %s\n", dev_address);
+        return 2;
     }
 
     // prompt user to put device in pairing mode
-    if (code == 0xffff)
+    if (dev_code == UINT32_MAX)
         fputs("****************************************************************\n"
               "Please put device in pairing mode (MENU -> PHONE -> PAIR NEW)...\n"
               "****************************************************************\n\n",
@@ -208,10 +235,12 @@ int main(int argc, const char **argv)
         { 0x0003, "user_name" },
         { 0 }
     };
-    fprintf(stderr, "\nConnected device information:\n");
-    for (struct tt_dev_info *p = info; p->handle; p++) {
+    for (struct tt_dev_info *p = info; p->handle; p++)
         p->len = att_read(fd, p->handle, p->buf);
-        fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
+    if (version) {
+        fprintf(stderr, "\nDevice information:\n");
+        for (struct tt_dev_info *p = info; p->handle; p++)
+            fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
         int8_t rssi=0;
         if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
             fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
@@ -226,8 +255,8 @@ int main(int argc, const char **argv)
     // authorize with the device
     const uint16_t auth_one = btohs(0x0001);
     const uint8_t auth_magic[] = { 0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0 };
-    if (code != 0xffff) {
-        uint32_t bcode = htobl(code);
+    if (dev_code != UINT32_MAX) {
+        uint32_t bcode = htobl(dev_code);
         att_write(fd, 0x0033, &auth_one, sizeof auth_one);
         att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
         att_write(fd, 0x0026, &auth_one, sizeof auth_one);
@@ -235,11 +264,11 @@ int main(int argc, const char **argv)
     } else {
         fprintf(stderr, "\n**************************************************\n"
                         "Enter 6-digit pairing code shown on device: ");
-        if (scanf("%d%c", &code, &ch) != 1) {
+        if (scanf("%d%c", &dev_code, &ch) != 1) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
         }
-        uint32_t bcode = htobl(code);
+        uint32_t bcode = htobl(dev_code);
         att_write(fd, 0x0033, &auth_one, sizeof auth_one);
         att_write(fd, 0x0026, &auth_one, sizeof auth_one);
         att_write(fd, 0x0029, &auth_one, sizeof auth_one);
@@ -249,7 +278,7 @@ int main(int argc, const char **argv)
         att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
     }
     if (EXPECT_uint8(fd, H_PASSCODE, 1) < 0) {
-        fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
+        fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
         goto fail;
     }
 
@@ -266,76 +295,81 @@ int main(int argc, const char **argv)
     tt_delete_file(fd, 0x00020002);
     tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
 
-    uint16_t *list;
-    int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-    fprintf(stderr, "\nFound %d activity files on watch.\n", n_files);
-    for (int ii=0; ii<n_files; ii++) {
-        uint32_t fileno = 0x00910000 + list[ii];
+    if (get_activities) {
+        uint16_t *list;
+        int n_files = tt_list_sub_files(fd, 0x00910000, &list);
+        char filetime[16], filename[strlen(activity_store) + strlen("/0910000_20150101_010101.ttbin") + 1];
+        fprintf(stderr, "\nFound %d activity files on watch.\n", n_files);
+        for (int ii=0; ii<n_files; ii++) {
+            uint32_t fileno = 0x00910000 + list[ii];
 
-        fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
-        if ((length = tt_read_file(fd, fileno, 1, &fbuf)) < 0) {
-            fprintf(stderr, "Could not read file 0x%08X on watch!\n", fileno);
-            goto fail;
-        } else {
-            char filename[32], filetime[16];
-            time_t t = time(NULL);
-            struct tm *tmp = localtime(&t);
-            strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-            sprintf(filename, "%08X_%s.ttbin", fileno, filetime);
-
-            if ((f = fopen(filename, "wxb")) == NULL) {
-                fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+            fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
+            if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+                fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
                 goto fail;
             } else {
-                if (fwrite(fbuf, 1, length, f) < length) {
-                    fclose(f);
-                    fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                time_t t = time(NULL);
+                struct tm *tmp = localtime(&t);
+                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
+
+                if ((f = fopen(filename, "wxb")) == NULL) {
+                    fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
                     goto fail;
                 } else {
-                    fclose(f);
-                    free(fbuf);
-                    fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
-                    fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                    tt_delete_file(fd, fileno);
+                    if (fwrite(fbuf, 1, length, f) < length) {
+                        fclose(f);
+                        fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                        goto fail;
+                    } else {
+                        fclose(f);
+                        free(fbuf);
+                        fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
+                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        tt_delete_file(fd, fileno);
+                    }
                 }
             }
         }
     }
 
-    CURLcode res;
-    char curlerr[CURL_ERROR_SIZE];
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        fprintf(stderr, "Could not start curl");
-        goto fail;
-    } else {
-        char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
-        sprintf(url+strlen(url), "%ld", (long)time(NULL));
-        fprintf(stderr, "\nUpdating QuickFixGPS...\n  Downloading %s\n", url);
-
-        f = tmpfile();
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
-        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
-        res = curl_easy_perform(curl);
-        curl_easy_cleanup(curl);
-        if (res != 0) {
-            fprintf(stderr, "Download failed: %s\n", curlerr);
+    if (update_gps) {
+        CURLcode res;
+        char curlerr[CURL_ERROR_SIZE];
+        CURL *curl = curl_easy_init();
+        if (!curl) {
+            fputs("Could not start curl\n", stderr);
+            goto fail;
         } else {
-            length = ftell(f);
-            fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
-            fseek (f, 0, SEEK_SET);
-            fbuf = malloc(length);
-            if (fread (fbuf, 1, length, f) < length)
-                goto fail;
-            fclose (f);
+            char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
+            sprintf(url+strlen(url), "%ld", (long)time(NULL));
+            fprintf(stderr, "\nUpdating QuickFixGPS...\n"
+                            "  Downloading %s\n", url);
 
-            tt_delete_file(fd, 0x00010100);
-            if (tt_write_file(fd, 0x00010100, 1, fbuf, length) < 0)
-                fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
-            else
-                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+            f = tmpfile();
+            curl_easy_setopt(curl, CURLOPT_URL, url);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+            curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
+            res = curl_easy_perform(curl);
+            curl_easy_cleanup(curl);
+            if (res != 0) {
+                fprintf(stderr, "Download failed: %s\n", curlerr);
+            } else {
+                length = ftell(f);
+                fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
+                fseek (f, 0, SEEK_SET);
+                fbuf = malloc(length);
+                if (fread (fbuf, 1, length, f) < length)
+                    goto fail;
+                fclose (f);
+
+                tt_delete_file(fd, 0x00010100);
+                if (tt_write_file(fd, 0x00010100, debug, fbuf, length) < 0)
+                    fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
+                else
+                    att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+            }
         }
     }
 
