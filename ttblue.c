@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
+#include <fcntl.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -571,27 +572,10 @@ int main(int argc, const char **argv)
 
     // transfer files
     uint8_t *fbuf;
-    FILE *f;
 
     fprintf(stderr, "\nSetting PHONE menu to '%s'.\n", hciname);
     tt_delete_file(fd, 0x00020002);
     tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
-
-    if (false) {
-        fprintf(stderr, "\nReading preferences.xml ...\n");
-        if ((length = tt_read_file(fd, 0x00f20000, 1, &fbuf)) < 0) {
-            fprintf(stderr, "  Could not read file 0x00F20000 on watch!\n");
-        } else {
-            if ((f = fopen("preferences.xml", "w")) == NULL) {
-                fprintf(stderr, "  Could not open: %s (%d)\n", strerror(errno), errno);
-            } else {
-                fwrite(fbuf, 1, length, f);
-                fclose(f);
-                fprintf(stderr, "  Saved %d bytes to preferences.xml\n", length);
-            }
-            free(fbuf);
-        }
-    }
 
     uint16_t *list;
     int n_files = tt_list_sub_files(fd, 0x00910000, &list);
@@ -607,17 +591,20 @@ int main(int argc, const char **argv)
             char filename[32], filetime[16];
             time_t t = time(NULL);
             struct tm *tmp = localtime(&t);
+            int afd;
             strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-            sprintf(filename, "0x%08X_%s.ttbin", fileno, filetime);
+            sprintf(filename, "%08X_%s.ttbin", fileno, filetime);
 
-            if ((f = fopen(filename, "w")) == NULL) {
+            if ((afd = open(filename, O_CREAT | O_WRONLY | O_EXCL, 0600)) < 0) {
                 fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+                goto fail;
             } else {
-                if (fwrite(fbuf, 1, length, f) < length) {
-                    fclose(f);
+                if (write(afd, fbuf, length) < length) {
+                    close(afd);
                     fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                    goto fail;
                 } else {
-                    fclose(f);
+                    close(afd);
                     free(fbuf);
                     fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
                     fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
@@ -638,7 +625,7 @@ int main(int argc, const char **argv)
         sprintf(url+strlen(url), "%ld", (long)time(NULL));
         fprintf(stderr, "\nUpdating QuickFixGPS...\n  Downloading %s\n", url);
 
-        f = tmpfile();
+        FILE *f = tmpfile();
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);

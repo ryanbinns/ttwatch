@@ -67,7 +67,7 @@ device's BLE MAC address.
   with a few buttons.
 
 `ttblue` will download your activity files (saved as
-`0x0091000n_YYYYMMDD_HHmmSS.ttbin`), and attempt to download the
+`0091000n_YYYYMMDD_HHmmSS.ttbin`), and attempt to download the
 QuickGPSFix update and send it to the watch. (You can then use
 [`ttbincnv`](https://github.com/ryanbinns/ttwatch/tree/master/ttbincnv)
 to convert the TTBIN files to GPX/TCX format.)
@@ -91,10 +91,10 @@ Connected device information:
 Setting PHONE menu to 'dlenski-ultra'.
 
 Found 1 activity files on watch.
-  Reading activity file 0x00910000 ...
+  Reading activity file 00910000 ...
 11: read 55000 bytes from watch (1807/sec)
-    Saved 55000 bytes to 0x00910000_20150801_123616.ttbin
-    Deleting activity file 0x00910000 ...
+    Saved 55000 bytes to 00910000_20150801_123616.ttbin
+    Deleting activity file 00910000 ...
 
 Updating QuickFixGPS...
   Downloading http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=1439172006
