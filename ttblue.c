@@ -532,23 +532,25 @@ int main(int argc, const char **argv)
     const uint16_t auth_one = btohs(0x0001);
     const uint8_t auth_magic[] = { 0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0 };
     if (code != 0xffff) {
+        uint32_t bcode = htobl(code);
         att_write(fd, 0x0033, &auth_one, sizeof auth_one);
         att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
         att_write(fd, 0x0026, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_PASSCODE, &code, sizeof code);
+        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
     } else {
         printf("\nEnter 6-digit pairing code shown on device: ");
         if (scanf("%d%c", &code, &ch) != 1) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
         }
+        uint32_t bcode = htobl(code);
         att_write(fd, 0x0033, &auth_one, sizeof auth_one);
         att_write(fd, 0x0026, &auth_one, sizeof auth_one);
         att_write(fd, 0x0029, &auth_one, sizeof auth_one);
         att_write(fd, 0x003c, &auth_one, sizeof auth_one);
         att_write(fd, 0x002c, &auth_one, sizeof auth_one);
         att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
-        att_wrreq(fd, H_PASSCODE, &code, sizeof code);
+        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
     }
     if (EXPECT_uint8(fd, H_PASSCODE, 1) < 0) {
         fprintf(stderr, "Device didn't accept pairing code %d.\n", code);
