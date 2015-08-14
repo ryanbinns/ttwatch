@@ -445,6 +445,13 @@ int main(int argc, const char **argv)
         goto preopen_fail;
     }
 
+    // prompt user to put device in pairing mode
+    if (code == 0xffff)
+        fputs("****************************************************************\n"
+              "Please put device in pairing mode (MENU -> PHONE -> PAIR NEW)...\n"
+              "****************************************************************\n\n",
+              stderr);
+
     // setup HCI and L2CAP sockets
     devid = hci_get_route(NULL);
     dd = hci_open_dev(devid);
@@ -486,7 +493,7 @@ int main(int argc, const char **argv)
                                 2000);
     if (result < 0) {
         if (errno==EPERM) {
-            fputs("----------------------------------------------------------\n"
+            fputs("**********************************************************\n"
                   "NOTE: This program lacks the permissions necessary for\n"
                   "  manipulating the raw Bluetooth HCI socket, which\n"
                   "  is required to set the minimum connection inverval\n"
@@ -494,12 +501,9 @@ int main(int argc, const char **argv)
                   "  To fix this, run it as root or, better yet, set the\n"
                   "  following capabilities on the ttblue executable:\n\n"
                   "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
-                  "  Also please feel free to chime in on the BlueZ list\n"
-                  "  and complain about this situation with me :-D. This is,\n"
-                  "  in my opinion, something that programs should be able to\n"
-                  "  set without additional permissions:\n\n"
+                  "  For gory details, see the BlueZ mailing list:\n"
                   "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
-                  "----------------------------------------------------------\n",
+                  "**********************************************************\n",
                   stderr);
         } else {
             perror("hci_le_conn_update");
