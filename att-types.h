@@ -21,6 +21,9 @@
  *
  */
 
+#ifndef __ATT_TYPES_H__
+#define __ATT_TYPES_H__
+
 #include <stdint.h>
 
 #ifndef __packed
@@ -145,3 +148,5 @@ struct bt_att_pdu_error_rsp {
 #define BT_GATT_CHRC_EXT_PROP_AUTH_WRITE		0x20
 #define BT_GATT_CHRC_EXT_PROP_AUTH	(BT_GATT_CHRC_EXT_PROP_AUTH_READ | \
 					BT_GATT_CHRC_EXT_PROP_AUTH_WRITE)
+
+#endif /* #ifndef __ATT_TYPES_H__ */

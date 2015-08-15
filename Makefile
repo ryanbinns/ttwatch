@@ -2,9 +2,11 @@ CFLAGS += -g -O0 --std=c99
 LDFLAGS += -lcurl -lbluetooth
 
 SRC = ttblue.c \
-      bbatt.c
+      bbatt.c \
+      ttops.c
 
 HEADERS = bbatt.h \
+          ttops.h \
           att-types.h
 
 OUTPUT = ttblue
