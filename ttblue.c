@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
-#include <fcntl.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -572,6 +571,7 @@ int main(int argc, const char **argv)
 
     // transfer files
     uint8_t *fbuf;
+    FILE *f;
 
     fprintf(stderr, "\nSetting PHONE menu to '%s'.\n", hciname);
     tt_delete_file(fd, 0x00020002);
@@ -591,20 +591,19 @@ int main(int argc, const char **argv)
             char filename[32], filetime[16];
             time_t t = time(NULL);
             struct tm *tmp = localtime(&t);
-            int afd;
             strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
             sprintf(filename, "%08X_%s.ttbin", fileno, filetime);
 
-            if ((afd = open(filename, O_CREAT | O_WRONLY | O_EXCL, 0600)) < 0) {
+            if ((f = fopen(filename, "wxb")) == NULL) {
                 fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
                 goto fail;
             } else {
-                if (write(afd, fbuf, length) < length) {
-                    close(afd);
+                if (fwrite(fbuf, 1, length, f) < length) {
+                    fclose(f);
                     fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                     goto fail;
                 } else {
-                    close(afd);
+                    fclose(f);
                     free(fbuf);
                     fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
                     fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
@@ -625,7 +624,7 @@ int main(int argc, const char **argv)
         sprintf(url+strlen(url), "%ld", (long)time(NULL));
         fprintf(stderr, "\nUpdating QuickFixGPS...\n  Downloading %s\n", url);
 
-        FILE *f = tmpfile();
+        f = tmpfile();
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
