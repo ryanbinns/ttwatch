@@ -472,7 +472,6 @@ int main(int argc, const char **argv)
     // create L2CAP socket
     fd = l2cap_le_att_connect(BDADDR_ANY, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
     if (fd < 0) {
-        hci_close_dev(dd);
         goto fail;
     }
 
@@ -482,7 +481,6 @@ int main(int argc, const char **argv)
     int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
     if (result < 0) {
         perror("getsockopt");
-        hci_close_dev(dd);
         goto fail;
     }
 
@@ -511,7 +509,6 @@ int main(int argc, const char **argv)
             goto fail;
         }
     }
-    hci_close_dev(dd);
 
     // show device identifiers
     struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU]; int len; } info[] = {
@@ -527,6 +524,9 @@ int main(int argc, const char **argv)
     for (struct tt_dev_info *p = info; p->handle; p++) {
         p->len = att_read(fd, p->handle, p->buf);
         fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
+        int8_t rssi=0;
+        if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
+            fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
     }
 
     // check that it's actually a TomTom device
@@ -654,9 +654,8 @@ int main(int argc, const char **argv)
     close(fd);
     return 0;
 
-fail_close_dd:
-    hci_close_dev(dd);
 fail:
+    hci_close_dev(dd);
     close(fd);
 preopen_fail:
     return 1;
