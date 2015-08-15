@@ -107,7 +107,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
 int get_activities=0, update_gps=0, version=0, debug=1;
 uint32_t dev_code=UINT32_MAX;
-char *activity_store=".", *dev_address=NULL;
+char *activity_store=".", *dev_address=NULL, *interface=NULL;
 
 struct poptOption options[] = {
     { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps" },
@@ -115,6 +115,7 @@ struct poptOption options[] = {
     { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
     { "update-gps", 0, POPT_ARG_NONE, &update_gps, 0, "Download TomTom QuickFixGPS update file and send it to the watch" },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
+    { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 0, "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
     { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
@@ -129,7 +130,7 @@ struct poptOption options[] = {
 int main(int argc, const char **argv)
 {
     int devid, dd, fd;
-    bdaddr_t dst_addr;
+    bdaddr_t src_addr, dst_addr;
     char ch;
     poptContext optCon = poptGetContext(NULL, argc, argv, options, 0);
 
@@ -160,6 +161,11 @@ int main(int argc, const char **argv)
         fprintf(stderr, "Could not understand Bluetooth device address: %s\n", dev_address);
         return 2;
     }
+    if (interface != NULL && (devid = hci_devid(interface)) < 0) {
+        fprintf(stderr, "Invalid Bluetooth interface: %s\n", interface);
+        return 2;
+    } else if ((devid = hci_get_route(NULL)) < 0)
+        devid = 0;
 
     // prompt user to put device in pairing mode
     if (dev_code == UINT32_MAX)
@@ -169,23 +175,24 @@ int main(int argc, const char **argv)
               stderr);
 
     // setup HCI and L2CAP sockets
-    devid = hci_get_route(NULL);
     dd = hci_open_dev(devid);
     if (dd < 0) {
         fprintf(stderr, "Can't open hci%d: %s (%d)\n", devid, strerror(errno), errno);
         goto preopen_fail;
     }
 
-    // get host name
+    // get host name and address
     char hciname[64];
-    if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0) {
-        fprintf(stderr, "Can't get hci%d name: %s (%d)\n", devid, strerror(errno), errno);
+    struct hci_dev_info hci_info;
+    if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0
+        || hci_devba(devid, &src_addr) < 0) {
+        fprintf(stderr, "Can't get hci%d info: %s (%d)\n", devid, strerror(errno), errno);
         hci_close_dev(dd);
         goto preopen_fail;
     }
 
     // create L2CAP socket
-    fd = l2cap_le_att_connect(BDADDR_ANY, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
+    fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
     if (fd < 0) {
         goto fail;
     }
