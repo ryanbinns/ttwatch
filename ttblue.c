@@ -59,7 +59,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
     if (sock < 0) {
-        perror("Failed to create L2CAP socket");
+        fprintf(stderr, "Failed to create L2CAP socket: %s (%d)\n", strerror(errno), errno);
         return -1;
     }
 
@@ -71,7 +71,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     bacpy(&srcaddr.l2_bdaddr, src);
 
     if (bind(sock, (struct sockaddr *)&srcaddr, sizeof(srcaddr)) < 0) {
-        perror("Failed to bind L2CAP socket");
+        fprintf(stderr, "Failed to bind L2CAP socket: %s (%d)\n", strerror(errno), errno);
         close(sock);
         return -1;
     }
@@ -81,7 +81,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     btsec.level = sec;
     if (setsockopt(sock, SOL_BLUETOOTH, BT_SECURITY, &btsec,
                             sizeof(btsec)) != 0) {
-        fprintf(stderr, "Failed to set L2CAP security level\n");
+        fprintf(stderr, "Failed to set L2CAP security level: %s (%d)\n", strerror(errno), errno);
         close(sock);
         return -1;
     }
@@ -97,7 +97,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     fflush(stdout);
 
     if (connect(sock, (struct sockaddr *) &dstaddr, sizeof(dstaddr)) < 0) {
-        perror(" Failed to connect");
+        fprintf(stderr, " Failed to connect: %s (%d)\n", strerror(errno), errno);
         close(sock);
         return -1;
     }
