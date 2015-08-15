@@ -486,7 +486,7 @@ int main(int argc, const char **argv)
         goto fail;
     }
 
-    result = hci_le_conn_update(dd, l2cci.hci_handle,
+    result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
                                 0x0006 /* min_interval */,
                                 0x0006 /* max_interval */,
                                 0 /* latency */,
