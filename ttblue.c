@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
+#include <ctype.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -168,11 +169,15 @@ int main(int argc, const char **argv)
         devid = 0;
 
     // prompt user to put device in pairing mode
-    if (dev_code == UINT32_MAX)
+    if (dev_code == UINT32_MAX) {
         fputs("****************************************************************\n"
               "Please put device in pairing mode (MENU -> PHONE -> PAIR NEW)...\n"
-              "****************************************************************\n\n",
+              "****************************************************************\n"
+              "Press Enter to continue: ",
               stderr);
+        getchar();
+        fputs("\n", stderr);
+    }
 
     // setup HCI and L2CAP sockets
     dd = hci_open_dev(devid);
@@ -271,7 +276,7 @@ int main(int argc, const char **argv)
     } else {
         fprintf(stderr, "\n**************************************************\n"
                         "Enter 6-digit pairing code shown on device: ");
-        if (scanf("%d%c", &dev_code, &ch) != 1) {
+        if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
             fprintf(stderr, "Pairing code should be 6-digit number.\n");
             goto fail;
         }
