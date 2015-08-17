@@ -62,6 +62,8 @@ EXPECT_uint8(int fd, uint16_t handle, uint8_t val)
 }
 
 void hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl);
+
+int tt_authorize(int fd, uint32_t code, bool new_code);
 int tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf);
 int tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length);
 int tt_delete_file(int fd, uint32_t fileno);

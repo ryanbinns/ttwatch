@@ -106,8 +106,9 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
 /****************************************************************************/
 
-int get_activities=0, update_gps=0, version=0, debug=1;
-uint32_t dev_code=UINT32_MAX;
+int debug=1;
+int get_activities=0, update_gps=0, version=0, new_pair=1, debug=1;
+uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL;
 
 struct poptOption options[] = {
@@ -117,7 +118,7 @@ struct poptOption options[] = {
     { "update-gps", 0, POPT_ARG_NONE, &update_gps, 0, "Download TomTom QuickFixGPS update file and send it to the watch" },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
-    { "code", 'c', POPT_ARG_INT, &dev_code, 0, "6-digit pairing code for the watch (if already paired)", "NUMBER" },
+    { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
     { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
     { "quiet", 'q', POPT_ARG_NONE, 0, 'q', "Suppress debugging output" },
@@ -132,21 +133,17 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
+
+    // parse args
     char ch;
     poptContext optCon = poptGetContext(NULL, argc, argv, options, 0);
 
-    // parse args
     while ((ch=poptGetNextOpt(optCon))>=0) {
         switch (ch) {
-        case 'D':
-            debug++;
-            break;
-        case 'q':
-            debug = 0;
-            break;
-        case 'a':
-            get_activities = update_gps = true;
-            break;
+        case 'c': new_pair=false; break;
+        case 'D': debug++; break;
+        case 'q': debug = 0; break;
+        case 'a': get_activities = update_gps = true; break;
         }
     }
     if (ch<-1) {
@@ -169,7 +166,7 @@ int main(int argc, const char **argv)
         devid = 0;
 
     // prompt user to put device in pairing mode
-    if (dev_code == UINT32_MAX) {
+    if (new_pair) {
         fputs("****************************************************************\n"
               "Please put device in pairing mode (MENU -> PHONE -> PAIR NEW)...\n"
               "****************************************************************\n"
@@ -200,6 +197,16 @@ int main(int argc, const char **argv)
     fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
     if (fd < 0) {
         goto fail;
+    }
+
+    // prompt for pairing code
+    if (new_pair) {
+        fprintf(stderr, "\n**************************************************\n"
+                "Enter 6-digit pairing code shown on device: ");
+        if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
+            fprintf(stderr, "Pairing code should be 6-digit number.\n");
+            goto fail;
+        }
     }
 
     // request minimum connection interval
@@ -265,31 +272,7 @@ int main(int argc, const char **argv)
     }
 
     // authorize with the device
-    const uint16_t auth_one = btohs(0x0001);
-    const uint8_t auth_magic[] = { 0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0 };
-    if (dev_code != UINT32_MAX) {
-        uint32_t bcode = htobl(dev_code);
-        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
-        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
-    } else {
-        fprintf(stderr, "\n**************************************************\n"
-                        "Enter 6-digit pairing code shown on device: ");
-        if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
-            fprintf(stderr, "Pairing code should be 6-digit number.\n");
-            goto fail;
-        }
-        uint32_t bcode = htobl(dev_code);
-        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
-        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
-        att_write(fd, 0x0029, &auth_one, sizeof auth_one);
-        att_write(fd, 0x003c, &auth_one, sizeof auth_one);
-        att_write(fd, 0x002c, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
-        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
-    }
-    if (EXPECT_uint8(fd, H_PASSCODE, 1) < 0) {
+    if (tt_authorize(fd, dev_code, new_pair) < 0) {
         fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
         goto fail;
     }

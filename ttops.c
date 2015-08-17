@@ -43,6 +43,32 @@ hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl)
 }
 
 int
+tt_authorize(int fd, uint32_t code, bool new_code)
+{
+    // authorize with the device
+    const uint16_t auth_one = btohs(0x0001);
+    const uint8_t auth_magic[] = { 0x01, 0x13, 0, 0, 0x01, 0x12, 0, 0 };
+    uint32_t bcode = htobl(code);
+
+    if (new_code) {
+        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
+        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
+        att_write(fd, 0x0029, &auth_one, sizeof auth_one);
+        att_write(fd, 0x003c, &auth_one, sizeof auth_one);
+        att_write(fd, 0x002c, &auth_one, sizeof auth_one);
+        att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
+        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
+    } else {
+        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
+        att_wrreq(fd, H_MAGIC, auth_magic, sizeof auth_magic);
+        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
+        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
+    }
+
+    return EXPECT_uint8(fd, H_PASSCODE, 1);
+}
+
+int
 tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 {
     *buf = NULL;
