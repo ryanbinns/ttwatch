@@ -298,17 +298,24 @@ int main(int argc, const char **argv)
         tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
 
         if (debug > 1) {
-            fputs("Reading preferences file 0x000f20000 from watch...\n", stderr);
-            if ((length=tt_read_file(fd, 0x00f20000, 0, &fbuf)) < 0) {
-                fputs("Could not read preferences file 0x00f20000 from watch.", stderr);
+            uint32_t fileno = 0x000f20000;
+            fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
+            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+                fprintf(stderr, "Could not read preferences file 0x%08x from watch.", fileno);
             } else {
-                if ((f = fopen("0x00f20000.xml", "wb")) == NULL) {
-                    fprintf(stderr, "Could not open 00f20000.xml: %s (%d)\n", strerror(errno), errno);
+                char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
+                time_t t = time(NULL);
+                struct tm *tmp = localtime(&t);
+                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                sprintf(filename, "%08x_%s.xml", fileno, filetime);
+
+                if ((f = fopen(filename, "wxb")) == NULL) {
+                    fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
                 } else {
                     if (fwrite(fbuf, 1, length, f) < length)
-                        fprintf(stderr, "Could not save to 00f20000.xml: %s (%d)\n", strerror(errno), errno);
+                        fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                     else
-                        fprintf(stderr, "  Saved %d bytes to 00f20000.xml\n", length);
+                        fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
                     fclose(f);
                     free(fbuf);
                 }
@@ -354,35 +361,27 @@ int main(int argc, const char **argv)
         }
 
         if (debug > 1) {
-            fputs("Reading 00020005.bin from watch...\n", stderr);
-            if ((length=tt_read_file(fd, 0x00020005, 0, &fbuf)) < 0) {
-                fputs("Could not read file 0x00020005 from watch.", stderr);
-            } else {
-                if ((f = fopen("00020005.bin", "wb")) == NULL) {
-                    fprintf(stderr, "Could not open 00020005.bin: %s (%d)\n", strerror(errno), errno);
+            for (uint32_t fileno=0x00020005; fileno>=0x00020001; fileno-=4) {
+                fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
+                if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+                    fprintf(stderr, "Could not read file 0x%08x from watch.", fileno);
                 } else {
-                    if (fwrite(fbuf, 1, length, f) < length)
-                        fprintf(stderr, "Could not save to 00020005.bin: %s (%d)\n", strerror(errno), errno);
-                    else
-                        fprintf(stderr, "  Saved %d bytes to 00020005.bin\n", length);
-                    fclose(f);
-                    free(fbuf);
-                }
-            }
+                    char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
+                    time_t t = time(NULL);
+                    struct tm *tmp = localtime(&t);
+                    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                    sprintf(filename, "%08x_%s.bin", fileno, filetime);
 
-            fputs("Reading 00020001.bin from watch...\n", stderr);
-            if ((length=tt_read_file(fd, 0x00020001, 0, &fbuf)) < 0) {
-                fputs("Could not read file 0x00020001 from watch.", stderr);
-            } else {
-                if ((f = fopen("00020001.bin", "wb")) == NULL) {
-                    fprintf(stderr, "Could not open 00020001.bin: %s (%d)\n", strerror(errno), errno);
-                } else {
-                    if (fwrite(fbuf, 1, length, f) < length)
-                        fprintf(stderr, "Could not save to 00020001.bin: %s (%d)\n", strerror(errno), errno);
-                    else
-                        fprintf(stderr, "  Saved %d bytes to 00020001.bin\n", length);
-                    fclose(f);
-                    free(fbuf);
+                    if ((f = fopen(filename, "wxb")) == NULL) {
+                        fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+                    } else {
+                        if (fwrite(fbuf, 1, length, f) < length)
+                            fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                        else
+                            fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
+                        fclose(f);
+                        free(fbuf);
+                    }
                 }
             }
         }
