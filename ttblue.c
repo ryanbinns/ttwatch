@@ -107,7 +107,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 /****************************************************************************/
 
 int debug=1;
-int get_activities=0, update_gps=0, version=0, new_pair=1, debug=1;
+int get_activities=0, update_gps=0, version=0, daemonize=0, new_pair=1;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL;
 
@@ -119,6 +119,7 @@ struct poptOption options[] = {
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
+    { "daemon", 0, POPT_ARG_NONE, &daemonize, 0, "Run as a daemon which will try to connect every 10 seconds" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
     { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
     { "quiet", 'q', POPT_ARG_NONE, 0, 'q', "Suppress debugging output" },
@@ -165,6 +166,14 @@ int main(int argc, const char **argv)
     } else if ((devid = hci_get_route(NULL)) < 0)
         devid = 0;
 
+    if (daemonize && new_pair)  {
+        fprintf(stderr,
+                "Daemon mode cannot be used together with initial pairing\n"
+                "Please specify existing pairing code, or run this first to pair:\n"
+                "\t%s -d %s\n", argv[0], dev_address);
+        return 2;
+    }
+
     // prompt user to put device in pairing mode
     if (new_pair) {
         fputs("****************************************************************\n"
@@ -176,199 +185,210 @@ int main(int argc, const char **argv)
         fputs("\n", stderr);
     }
 
-    // setup HCI and L2CAP sockets
-    dd = hci_open_dev(devid);
-    if (dd < 0) {
-        fprintf(stderr, "Can't open hci%d: %s (%d)\n", devid, strerror(errno), errno);
-        goto preopen_fail;
-    }
-
-    // get host name and address
-    char hciname[64];
-    struct hci_dev_info hci_info;
-    if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0
-        || hci_devba(devid, &src_addr) < 0) {
-        fprintf(stderr, "Can't get hci%d info: %s (%d)\n", devid, strerror(errno), errno);
-        hci_close_dev(dd);
-        goto preopen_fail;
-    }
-
-    // create L2CAP socket
-    fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, true);
-    if (fd < 0) {
-        goto fail;
-    }
-
-    // prompt for pairing code
-    if (new_pair) {
-        fprintf(stderr, "\n**************************************************\n"
-                "Enter 6-digit pairing code shown on device: ");
-        if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
-            fprintf(stderr, "Pairing code should be 6-digit number.\n");
-            goto fail;
+    for (bool first=true; first || daemonize; first=false) {
+        // setup HCI and L2CAP sockets
+        dd = hci_open_dev(devid);
+        if (dd < 0) {
+            fprintf(stderr, "Can't open hci%d: %s (%d)\n", devid, strerror(errno), errno);
+            goto preopen_fail;
         }
-    }
 
-    // request minimum connection interval
-    struct l2cap_conninfo l2cci;
-    int length = sizeof l2cci;
-    int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
-    if (result < 0) {
-        perror("getsockopt");
-        goto fail;
-    }
-
-    result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
-                                0x0006 /* min_interval */,
-                                0x0006 /* max_interval */,
-                                0 /* latency */,
-                                200 /* supervision_timeout */,
-                                2000);
-    if (result < 0) {
-        if (errno==EPERM) {
-            fputs("**********************************************************\n"
-                  "NOTE: This program lacks the permissions necessary for\n"
-                  "  manipulating the raw Bluetooth HCI socket, which\n"
-                  "  is required to set the minimum connection inverval\n"
-                  "  and speed up data transfer.\n\n"
-                  "  To fix this, run it as root or, better yet, set the\n"
-                  "  following capabilities on the ttblue executable:\n\n"
-                  "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
-                  "  For gory details, see the BlueZ mailing list:\n"
-                  "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
-                  "**********************************************************\n",
-                  stderr);
-        } else {
-            perror("hci_le_conn_update");
-            goto fail;
+        // get host name and address
+        char hciname[64];
+        struct hci_dev_info hci_info;
+        if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0
+            || hci_devba(devid, &src_addr) < 0) {
+            fprintf(stderr, "Can't get hci%d info: %s (%d)\n", devid, strerror(errno), errno);
+            hci_close_dev(dd);
+            goto preopen_fail;
         }
-    }
 
-    // show device identifiers
-    struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU]; int len; } info[] = {
-        { 0x001e, "maker" },
-        { 0x0014, "model_name" },
-        { 0x001a, "model_num" },
-        { 0x001c, "firmware" },
-        { 0x0016, "serial" },
-        { 0x0003, "user_name" },
-        { 0 }
-    };
-    for (struct tt_dev_info *p = info; p->handle; p++)
-        p->len = att_read(fd, p->handle, p->buf);
-    if (version) {
-        fprintf(stderr, "\nDevice information:\n");
-        for (struct tt_dev_info *p = info; p->handle; p++)
-            fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
-        int8_t rssi=0;
-        if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
-            fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
-    }
-
-    // check that it's actually a TomTom device
-    if (strcmp(info[0].buf, "TomTom Fitness") != 0) {
-        fprintf(stderr, "Not a TomTom device, exiting!\n");
-        goto fail;
-    }
-
-    // authorize with the device
-    if (tt_authorize(fd, dev_code, new_pair) < 0) {
-        fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
-        goto fail;
-    }
-
-    // set timeout to 20 seconds (delete and write operations can be slow)
-    struct timeval to = {.tv_sec=20, .tv_usec=0};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
-
-    // transfer files
-    uint8_t *fbuf;
-    FILE *f;
-
-    fprintf(stderr, "\nSetting PHONE menu to '%s'.\n", hciname);
-    tt_delete_file(fd, 0x00020002);
-    tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
-
-    if (get_activities) {
-        uint16_t *list;
-        int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-        char filetime[16], filename[strlen(activity_store) + strlen("/0910000_20150101_010101.ttbin") + 1];
-        fprintf(stderr, "\nFound %d activity files on watch.\n", n_files);
-        for (int ii=0; ii<n_files; ii++) {
-            uint32_t fileno = 0x00910000 + list[ii];
-
-            fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
-            if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
-                fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
+        // create L2CAP socket connected to watch
+        for (;; first=false) {
+            if (!first) {
+                fputs("Sleeping 10s...\n", stderr);
+                sleep(10);
+            }
+            fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, first);
+            if (fd >= 0)
+                break;
+            else if ((errno!=ENOTCONN) && (errno!=EINTR))
                 goto fail;
-            } else {
-                time_t t = time(NULL);
-                struct tm *tmp = localtime(&t);
-                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
+        }
 
-                if ((f = fopen(filename, "wxb")) == NULL) {
-                    fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+        // prompt for pairing code
+        if (new_pair) {
+            fprintf(stderr, "\n**************************************************\n"
+                    "Enter 6-digit pairing code shown on device: ");
+            if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
+                fprintf(stderr, "Pairing code should be 6-digit number.\n");
+                goto fail;
+            }
+        }
+
+        // request minimum connection interval
+        struct l2cap_conninfo l2cci;
+        int length = sizeof l2cci;
+        int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
+        if (result < 0) {
+            perror("getsockopt");
+            goto fail;
+        }
+
+        result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
+                                    0x0006 /* min_interval */,
+                                    0x0006 /* max_interval */,
+                                    0 /* latency */,
+                                    200 /* supervision_timeout */,
+                                    2000);
+        if (result < 0) {
+            if (errno==EPERM) {
+                fputs("**********************************************************\n"
+                      "NOTE: This program lacks the permissions necessary for\n"
+                      "  manipulating the raw Bluetooth HCI socket, which\n"
+                      "  is required to set the minimum connection inverval\n"
+                      "  and speed up data transfer.\n\n"
+                      "  To fix this, run it as root or, better yet, set the\n"
+                      "  following capabilities on the ttblue executable:\n\n"
+                      "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
+                      "  For gory details, see the BlueZ mailing list:\n"
+                      "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
+                      "**********************************************************\n",
+                      stderr);
+            } else {
+                perror("hci_le_conn_update");
+                goto fail;
+            }
+        }
+
+        // show device identifiers
+        struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU]; int len; } info[] = {
+            { 0x001e, "maker" },
+            { 0x0014, "model_name" },
+            { 0x001a, "model_num" },
+            { 0x001c, "firmware" },
+            { 0x0016, "serial" },
+            { 0x0003, "user_name" },
+            { 0 }
+        };
+        for (struct tt_dev_info *p = info; p->handle; p++)
+            p->len = att_read(fd, p->handle, p->buf);
+        if (version) {
+            fprintf(stderr, "\nDevice information:\n");
+            for (struct tt_dev_info *p = info; p->handle; p++)
+                fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
+            int8_t rssi=0;
+            if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
+                fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
+        }
+
+        // check that it's actually a TomTom device
+        if (strcmp(info[0].buf, "TomTom Fitness") != 0) {
+            fprintf(stderr, "Not a TomTom device, exiting!\n");
+            goto fail;
+        }
+
+        // authorize with the device
+        if (tt_authorize(fd, dev_code, new_pair) < 0) {
+            fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
+            goto fail;
+        }
+
+        // set timeout to 20 seconds (delete and write operations can be slow)
+        struct timeval to = {.tv_sec=20, .tv_usec=0};
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
+
+        // transfer files
+        uint8_t *fbuf;
+        FILE *f;
+
+        fprintf(stderr, "\nSetting PHONE menu to '%s'.\n", hciname);
+        tt_delete_file(fd, 0x00020002);
+        tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
+
+        if (get_activities) {
+            uint16_t *list;
+            int n_files = tt_list_sub_files(fd, 0x00910000, &list);
+            char filetime[16], filename[strlen(activity_store) + strlen("/0910000_20150101_010101.ttbin") + 1];
+            fprintf(stderr, "\nFound %d activity files on watch.\n", n_files);
+            for (int ii=0; ii<n_files; ii++) {
+                uint32_t fileno = 0x00910000 + list[ii];
+
+                fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
+                if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+                    fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
                     goto fail;
                 } else {
-                    if (fwrite(fbuf, 1, length, f) < length) {
-                        fclose(f);
-                        fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                    time_t t = time(NULL);
+                    struct tm *tmp = localtime(&t);
+                    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                    sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
+
+                    if ((f = fopen(filename, "wxb")) == NULL) {
+                        fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
                         goto fail;
                     } else {
-                        fclose(f);
-                        free(fbuf);
-                        fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
-                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        tt_delete_file(fd, fileno);
+                        if (fwrite(fbuf, 1, length, f) < length) {
+                            fclose(f);
+                            fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                            goto fail;
+                        } else {
+                            fclose(f);
+                            free(fbuf);
+                            fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
+                            fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                            tt_delete_file(fd, fileno);
+                        }
                     }
                 }
             }
+            fputc('\n', stderr);
         }
-    }
 
-    if (update_gps) {
-        CURLcode res;
-        char curlerr[CURL_ERROR_SIZE];
-        CURL *curl = curl_easy_init();
-        if (!curl) {
-            fputs("Could not start curl\n", stderr);
-            goto fail;
-        } else {
-            char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
-            sprintf(url+strlen(url), "%ld", (long)time(NULL));
-            fprintf(stderr, "\nUpdating QuickFixGPS...\n"
-                            "  Downloading %s\n", url);
-
-            f = tmpfile();
-            curl_easy_setopt(curl, CURLOPT_URL, url);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
-            curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
-            res = curl_easy_perform(curl);
-            curl_easy_cleanup(curl);
-            if (res != 0) {
-                fprintf(stderr, "Download failed: %s\n", curlerr);
+        if (update_gps) {
+            CURLcode res;
+            char curlerr[CURL_ERROR_SIZE];
+            CURL *curl = curl_easy_init();
+            if (!curl) {
+                fputs("Could not start curl\n", stderr);
+                goto fail;
             } else {
-                length = ftell(f);
-                fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
-                fseek (f, 0, SEEK_SET);
-                fbuf = malloc(length);
-                if (fread (fbuf, 1, length, f) < length)
-                    goto fail;
-                fclose (f);
+                char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
+                sprintf(url+strlen(url), "%ld", (long)time(NULL));
+                fprintf(stderr, "\nUpdating QuickFixGPS...\n"
+                        "  Downloading %s\n", url);
 
-                tt_delete_file(fd, 0x00010100);
-                if (tt_write_file(fd, 0x00010100, debug, fbuf, length) < 0)
-                    fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
-                else
-                    att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                f = tmpfile();
+                curl_easy_setopt(curl, CURLOPT_URL, url);
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+                curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
+                res = curl_easy_perform(curl);
+                curl_easy_cleanup(curl);
+                if (res != 0) {
+                    fprintf(stderr, "Download failed: %s\n", curlerr);
+                } else {
+                    length = ftell(f);
+                    fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
+                    fseek (f, 0, SEEK_SET);
+                    fbuf = malloc(length);
+                    if (fread (fbuf, 1, length, f) < length)
+                        goto fail;
+                    fclose (f);
+
+                    tt_delete_file(fd, 0x00010100);
+                    if (tt_write_file(fd, 0x00010100, debug, fbuf, length) < 0)
+                        fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
+                    else
+                        att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                }
             }
         }
+        hci_close_dev(dd);
+        close(fd);
     }
 
-    close(fd);
     return 0;
 
 fail:
