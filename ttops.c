@@ -104,7 +104,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
                 return -EBADMSG;
             check = crc16(optr, rlen, check); // update CRC
 
-            if (debug>1) {
+            if (debug>2) {
                 fprintf(stderr, "%04x: ", (int)(optr-*buf));
                 hexlify(stderr, optr, rlen, true);
             }
@@ -187,7 +187,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
                 if (att_write(fd, H_TRANSFER, out+20, wlen-20) < 0)
                     goto fail_write;
 
-            if (debug>1) {
+            if (debug>2) {
                 fprintf(stderr, "%04x: ", (int)(iptr-buf));
                 hexlify(stderr, out, wlen, true);
             }

@@ -332,11 +332,12 @@ Here is what the Android app does in normal operation:
   identifying the host device (the Bluetooth adapter device name),
   which is then shown at the bottom of the device screen in the
   __PHONE | SYNC__ menu.
-5. App reads the XML-ish preferences file `0x001f0000` from the
+5. App reads the XML-ish preferences file `0x000f2000` from the
    device; among other tidbits, this file contains information on the
    MySports online account to which the device is linked.
-6. App lists the `0x91****` files (TTBIN activity files), then reads
-   and deletes them one-by-one.
+6. The part that actually matters to end users:
+   * App lists the `0x91****` files (TTBIN activity files),
+   * … then reads and deletes them one-by-one.
 7. App reads the file `0x00020005`; this is some kind of device
    description file which is mostly binary but contains one
    identifiable ASCII string: the watch serial "number"

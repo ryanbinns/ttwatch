@@ -297,6 +297,24 @@ int main(int argc, const char **argv)
         tt_delete_file(fd, 0x00020002);
         tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
 
+        if (debug > 1) {
+            fputs("Reading preferences file 0x000f20000 from watch...\n", stderr);
+            if ((length=tt_read_file(fd, 0x00f20000, 0, &fbuf)) < 0) {
+                fputs("Could not read preferences file 0x00f20000 from watch.", stderr);
+            } else {
+                if ((f = fopen("0x00f20000.xml", "wb")) == NULL) {
+                    fprintf(stderr, "Could not open 00f20000.xml: %s (%d)\n", strerror(errno), errno);
+                } else {
+                    if (fwrite(fbuf, 1, length, f) < length)
+                        fprintf(stderr, "Could not save to 00f20000.xml: %s (%d)\n", strerror(errno), errno);
+                    else
+                        fprintf(stderr, "  Saved %d bytes to 00f20000.xml\n", length);
+                    fclose(f);
+                    free(fbuf);
+                }
+            }
+        }
+
         if (get_activities) {
             uint16_t *list;
             int n_files = tt_list_sub_files(fd, 0x00910000, &list);
@@ -331,6 +349,40 @@ int main(int argc, const char **argv)
                             tt_delete_file(fd, fileno);
                         }
                     }
+                }
+            }
+        }
+
+        if (debug > 1) {
+            fputs("Reading 00020005.bin from watch...\n", stderr);
+            if ((length=tt_read_file(fd, 0x00020005, 0, &fbuf)) < 0) {
+                fputs("Could not read file 0x00020005 from watch.", stderr);
+            } else {
+                if ((f = fopen("00020005.bin", "wb")) == NULL) {
+                    fprintf(stderr, "Could not open 00020005.bin: %s (%d)\n", strerror(errno), errno);
+                } else {
+                    if (fwrite(fbuf, 1, length, f) < length)
+                        fprintf(stderr, "Could not save to 00020005.bin: %s (%d)\n", strerror(errno), errno);
+                    else
+                        fprintf(stderr, "  Saved %d bytes to 00020005.bin\n", length);
+                    fclose(f);
+                    free(fbuf);
+                }
+            }
+
+            fputs("Reading 00020001.bin from watch...\n", stderr);
+            if ((length=tt_read_file(fd, 0x00020001, 0, &fbuf)) < 0) {
+                fputs("Could not read file 0x00020001 from watch.", stderr);
+            } else {
+                if ((f = fopen("00020001.bin", "wb")) == NULL) {
+                    fprintf(stderr, "Could not open 00020001.bin: %s (%d)\n", strerror(errno), errno);
+                } else {
+                    if (fwrite(fbuf, 1, length, f) < length)
+                        fprintf(stderr, "Could not save to 00020001.bin: %s (%d)\n", strerror(errno), errno);
+                    else
+                        fprintf(stderr, "  Saved %d bytes to 00020001.bin\n", length);
+                    fclose(f);
+                    free(fbuf);
                 }
             }
         }
