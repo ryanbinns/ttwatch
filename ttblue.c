@@ -134,6 +134,7 @@ int main(int argc, const char **argv)
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
     int success;
+    time_t last_qfg_update;
 
     // parse args
     char ch;
@@ -370,11 +371,42 @@ int main(int argc, const char **argv)
         }
 
         if (debug > 1) {
-            for (uint32_t fileno=0x00020005; fileno>=0x00020001; fileno-=4) {
-                fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
-                if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
-                    fprintf(stderr, "Could not read file 0x%08x from watch.", fileno);
+            uint32_t fileno = 0x00020005;
+            fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
+            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+                fprintf(stderr, "Could not read file 0x%08x from watch.", fileno);
+            } else {
+                char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
+                time_t t = time(NULL);
+                struct tm *tmp = localtime(&t);
+                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                sprintf(filename, "%08x_%s.bin", fileno, filetime);
+                if ((f = fopen(filename, "wxb")) == NULL) {
+                    fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
                 } else {
+                    if (fwrite(fbuf, 1, length, f) < length)
+                        fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
+                    else
+                        fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
+                    fclose(f);
+                    free(fbuf);
+                }
+            }
+        }
+
+        if (update_gps) {
+            fputs("Updating QuickFixGPS...\n", stderr);
+
+            time_t last_qfg_update = 0;
+            uint32_t fileno = 0x00020001;
+            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+                fprintf(stderr, "Could not read GPS status file 0x%08x from watch.", fileno);
+            } else {
+                struct tm tmp = { .tm_sec = fbuf[0x13], .tm_min = fbuf[0x12], .tm_hour = fbuf[0x11], .tm_mday = fbuf[0x05],
+                                  .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900, .tm_isdst = 0 };
+                last_qfg_update = mktime(&tmp);
+
+                if (debug > 1) {
                     char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
                     time_t t = time(NULL);
                     struct tm *tmp = localtime(&t);
@@ -386,52 +418,52 @@ int main(int argc, const char **argv)
                     } else {
                         if (fwrite(fbuf, 1, length, f) < length)
                             fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
-                        else
-                            fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
                         fclose(f);
                         free(fbuf);
                     }
                 }
             }
-        }
 
-        if (update_gps) {
-            CURLcode res;
-            char curlerr[CURL_ERROR_SIZE];
-            CURL *curl = curl_easy_init();
-            if (!curl) {
-                fputs("Could not start curl\n", stderr);
-                goto fail;
+            if (time(NULL) - last_qfg_update < 24*3600) {
+                fprintf(stderr, "  No update needed, last was at %s", ctime(&last_qfg_update));
             } else {
-                char url[128];
-                sprintf(url, GQF_URL, update_gps==1 ? "gps" : "glo", (long)time(NULL));
-                fprintf(stderr, "Updating QuickFixGPS...\n"
-                                "  Downloading %s\n", url);
-
-                f = tmpfile();
-                curl_easy_setopt(curl, CURLOPT_URL, url);
-                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
-                curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
-                curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
-                res = curl_easy_perform(curl);
-                curl_easy_cleanup(curl);
-                if (res != 0) {
-                    fprintf(stderr, "Download failed: %s\n", curlerr);
+                CURLcode res;
+                char curlerr[CURL_ERROR_SIZE];
+                CURL *curl = curl_easy_init();
+                if (!curl) {
+                    fputs("Could not start curl\n", stderr);
+                    goto fail;
                 } else {
-                    length = ftell(f);
-                    fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
-                    fseek (f, 0, SEEK_SET);
-                    fbuf = malloc(length);
-                    if (fread (fbuf, 1, length, f) < length)
-                        goto fail;
-                    fclose (f);
+                    char url[128];
+                    sprintf(url, GQF_URL, update_gps==1 ? "gps" : "glo", (long)time(NULL));
+                    fprintf(stderr, "  Downloading %s\n", url);
 
-                    tt_delete_file(fd, 0x00010100);
-                    if (tt_write_file(fd, 0x00010100, debug, fbuf, length) < 0) {
-                        fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
+                    f = tmpfile();
+                    curl_easy_setopt(curl, CURLOPT_URL, url);
+                    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
+                    curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+                    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
+                    res = curl_easy_perform(curl);
+                    curl_easy_cleanup(curl);
+                    if (res != 0) {
+                        fprintf(stderr, "Download failed: %s\n", curlerr);
                         goto fail;
-                    } else
-                        att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                    } else {
+                        length = ftell(f);
+                        fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
+                        fseek (f, 0, SEEK_SET);
+                        fbuf = malloc(length);
+                        if (fread (fbuf, 1, length, f) < length)
+                            goto fail;
+                        fclose (f);
+
+                        tt_delete_file(fd, 0x00010100);
+                        if (tt_write_file(fd, 0x00010100, debug, fbuf, length) < 0) {
+                            fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
+                            goto fail;
+                        } else
+                            att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                    }
                 }
             }
         }
