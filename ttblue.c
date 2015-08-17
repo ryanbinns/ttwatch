@@ -29,6 +29,7 @@
 #include "ttops.h"
 
 #define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
+#define GQF_URL "http://gpsquickfix.services.tomtom.com/fitness/sif%s.f2p3enc.ee?timestamp=%ld"
 
 /**
  * taken from bluez/tools/btgatt-client.c
@@ -102,6 +103,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
 int debug=1;
 int get_activities=0, update_gps=0, version=0, daemonize=0, new_pair=1;
+int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL;
 
@@ -109,14 +111,17 @@ struct poptOption options[] = {
     { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps --version" },
     { "get-activities", 0, POPT_ARG_NONE, &get_activities, 0, "Downloads and deletes .ttbin activity files from the watch" },
     { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
-    { "update-gps", 0, POPT_ARG_NONE, &update_gps, 0, "Download TomTom QuickFixGPS update file and send it to the watch" },
+    { "update-gps", 0, POPT_ARG_VAL, &update_gps, 1, "Download TomTom QuickFixGPS update file and send it to the watch" },
+    { "glonass", 0, POPT_ARG_VAL, &update_gps, 2, "Use GLONASS version of QuickFix update file." },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "daemon", 0, POPT_ARG_NONE, &daemonize, 0, "Run as a daemon which will try to connect every 10 seconds" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
     { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
-    { "quiet", 'q', POPT_ARG_NONE, 0, 'q', "Suppress debugging output" },
+    { "quiet", 'q', POPT_ARG_VAL, &debug, 0, "Suppress debugging output" },
+    { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 0, "Wait time after successful connection to watch", "SECONDS" },
+    { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 10, "Wait time after failed connection to watch", "SECONDS" },
 //    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
     POPT_AUTOHELP
     POPT_TABLEEND
@@ -128,7 +133,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
-    int sleept = 0;
+    int success;
 
     // parse args
     char ch;
@@ -138,7 +143,6 @@ int main(int argc, const char **argv)
         switch (ch) {
         case 'c': new_pair=false; break;
         case 'D': debug++; break;
-        case 'q': debug = 0; break;
         case 'a': get_activities = update_gps = version = true; break;
         }
     }
@@ -181,6 +185,12 @@ int main(int argc, const char **argv)
     }
 
     for (bool first=true; first || daemonize; ) {
+        if (!first) {
+            if (success)
+                fprintf(stderr, "Waiting for %d s...\n", sleep_success);
+            sleep(success ? sleep_success : sleep_fail);
+        }
+
         // setup HCI and L2CAP sockets
         dd = hci_open_dev(devid);
         if (dd < 0) {
@@ -251,31 +261,30 @@ int main(int argc, const char **argv)
             }
         }
 
-        // show device identifiers
-        struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU]; int len; } info[] = {
+        // check that it's actually a TomTom device and show device identifiers
+
+        struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU-3]; int len; } info[] = {
             { 0x001e, "maker" },
+            { 0x0016, "serial" },
+            { 0x0003, "user_name" },
             { 0x0014, "model_name" },
             { 0x001a, "model_num" },
             { 0x001c, "firmware" },
-            { 0x0016, "serial" },
-            { 0x0003, "user_name" },
             { 0 }
         };
         for (struct tt_dev_info *p = info; p->handle; p++)
             p->len = att_read(fd, p->handle, p->buf);
+        if (strncmp(info[0].buf, "TomTom Fitness", 14) != 0) {
+            fprintf(stderr, "Maker is not TomTom Fitness but '%.*s', exiting!\n", (int)(sizeof info[1].buf), info[1].buf);
+            goto fatal;
+        }
+        fprintf(stderr, "Connected to %s.\n", info[1].buf);
         if (version && first) {
-            fprintf(stderr, "Device information:\n");
             for (struct tt_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
             int8_t rssi=0;
             if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
                 fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
-        }
-
-        // check that it's actually a TomTom device
-        if (strcmp(info[0].buf, "TomTom Fitness") != 0) {
-            fprintf(stderr, "Not a TomTom device, exiting!\n");
-            goto fatal;
         }
 
         // authorize with the device
@@ -394,8 +403,8 @@ int main(int argc, const char **argv)
                 fputs("Could not start curl\n", stderr);
                 goto fail;
             } else {
-                char url[128]="http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=";
-                sprintf(url+strlen(url), "%ld", (long)time(NULL));
+                char url[128];
+                sprintf(url, GQF_URL, update_gps==1 ? "gps" : "glo", (long)time(NULL));
                 fprintf(stderr, "Updating QuickFixGPS...\n"
                                 "  Downloading %s\n", url);
 
@@ -427,17 +436,17 @@ int main(int argc, const char **argv)
             }
         }
 
-        fputs("Sleeping for 120 s...\n", stderr);
-        sleept = 120;
+        success = true;
         first = false;
-        goto cleanup;
+        close(fd);
+        hci_close_dev(dd);
+        continue;
+
     fail:
-        sleept = 10;
-    cleanup:
         close(fd);
     preopen_fail:
         hci_close_dev(dd);
-        sleep(sleept);
+        success = false;
     }
 
     return 0;
