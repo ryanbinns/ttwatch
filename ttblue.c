@@ -327,8 +327,8 @@ int main(int argc, const char **argv)
                     else
                         fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
                     fclose(f);
-                    free(fbuf);
                 }
+                free(fbuf);
             }
         }
 
@@ -352,10 +352,12 @@ int main(int argc, const char **argv)
 
                     if ((f = fopen(filename, "wxb")) == NULL) {
                         fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
+                        free(fbuf);
                         goto fail;
                     } else {
                         if (fwrite(fbuf, 1, length, f) < length) {
                             fclose(f);
+                            free(fbuf);
                             fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                             goto fail;
                         } else {
@@ -389,8 +391,8 @@ int main(int argc, const char **argv)
                     else
                         fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
                     fclose(f);
-                    free(fbuf);
                 }
+                free(fbuf);
             }
         }
 
@@ -419,8 +421,8 @@ int main(int argc, const char **argv)
                         if (fwrite(fbuf, 1, length, f) < length)
                             fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
                         fclose(f);
-                        free(fbuf);
                     }
+                    free(fbuf);
                 }
             }
 
