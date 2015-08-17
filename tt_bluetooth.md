@@ -20,6 +20,7 @@ Table of Contents
         * [Read from file](#read-from-file)
     * [Normal operation](#normal-operation)
   * [Mysteries](#mysteries)
+    * [File 0x00020001](#file-0x00020001)
   * [Acknowledgments](#acknowledgments)
 
 # Motivation
@@ -342,8 +343,9 @@ Here is what the Android app does in normal operation:
    description file which is mostly binary but contains one
    identifiable ASCII string: the watch serial "number"
    (e.g. `HC4354G00150`).
-8. App reads the file `0x00020001`; this is some kind of description
-   of the GPS firmware, containing a couple of ASCIIZ strings that
+8. App reads the file `0x00020001`; this represents the [status
+   of the GPS firmware](#file-0x00020001) somehow, and contains
+   a couple of ASCIIZ strings that
    appear to be related to the GPS firmware revision strings that also
    appear in the TTBIN header: e.g. `5xp__5.5.116-
    R32+5xpt_5.5.116-R32` and `EGSD5xp` for my watch.
@@ -399,6 +401,34 @@ BLE protocol and firmware:
   "notices" the change. Is it possible to cause the device to reload
   its own settings immediately?
 
+## File 0x00020001
+
+Partially decoded structure of this file: it appears to encode the UTC
+date of the last update to the QuickFixGPS file. Sending the GLONASS
+version of the update rather than the GPS version does not appear to
+affect anything other than the timestamp.
+
+Perhaps this can be used to avoid re-updating the QFG file
+unnecessarily on every connection... but I'm not really sure how to
+determine when the QFG file *expires*. Is it always *exactly 3 days*
+after the date here?
+
+    00: 03 00
+    02: 07 df = 2015 (int16_be)
+    04: 08 = month 8
+    05: 11 = day 17
+    06: 00 00
+    08: 39 6d = ??? these change every time GPS is activated ???
+    0a: 00 00       sometimes these too
+    0c: 00 00       sometimes these too
+    0e: 2d 07 11
+    11: 06 2a 04 = 06:42:04 (hour minute second)
+    14: 06 00
+    16: 50 00
+    18: 02 00
+    1a: 05 05 74 00
+    1e: + ASCIIZ firmware string (34 bytes w/null)
+    40: + ASCIIZ firmware string (8 bytes w/null)
 
 # Acknowledgments
 
