@@ -325,7 +325,7 @@ int main(int argc, const char **argv)
         if (get_activities) {
             uint16_t *list;
             int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-            char filetime[16], filename[strlen(activity_store) + strlen("/0910000_20150101_010101.ttbin") + 1];
+            char filetime[16], filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
             fprintf(stderr, "Found %d activity files on watch.\n", n_files);
             for (int ii=0; ii<n_files; ii++) {
                 uint32_t fileno = 0x00910000 + list[ii];
