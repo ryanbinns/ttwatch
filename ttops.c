@@ -78,11 +78,11 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
     uint8_t cmd[] = {1, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
     if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
-        return -EBADMSG;
+        goto prealloc_fail;
 
     int flen = EXPECT_LENGTH(fd);
     if (flen < 0)
-        return -EBADMSG;
+        goto prealloc_fail;
 
     uint8_t *optr = *buf = malloc(flen + BT_ATT_DEFAULT_LE_MTU);
     const uint8_t *end = optr+flen;
@@ -101,7 +101,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         while (optr < checkpoint+2) {
             int rlen = EXPECT_BYTES(fd, optr);
             if (rlen < 0)
-                return -EBADMSG;
+                goto fail;
             check = crc16(optr, rlen, check); // update CRC
 
             if (debug>2) {
@@ -116,7 +116,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
         if (check!=0) {
             if (debug)
                 fprintf(stderr, "wrong crc16 sum: expected 0, got 0x%04x\n", check);
-            return -EBADMSG;
+            goto fail;
         }
 
         uint32_t c = htobl(++counter);
@@ -133,8 +133,13 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
     }
 
     if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
-        return -EBADMSG;
+        goto fail;
     return optr-*buf;
+
+fail:
+    free(*buf);
+prealloc_fail:
+    return -EBADMSG;
 }
 
 int

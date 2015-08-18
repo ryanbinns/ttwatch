@@ -445,16 +445,22 @@ int main(int argc, const char **argv)
                         fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
                         fseek (f, 0, SEEK_SET);
                         fbuf = malloc(length);
-                        if (fread (fbuf, 1, length, f) < length)
+                        if (fread (fbuf, 1, length, f) < length) {
+                            fclose(f);
+                            free(fbuf);
+                            fputs("Could not read QuickFixGPS update.\n", stderr);
                             goto fail;
-                        fclose (f);
-
-                        tt_delete_file(fd, 0x00010100);
-                        if (tt_write_file(fd, 0x00010100, debug, fbuf, length) < 0) {
-                            fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
-                            goto fail;
-                        } else
-                            att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                        } else {
+                            fclose (f);
+                            tt_delete_file(fd, 0x00010100);
+                            result = tt_write_file(fd, 0x00010100, debug, fbuf, length);
+                            free(fbuf);
+                            if (result < 0) {
+                                fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
+                                goto fail;
+                            } else
+                                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                        }
                     }
                 }
             }
