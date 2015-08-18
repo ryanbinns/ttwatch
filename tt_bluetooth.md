@@ -418,11 +418,20 @@ after the date here?
     04: 08 = month 8
     05: 11 = day 17
     06: 00 00
-    08: 39 6d = ??? these change every time GPS is activated ???
-    0a: 00 00       sometimes these too
-    0c: 00 00       sometimes these too
-    0e: 2d 07 11
-    11: 06 2a 04 = 06:42:04 (hour minute second)
+
+    Next 6 bytes (but usually only 2 bytes?) change every time GPS is
+    activated:
+      08: 39 6d
+      0a: 00 00
+      0c: 00 00
+
+    I think this part represents a UTC time, since it's close to the
+    current UTC time right after an update:
+        0e: 2d = 45 (year - 1970?)
+        0f: 07 = month - 1? (as in POSIX struct timeval)
+        10: 11 = day 17
+        11: 06 2a 04 = 06:42:04 (hour minute second)
+
     14: 06 00
     16: 50 00
     18: 02 00
