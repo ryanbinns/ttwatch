@@ -266,7 +266,7 @@ int main(int argc, const char **argv)
                                     200 /* supervision_timeout */,
                                     2000);
         if (result < 0) {
-            if (errno==EPERM) {
+            if (errno==EPERM && first) {
                 fputs("**********************************************************\n"
                       "NOTE: This program lacks the permissions necessary for\n"
                       "  manipulating the raw Bluetooth HCI socket, which\n"
@@ -286,7 +286,6 @@ int main(int argc, const char **argv)
         }
 
         // check that it's actually a TomTom device and show device identifiers
-
         struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU-3]; int len; } info[] = {
             { 0x001e, "maker" },
             { 0x0016, "serial" },
