@@ -99,6 +99,29 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     return sock;
 }
 
+int
+save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int length, int indent, int verbose)
+{
+    char istr[indent+1];
+    memset(istr, ' ', indent);
+    istr[indent] = 0;
+    FILE *f;
+
+    if ((f = fopen(filename, mode)) == NULL) {
+        fprintf(stderr, "%sCould not open %s: %s (%d)\n", istr, filename, strerror(errno), errno);
+        return -1;
+    } else if (fwrite(fbuf, length, 1, f) != 1) {
+        fclose(f);
+        fprintf(stderr, "%sCould not save to %s: %s (%d)\n", istr, filename, strerror(errno), errno);
+        return -2;
+    } else {
+        fclose(f);
+        if (verbose)
+            fprintf(stderr, "%sSaved %d bytes to %s\n", istr, length, filename);
+        return 0;
+    }
+}
+
 /****************************************************************************/
 
 int debug=1;
@@ -319,15 +342,7 @@ int main(int argc, const char **argv)
                 strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
                 sprintf(filename, "%08x_%s.xml", fileno, filetime);
 
-                if ((f = fopen(filename, "wxb")) == NULL) {
-                    fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
-                } else {
-                    if (fwrite(fbuf, 1, length, f) < length)
-                        fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
-                    else
-                        fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
-                    fclose(f);
-                }
+                save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
                 free(fbuf);
             }
         }
@@ -350,23 +365,13 @@ int main(int argc, const char **argv)
                     strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
                     sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
 
-                    if ((f = fopen(filename, "wxb")) == NULL) {
-                        fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
-                        free(fbuf);
+                    int result = save_buf_to_file(filename, "wxb", fbuf, length, 4, true);
+                    free(fbuf);
+                    if (result < 0)
                         goto fail;
-                    } else {
-                        if (fwrite(fbuf, 1, length, f) < length) {
-                            fclose(f);
-                            free(fbuf);
-                            fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
-                            goto fail;
-                        } else {
-                            fclose(f);
-                            free(fbuf);
-                            fprintf(stderr, "    Saved %d bytes to %s\n", length, filename);
-                            fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                            tt_delete_file(fd, fileno);
-                        }
+                    else {
+                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        tt_delete_file(fd, fileno);
                     }
                 }
             }
@@ -383,15 +388,7 @@ int main(int argc, const char **argv)
                 struct tm *tmp = localtime(&t);
                 strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
                 sprintf(filename, "%08x_%s.bin", fileno, filetime);
-                if ((f = fopen(filename, "wxb")) == NULL) {
-                    fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
-                } else {
-                    if (fwrite(fbuf, 1, length, f) < length)
-                        fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
-                    else
-                        fprintf(stderr, "  Saved %d bytes to %s\n", length, filename);
-                    fclose(f);
-                }
+                save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
                 free(fbuf);
             }
         }
@@ -414,16 +411,9 @@ int main(int argc, const char **argv)
                     struct tm *tmp = localtime(&t);
                     strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
                     sprintf(filename, "%08x_%s.bin", fileno, filetime);
-
-                    if ((f = fopen(filename, "wxb")) == NULL) {
-                        fprintf(stderr, "Could not open %s: %s (%d)\n", filename, strerror(errno), errno);
-                    } else {
-                        if (fwrite(fbuf, 1, length, f) < length)
-                            fprintf(stderr, "Could not save to %s: %s (%d)\n", filename, strerror(errno), errno);
-                        fclose(f);
-                    }
-                    free(fbuf);
+                    save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
                 }
+                free(fbuf);
             }
 
             if (time(NULL) - last_qfg_update < 24*3600) {
