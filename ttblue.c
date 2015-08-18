@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -124,6 +125,26 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
 
 /****************************************************************************/
 
+void
+nullhandler(int signal) {}
+
+int
+isleep(int seconds, int verbose)
+{
+    if (verbose) {
+        fprintf(stderr, "Sleeping for %d seconds...", seconds);
+        fflush(stderr);
+    }
+    signal(SIGALRM, nullhandler);
+    int res = sleep(seconds);
+    signal(SIGALRM, SIG_IGN);
+    if (verbose)
+        fprintf(stderr, "%s\n\n", res ? " woken by signal!" : "");
+    return (res>0);
+}
+
+/****************************************************************************/
+
 int debug=1;
 int get_activities=0, update_gps=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10;
@@ -189,7 +210,7 @@ int main(int argc, const char **argv)
     } else if ((devid = hci_get_route(NULL)) < 0)
         devid = 0;
 
-    if (daemonize && new_pair)  {
+    if (daemonize && new_pair) {
         fprintf(stderr,
                 "Daemon mode cannot be used together with initial pairing\n"
                 "Please specify existing pairing code, or run this first to pair:\n"
@@ -209,11 +230,8 @@ int main(int argc, const char **argv)
     }
 
     for (bool first=true; first || daemonize; ) {
-        if (!first) {
-            if (success)
-                fprintf(stderr, "Waiting for %d s...\n", sleep_success);
-            sleep(success ? sleep_success : sleep_fail);
-        }
+        if (!first)
+            isleep(success ? sleep_success : sleep_fail, success || (debug>1));
 
         // setup HCI and L2CAP sockets
         dd = hci_open_dev(devid);
