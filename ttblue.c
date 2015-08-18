@@ -277,12 +277,14 @@ int main(int argc, const char **argv)
             goto fail;
         }
 
-        result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
-                                    0x0006 /* min_interval */,
-                                    0x0006 /* max_interval */,
-                                    0 /* latency */,
-                                    200 /* supervision_timeout */,
-                                    2000);
+        do {
+            result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
+                                        0x0006 /* min_interval */,
+                                        0x0006 /* max_interval */,
+                                        0 /* latency */,
+                                        200 /* supervision_timeout */,
+                                        2000);
+        } while (errno==ETIMEDOUT);
         if (result < 0) {
             if (errno==EPERM && first) {
                 fputs("**********************************************************\n"
