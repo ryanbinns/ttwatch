@@ -255,7 +255,7 @@ int main(int argc, const char **argv)
         // create L2CAP socket connected to watch
         fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, first);
         if (fd < 0) {
-            if (!daemonize || errno!=ENOTCONN)
+            if (!daemonize || errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
             goto fail;
         }
