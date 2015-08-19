@@ -205,7 +205,9 @@ int main(int argc, char *argv[])
     {
         if ((formats & OFFLINE_FORMATS[i].mask) && OFFLINE_FORMATS[i].producer)
         {
-            if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_records.count)
+            if ((OFFLINE_FORMATS[i].gps_ok && ttbin->gps_records.count)
+                || (OFFLINE_FORMATS[i].treadmill_ok && ttbin->activity==ACTIVITY_TREADMILL)
+                || (OFFLINE_FORMATS[i].pool_swim_ok && ttbin->activity==ACTIVITY_SWIMMING))
             {
                 FILE *output_file = stdout;
                 if (!pipe_mode)

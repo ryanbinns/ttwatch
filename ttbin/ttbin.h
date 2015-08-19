@@ -317,7 +317,9 @@ typedef struct
 {
     uint32_t mask;
     const char *name;
-    int requires_gps;
+    int gps_ok;
+    int treadmill_ok;
+    int pool_swim_ok;
     void (*producer)(TTBIN_FILE* ttbin, FILE *file);
 } OFFLINE_FORMAT;
 

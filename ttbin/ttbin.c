@@ -19,12 +19,12 @@
 /*****************************************************************************/
 
 const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT] = {
-    { OFFLINE_FORMAT_CSV, "csv", 0, export_csv },
-    { OFFLINE_FORMAT_FIT, "fit", 1, 0          },
-    { OFFLINE_FORMAT_GPX, "gpx", 1, export_gpx },
-    { OFFLINE_FORMAT_KML, "kml", 1, export_kml },
-    { OFFLINE_FORMAT_PWX, "pwx", 1, 0          },
-    { OFFLINE_FORMAT_TCX, "tcx", 1, export_tcx },
+    { OFFLINE_FORMAT_CSV, "csv", 1, 1, 1, export_csv },
+    { OFFLINE_FORMAT_FIT, "fit", 1, 0, 0, 0          },
+    { OFFLINE_FORMAT_GPX, "gpx", 1, 0, 0, export_gpx },
+    { OFFLINE_FORMAT_KML, "kml", 1, 0, 0, export_kml },
+    { OFFLINE_FORMAT_PWX, "pwx", 1, 0, 0, 0          },
+    { OFFLINE_FORMAT_TCX, "tcx", 1, 1, 0, export_tcx },
 };
 
 /*****************************************************************************/
@@ -960,7 +960,9 @@ uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats)
     {
         if ((formats & OFFLINE_FORMATS[i].mask) && OFFLINE_FORMATS[i].producer)
         {
-            if (!OFFLINE_FORMATS[i].requires_gps || ttbin->gps_records.count)
+            if ((OFFLINE_FORMATS[i].gps_ok && ttbin->gps_records.count)
+                || (OFFLINE_FORMATS[i].treadmill_ok && ttbin->activity==ACTIVITY_TREADMILL)
+                || (OFFLINE_FORMATS[i].pool_swim_ok && ttbin->activity==ACTIVITY_SWIMMING))
             {
                 f = fopen(create_filename(ttbin, OFFLINE_FORMATS[i].name), "w");
                 if (f)
