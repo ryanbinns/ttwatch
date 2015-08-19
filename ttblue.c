@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
@@ -149,12 +150,13 @@ int debug=1;
 int get_activities=0, update_gps=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
-char *activity_store=".", *dev_address=NULL, *interface=NULL;
+char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
 
 struct poptOption options[] = {
     { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps --version" },
     { "get-activities", 0, POPT_ARG_NONE, &get_activities, 0, "Downloads and deletes .ttbin activity files from the watch" },
     { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
+    { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
     { "update-gps", 0, POPT_ARG_VAL, &update_gps, 1, "Download TomTom QuickFixGPS update file and send it to the watch" },
     { "glonass", 0, POPT_ARG_VAL, &update_gps, 2, "Use GLONASS version of QuickFix update file." },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
@@ -391,6 +393,25 @@ int main(int argc, const char **argv)
                     else {
                         fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
                         tt_delete_file(fd, fileno);
+                        if (postproc) {
+                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
+                            fflush(stderr);
+
+                            switch (fork()) {
+                            case 0:
+                                dup2(1, 2); // redirect stdout to stderr
+                                execlp(postproc, postproc, filename, NULL);
+                                exit(1); // if exec fails?
+                            default:
+                                wait(&result);
+                                if (result==0)
+                                    fputc('\n', stderr);
+                                else
+                                // Ridiculous syntax but I'm extremely proud of it :-P
+                            case -1:
+                                    fprintf(stderr, " FAILED\n");
+                            }
+                        }
                     }
                 }
             }
