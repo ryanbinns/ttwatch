@@ -23,15 +23,13 @@ kernels.
 The [`libbluetooth` (BlueZ)](http://www.bluez.org/),
 [`libcurl`](http://curl.haxx.se/libcurl), and
 [`popt`](http://directory.fsf.org/wiki/Popt) libraries are required.
-
-# Compiling it
-
-On Debian/Ubuntu-based systems, you can install the required libraries
-with:
+On Debian/Ubuntu-based systems, these can be installed with:
 
 ```bash
 $ sudo apt-get install libbluetooth-dev libcurl4-gnutls-dev libpopt-dev
 ```
+
+# Building
 
 Compilation with `gcc` should be straightforward:
 
@@ -49,13 +47,16 @@ sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue
 # Run it
 
 ```
-./ttblue -d <bluetooth-address> [-c <pairing-code>]
+./ttblue -a -d <bluetooth-address> [-c <pairing-code>] [-s <activity-store>]
 ```
 
 Where `bluetooth-address` is the twelve-digit MAC address of your
 TomTom GPS watch (`E4:04:39:__:__:__`) and pairing-code is a
 previously-used pairing code (can be from one of the "official" TomTom
 mobile apps), or left blank to create a new pairing.
+The `-a`/`--auto` option tells `ttblue` to download all activities and
+update QuickFixGPS, while `-s` specifies a location for `.ttbin`
+activity files to be output (current directory is the default).
 
 For the time being, you can use `sudo hcitool lescan` to find your
 device's BLE MAC address.
@@ -73,34 +74,40 @@ QuickGPSFix update and send it to the watch. (You can then use
 to convert the TTBIN files to GPX/TCX format.)
 
 ```none
-$ ./ttblue -d E4:04:39:17:62:B1 -c 123456
-
+$ ./ttblue -a -d E4:04:39:17:62:B1 -c 123456
 Opening L2CAP LE connection on ATT channel:
 	 src: 00:00:00:00:00:00
 	dest: E4:04:39:17:62:B1
-Connecting to device... Done
-
-Connected device information:
+Connected to HC4354G00150.
   maker     : TomTom Fitness
+  serial    : HC4354G00150
+  user_name : Lenski
   model_name: Runner
   model_num : 1001
   firmware  : 1.8.42
-  serial    : HC4354G00150
-  user_name : Lenski
-  rssi      : -75 dB
-
-Setting PHONE menu to 'dlenski-ultra'.
-
+  rssi      : -90 dB
+Setting PHONE menu to 'dlenski-ultra-0'.
 Found 1 activity files on watch.
   Reading activity file 00910000 ...
 11: read 55000 bytes from watch (1807/sec)
     Saved 55000 bytes to ./00910000_20150801_123616.ttbin
     Deleting activity file 00910000 ...
-
 Updating QuickFixGPS...
+  Last update was at at Sat Aug 1 04:11:03 2015.
   Downloading http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=1439172006
   Sending update to watch (32150 bytes)...
 7: wrote 32150 bytes to watch (1891/sec)
+```
+
+There's also a fairly rudimentary "daemon" mode wherein `ttblue` just
+loops over and over (by default it waits an hour to retry after a
+successful connection, but only 10 seconds after a failed one), and a
+`-p`/`--post` option to specify a command to be run on each
+successfully downloaded `.ttbin` file (see [`ttbin2strava.sh`](ttbin2strava.sh))
+for an example):
+
+```none
+$ ./ttblue -a --daemon -d e4:04:39:17:62:b1 -c 123456 -s ~/ttbin -p ttbin2strava.sh
 ```
 
 ## Why so slow?
@@ -115,7 +122,12 @@ Unfortunately, elevated permissions are required to configure this feature of a 
 
 # TODO
 
-* Command line options, config file, etc.
+* More command line options?
+* Real config file?
+* Better daemon mode that actually puts itself in the background
+  and writes output to a log file?
+* Integrate with [`ttwatch`](http://github.com/ryanbinns/ttwatch)
+  which already does all these things, but over USB?
 
 # Protocol documentation
 
