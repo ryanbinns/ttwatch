@@ -12,6 +12,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <signal.h>
+#include <stdarg.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -124,6 +125,21 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
     }
 }
 
+__attribute__ ((format (printf, 1, 2)))
+void
+term_title(const char *fmt, ...)
+{
+    if (isatty(1)) {
+        va_list va;
+        va_start(va, fmt);
+
+        fputs("\033]0;", stdout);
+        vfprintf(stdout, fmt, va);
+        fputc('\007', stdout);
+        fflush(stdout);
+    }
+}
+
 /****************************************************************************/
 
 void
@@ -232,8 +248,11 @@ int main(int argc, const char **argv)
     }
 
     for (bool first=true; first || daemonize; ) {
-        if (!first)
+        if (!first) {
+            term_title("ttblue: Sleeping");
             isleep(success ? sleep_success : sleep_fail, success || (debug>1));
+        }
+        term_title("ttblue: Connecting...");
 
         // setup HCI and L2CAP sockets
         dd = hci_open_dev(devid);
@@ -338,6 +357,8 @@ int main(int argc, const char **argv)
             goto fatal;
         }
 
+        term_title("ttblue: Connected");
+
         // set timeout to 20 seconds (delete and write operations can be slow)
         struct timeval to = {.tv_sec=20, .tv_usec=0};
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
@@ -377,6 +398,7 @@ int main(int argc, const char **argv)
                 uint32_t fileno = 0x00910000 + list[ii];
 
                 fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
+                term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
                 if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
                     fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
                     goto fail;
@@ -435,6 +457,7 @@ int main(int argc, const char **argv)
 
         if (update_gps) {
             fputs("Updating QuickFixGPS...\n", stderr);
+            term_title("ttblue: Updating QuickFixGPS");
 
             time_t last_qfg_update = 0;
             uint32_t fileno = 0x00020001;
