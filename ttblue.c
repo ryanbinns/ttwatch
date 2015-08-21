@@ -340,7 +340,7 @@ int main(int argc, const char **argv)
             p->len = att_read(fd, p->handle, p->buf);
         if (strncmp(info[0].buf, "TomTom Fitness", 14) != 0) {
             fprintf(stderr, "Maker is not TomTom Fitness but '%.*s', exiting!\n", (int)(sizeof info[1].buf), info[1].buf);
-            goto fatal;
+            if (first) goto fatal; else goto fail; // sometimes my watch randomly gives the wrong maker name
         }
         fprintf(stderr, "Connected to %s.\n", info[1].buf);
         if (version && first) {
