@@ -13,6 +13,12 @@ OUTPUT = ttblue
 
 all: $(OUTPUT)
 
+setcap: $(OUTPUT)
+	@echo 'This will give ttblue permissions to create raw'
+	@echo 'network sockets and thereby improve the speed of'
+	@echo 'the BLE connection.'
+	sudo setcap 'cap_net_raw,cap_net_admin+eip' $(OUTPUT)
+
 $(SRC:.c=.o): $(HEADERS)
 
 %.o: %.c

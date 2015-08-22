@@ -35,10 +35,15 @@ Compilation with `gcc` should be straightforward:
 
 ```bash
 $ make
+$ make setcap # requires sudo/root access
 ```
 
 To fix the issue with [very slow file transfers](#why-so-slow), the
-most secure solution I've been able to come up with so far is to give the binary elevated capabilities as discussed [on StackExchange](http://unix.stackexchange.com/a/182559/58453):
+most secure solution I've been able to come up with so far is to give
+the binary elevated capabilities as discussed
+[on StackExchange](http://unix.stackexchange.com/a/182559/58453):
+`make setcap` will do this automatically or you can do it manually as
+follows:
 
 ```bash
 sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue
