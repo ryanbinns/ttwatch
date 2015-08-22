@@ -291,7 +291,7 @@ int main(int argc, const char **argv)
                     "Enter 6-digit pairing code shown on device: ");
             if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
                 fprintf(stderr, "Pairing code should be 6-digit number.\n");
-                goto fatal;
+                if (first) goto fatal; else goto fail;
             }
         }
 
