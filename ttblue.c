@@ -153,9 +153,15 @@ isleep(int seconds, int verbose)
         fflush(stderr);
     }
     signal(SIGALRM, nullhandler);
-    int res = sleep(seconds);
+
+    // weird workaround for non-realtime-awareness of sleep:
+    // http://stackoverflow.com/questions/32152276/real-time-aware-sleep-call
+    int res=0, elapsed=0;
+    for (time_t t=time(NULL); (elapsed<seconds) && (res<=0); elapsed=time(NULL)-t)
+        res = sleep((seconds-elapsed > 30) ? 30 : seconds-elapsed);
+
     signal(SIGALRM, SIG_IGN);
-    if (verbose)
+    if (res && verbose)
         fprintf(stderr, "%s\n\n", res ? " woken by signal!" : "");
     return (res>0);
 }
