@@ -267,6 +267,18 @@ int main(int argc, const char **argv)
             goto preopen_fail;
         }
 
+        // check for BLE support (see hciconfig.c cmd_features from Bluez)
+        if (first) {
+            uint8_t features[8];
+            if (hci_read_local_ext_features(dd, 0, NULL, features, 1000) < 0) {
+                fprintf(stderr, "Could not read hci%d features: %s (%d)", dd, strerror(errno), errno);
+                goto pre_fatal;
+            } else if ((features[4] & LMP_LE) == 0 || (features[6] & LMP_LE_BREDR) == 0) {
+                fprintf(stderr, "Bluetooth interface hci%d doesn't support 4.0 (Bluetooth LE+BR/EDR)", dd);
+                goto pre_fatal;
+            }
+        }
+
         // get host name and address
         char hciname[64];
         struct hci_dev_info hci_info;
@@ -553,6 +565,7 @@ int main(int argc, const char **argv)
 
 fatal:
     close(fd);
+pre_fatal:
     hci_close_dev(dd);
     return 1;
 }
