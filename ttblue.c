@@ -497,10 +497,10 @@ int main(int argc, const char **argv)
                 free(fbuf);
             }
 
-            if (time(NULL) - last_qfg_update < 24*3600) {
+/*            if (time(NULL) - last_qfg_update < 24*3600) {
                 fprintf(stderr, "  No update needed, last was at %.24s.\n", ctime(&last_qfg_update));
-            } else {
-                fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
+              } else */ {
+//                fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
                 CURLcode res;
                 char curlerr[CURL_ERROR_SIZE];
                 CURL *curl = curl_easy_init();

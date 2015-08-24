@@ -410,14 +410,18 @@ affect anything other than the timestamp.
 
 Perhaps this can be used to avoid re-updating the QFG file
 unnecessarily on every connection... but I'm not really sure how to
-determine when the QFG file *expires*. Is it always *exactly 3 days*
-after the date here?
+determine when the QFG file *expires*.
 
     00: 03 00
-    02: 07 df = 2015 (int16_be)
-    04: 08 = month 8
-    05: 11 = day 17
-    06: 00 00
+
+    Aha! This one seems to be the date when the QFG was
+    last UPDATED:
+      02: 07 df = 2015 (int16_be)
+      04: 08 = month 8
+      05: 11 = day 17
+
+    I've seen this change to 00 01 right after an update:
+      06: 00 00
 
     Next 6 bytes (but usually only 2 bytes?) change every time GPS is
     activated:
@@ -426,7 +430,9 @@ after the date here?
       0c: 00 00
 
     I think this part represents a UTC time, since it's close to the
-    current UTC time right after an update:
+    current UTC time right after an update. It also updates after
+    using the watch for a GPS activity. Perhaps it's the timestamp of the
+    last GPS fix?
         0e: 2d = 45 (year - 1970?)
         0f: 07 = month - 1? (as in POSIX struct timeval)
         10: 11 = day 17
