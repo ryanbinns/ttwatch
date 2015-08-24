@@ -215,9 +215,9 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             lap_distance = ttbin->total_distance - lap_start_distance;
             lap_max_speed = max_speed;
             lap_calories = ttbin->total_calories - lap_start_calories;
-            lap_heart_rate_count = heart_rate_count;
-            if (heart_rate_count > 0)
-                lap_avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
+            lap_heart_rate_count = heart_rate_count - lap_start_heart_rate_count;;
+            if (lap_heart_rate_count > 0)
+                lap_avg_heart_rate = (total_heart_rate + (lap_heart_rate_count >> 1)) / lap_heart_rate_count;
             lap_max_heart_rate = max_heart_rate;
             lap_step_count = total_step_count;
         }
