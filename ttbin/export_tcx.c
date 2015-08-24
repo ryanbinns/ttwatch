@@ -97,43 +97,54 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             break;
 
         case TAG_TREADMILL:
-            /* this will happen if the activity is paused and then resumed */
-            if (record->treadmill.timestamp == 0)
-                break;
+        case TAG_GPS:
+            if (record->tag==TAG_TREADMILL) {
+                /* this will happen if the activity is paused and then resumed */
+                if (record->treadmill.timestamp == 0)
+                    break;
 
-            steps = record->treadmill.steps - steps_prev;
-            steps_prev = record->treadmill.steps;
+                steps = record->treadmill.steps - steps_prev;
+                steps_prev = record->treadmill.steps;
 
-            /* low-pass filter the coarse cadence values (1, 2, 3 steps/sec), with RC=20
-               based on: https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter */
-            {
-                float dt = smooth_cadence_count == 0 ? 1.0f : record->treadmill.timestamp - smooth_cadence_lt;
-                float rc = smooth_cadence_count < 20 ? (float)smooth_cadence_count : 20.0f;
-                float alpha = dt / (rc + dt);
-                int coarse_cadence = 30*(int)steps;
-                smooth_cadence += alpha * (coarse_cadence - smooth_cadence);
-                smooth_cadence_count++;
-                smooth_cadence_lt = record->treadmill.timestamp;
+                /* low-pass filter the coarse cadence values (1, 2, 3 steps/sec), with RC=20
+                   based on: https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter */
+                {
+                    float dt = smooth_cadence_count == 0 ? 1.0f : record->treadmill.timestamp - smooth_cadence_lt;
+                    float rc = smooth_cadence_count < 20 ? (float)smooth_cadence_count : 20.0f;
+                    float alpha = dt / (rc + dt);
+                    int coarse_cadence = 30*(int)steps;
+                    smooth_cadence += alpha * (coarse_cadence - smooth_cadence);
+                    smooth_cadence_count++;
+                    smooth_cadence_lt = record->treadmill.timestamp;
+                }
+
+                total_step_count += steps;
+            } else { /* TAG_GPS only */
+                /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
+                if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
+                    break;
+
+                if (record->gps.instant_speed > max_speed)
+                    max_speed = record->gps.instant_speed;
+                total_speed += record->gps.instant_speed;
+
+                /* low-pass filter the coarse cadence values (1, 2, 3 steps/sec), with RC=20
+                   based on: https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter */
+                if (ttbin->activity==ACTIVITY_RUNNING)
+                {
+                    float dt = smooth_cadence_count == 0 ? 1.0f : record->gps.timestamp - smooth_cadence_lt;
+                    float rc = smooth_cadence_count < 20 ? (float)smooth_cadence_count : 20.0f;
+                    float alpha = dt / (rc + dt);
+                    int coarse_cadence = 30*(int)record->gps.cycles;
+                    smooth_cadence += alpha * (coarse_cadence - smooth_cadence);
+                    smooth_cadence_count++;
+                    smooth_cadence_lt = record->gps.timestamp;
+                }
+                if (ttbin->activity==ACTIVITY_RUNNING)
+                    total_step_count += record->gps.cycles;
             }
 
-            total_step_count += steps;
-            goto motion_common;
-
-        case TAG_GPS:
-            /* this will happen if the activity is paused and then resumed, or if the GPS signal is lost  */
-            if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
-                break;
-
-            if (record->gps.instant_speed > max_speed)
-                max_speed = record->gps.instant_speed;
-            total_speed += record->gps.instant_speed;
-
-            /* low-pass filter the coarse cadence values (1, 2, 3 steps/sec), with RC=20
-            if (ttbin->activity==ACTIVITY_RUNNING)
-                total_step_count += record->gps.cycles;
-            goto motion_common;
-
-        motion_common:
+            /* code common to both TAG_GPS and TAG_TREADMILL */
             ++move_count;
 
             if (lap_state == 0 && insert_pause)
