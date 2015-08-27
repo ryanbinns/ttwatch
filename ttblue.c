@@ -170,7 +170,7 @@ isleep(int seconds, int verbose)
 
 int debug=1;
 int get_activities=0, update_gps=0, version=0, daemonize=0, new_pair=1;
-int sleep_success=3600, sleep_fail=10;
+int sleep_success=3600, sleep_fail=10, gps_write_delay=20000;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
 
@@ -190,6 +190,7 @@ struct poptOption options[] = {
     { "quiet", 'q', POPT_ARG_VAL, &debug, 0, "Suppress debugging output" },
     { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 0, "Wait time after successful connection to watch", "SECONDS" },
     { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 10, "Wait time after failed connection to watch", "SECONDS" },
+    { "gps-write-delay", 0, POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &gps_write_delay, 0, "QuickFixGPS write delay (microseconds), increase if you have problems with failed QuickFixGPS updates" },
 //    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
     POPT_AUTOHELP
     POPT_TABLEEND
@@ -388,7 +389,7 @@ int main(int argc, const char **argv)
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hciname);
         tt_delete_file(fd, 0x00020002);
-        tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname));
+        tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname), 0);
 
         if (debug > 1) {
             uint32_t fileno = 0x000f20000;
@@ -535,7 +536,7 @@ int main(int argc, const char **argv)
                         } else {
                             fclose (f);
                             tt_delete_file(fd, 0x00010100);
-                            result = tt_write_file(fd, 0x00010100, debug, fbuf, length);
+                            result = tt_write_file(fd, 0x00010100, debug, fbuf, length, gps_write_delay);
                             free(fbuf);
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);

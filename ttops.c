@@ -143,7 +143,7 @@ prealloc_fail:
 }
 
 int
-tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length)
+tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length, uint32_t write_delay)
 {
     if (fileno>>24)
         return -EINVAL;
@@ -208,8 +208,8 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
             // don't like having them spit out at max speed with min
             // connection interval
             gettimeofday(&now, NULL);
-            if (now.tv_sec==lastpkt.tv_sec && now.tv_usec-lastpkt.tv_usec < 20000)
-                usleep(20000);
+            if (now.tv_sec==lastpkt.tv_sec && now.tv_usec-lastpkt.tv_usec < write_delay)
+                usleep(write_delay);
             memcpy(&lastpkt, &now, sizeof now);
         }
         iptr = checkpoint; // trim CRC bytes from input position
