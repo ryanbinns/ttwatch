@@ -173,15 +173,20 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
         // checkpoint is followed by 2 bytes for CRC16_modbus
         uint32_t check = 0xffff;
         while (iptr < checkpoint) {
-            int wlen = (iptr+20 < checkpoint) ? 20 : (checkpoint-iptr);
-            check = crc16(iptr, wlen, check); // update CRC with data bytes
-
+            int wlen;
             uint8_t *out;
-            if (wlen==20) {
+
+            if (iptr+20 < checkpoint) {
+                wlen = 20;
                 out = (void*)iptr;
+                check = crc16(iptr, wlen, check); // update CRC with data bytes
             } else {
+                wlen = checkpoint-iptr;
+                out = temp;
+                check = crc16(iptr, wlen, check); // update CRC with data bytes
+
                 uint16_t c = btohs(check);
-                memcpy( mempcpy(out=temp, iptr, wlen),
+                memcpy( mempcpy(out, iptr, wlen),
                         &c, sizeof c); // output is data bytes + CRC16
                 wlen += 2;
             }
