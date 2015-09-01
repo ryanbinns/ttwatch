@@ -483,9 +483,9 @@ int main(int argc, const char **argv)
             if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
                 fprintf(stderr, "Could not read GPS status file 0x%08x from watch.", fileno);
             } else {
-                struct tm tmp = { .tm_sec = fbuf[0x13], .tm_min = fbuf[0x12], .tm_hour = fbuf[0x11], .tm_mday = fbuf[0x10],
-                                  .tm_mon = fbuf[0x0f], .tm_year = 70 + fbuf[0x0e], .tm_isdst = 0 };
-                last_qfg_update = mktime(&tmp);
+                struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
+                                  .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
+                last_qfg_update = timegm(&tmp);
 
                 if (debug > 1) {
                     char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
@@ -498,10 +498,10 @@ int main(int argc, const char **argv)
                 free(fbuf);
             }
 
-/*            if (time(NULL) - last_qfg_update < 24*3600) {
-                fprintf(stderr, "  No update needed, last was at %.24s.\n", ctime(&last_qfg_update));
-              } else */ {
-//                fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
+            if (time(NULL) - last_qfg_update < 24*3600) {
+                fprintf(stderr, "  No update needed, last was %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
+            } else {
+                fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
                 CURLcode res;
                 char curlerr[CURL_ERROR_SIZE];
                 CURL *curl = curl_easy_init();
