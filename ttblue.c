@@ -169,14 +169,15 @@ isleep(int seconds, int verbose)
 /****************************************************************************/
 
 int debug=1;
-int get_activities=0, update_gps=0, version=0, daemonize=0, new_pair=1;
+int get_activities=0, set_time=0, update_gps=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10, gps_write_delay=20000;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
 
 struct poptOption options[] = {
-    { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps --version" },
+    { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps --set-time --version" },
     { "get-activities", 0, POPT_ARG_NONE, &get_activities, 0, "Downloads and deletes .ttbin activity files from the watch" },
+    { "set-time", 0, POPT_ARG_NONE, &set_time, 0, "Set time zone on the watch to match this computer" },
     { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
     { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
     { "update-gps", 0, POPT_ARG_VAL, &update_gps, 1, "Download TomTom QuickFixGPS update file and send it to the watch" },
@@ -213,7 +214,7 @@ int main(int argc, const char **argv)
         switch (ch) {
         case 'c': new_pair=false; break;
         case 'D': debug++; break;
-        case 'a': get_activities = update_gps = version = true; break;
+        case 'a': get_activities = update_gps = set_time = version = true; break;
         }
     }
     if (ch<-1) {
@@ -404,6 +405,36 @@ int main(int argc, const char **argv)
                 sprintf(filename, "%08x_%s.xml", fileno, filetime);
 
                 save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
+                free(fbuf);
+            }
+        }
+
+        if (set_time) {
+            if ((length = tt_read_file(fd, 0x00850000, debug, &fbuf)) < 0) {
+                fprintf(stderr, "Could not read settings manifest file 0x0085000 from watch!\n");
+            } else {
+                // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
+                int32_t *watch_timezone = NULL;
+                for (int16_t *index = fbuf+4; index < (fbuf+length); index += 3) {
+                    if (*index == 169) {
+                        watch_timezone = index + 1;
+                        break;
+                    }
+                }
+                if (!watch_timezone) {
+                    fprintf(stderr, "Could not find watch timezone setting!\n");
+                } else {
+                    time_t t = time(NULL);
+                    struct tm *lt = localtime(&t);
+
+                    if (*watch_timezone != lt->tm_gmtoff) {
+                        fprintf(stderr, "Changing timezone from UTC%+d to UTC%+ld.\n", *watch_timezone, lt->tm_gmtoff);
+                        *watch_timezone = htole32(lt->tm_gmtoff);
+                        tt_delete_file(fd, 0x00850000);
+                        tt_write_file(fd, 0x00850000, false, fbuf, length, 0);
+                        att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x85, 0x00, 0x00), 4); // update magic?
+                    }
+                }
                 free(fbuf);
             }
         }
