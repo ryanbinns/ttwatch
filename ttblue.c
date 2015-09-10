@@ -415,9 +415,9 @@ int main(int argc, const char **argv)
             } else {
                 // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
                 int32_t *watch_timezone = NULL;
-                for (int16_t *index = fbuf+4; index < (fbuf+length); index += 3) {
-                    if (*index == 169) {
-                        watch_timezone = index + 1;
+                for (int16_t *index = (int16_t*)(fbuf+4); index < (int16_t*)(fbuf+length); index += 3) {
+                    if (le16toh(*index) == 169) {
+                        watch_timezone = (int32_t*)(index + 1);
                         break;
                     }
                 }
@@ -427,8 +427,8 @@ int main(int argc, const char **argv)
                     time_t t = time(NULL);
                     struct tm *lt = localtime(&t);
 
-                    if (*watch_timezone != lt->tm_gmtoff) {
-                        fprintf(stderr, "Changing timezone from UTC%+d to UTC%+ld.\n", *watch_timezone, lt->tm_gmtoff);
+                    if (btohl(*watch_timezone) != lt->tm_gmtoff) {
+                        fprintf(stderr, "Changing timezone from UTC%+d to UTC%+ld.\n", le32toh(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htole32(lt->tm_gmtoff);
                         tt_delete_file(fd, 0x00850000);
                         tt_write_file(fd, 0x00850000, false, fbuf, length, 0);
