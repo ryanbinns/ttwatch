@@ -185,54 +185,59 @@ static int s_show_packets;
 //------------------------------------------------------------------------------
 void print_packet(uint8_t *packet, uint8_t size)
 {
-    int i;
-
     if (s_show_packets)
     {
-
-        char msg_id[0xFF][128];
-        for (i = 0; i < 0xFF; i++) {
-            sprintf(msg_id[i],                      "unknown_%0X ", i);
-        }
-
-        strcpy(msg_id[MSG_OPEN_FILE_WRITE],         "ofile_write  ");
-        strcpy(msg_id[MSG_DELETE_FILE],             "delete_file  ");
-        strcpy(msg_id[MSG_WRITE_FILE_DATA],         "write_fdata  ");
-        strcpy(msg_id[MSG_GET_FILE_SIZE],           "get_fsize    ");
-        strcpy(msg_id[MSG_OPEN_FILE_READ],          "ofile_read   ");
-        strcpy(msg_id[MSG_READ_FILE_DATA_REQUEST],  "rfile_request");
-        strcpy(msg_id[MSG_READ_FILE_DATA_RESPONSE], "rfile_reply  ");
-        strcpy(msg_id[MSG_FIND_CLOSE],              "find_close   ");
-        strcpy(msg_id[MSG_CLOSE_FILE],              "close_file   ");
-        strcpy(msg_id[MSG_UNKNOWN_0D],              "unknown_0D   ");
-        strcpy(msg_id[MSG_RESET_DEVICE],            "reset_device ");
-        strcpy(msg_id[MSG_FIND_FIRST_FILE],         "ffirst_file  ");
-        strcpy(msg_id[MSG_FIND_NEXT_FILE],          "fnext_file   ");
-        strcpy(msg_id[MSG_GET_CURRENT_TIME],        "get_time     ");
-        strcpy(msg_id[MSG_UNKNOWN_1A],              "unknown_1A   ");
-        strcpy(msg_id[MSG_RESET_GPS_PROCESSOR],     "reset_gps    ");
-        strcpy(msg_id[MSG_UNKNOWN_1F],              "unknown_1F   ");
-        strcpy(msg_id[MSG_GET_PRODUCT_ID],          "get_prod_id  ");
-        strcpy(msg_id[MSG_GET_FIRMWARE_VERSION],    "fw_version   ");
-        strcpy(msg_id[MSG_UNKNOWN_22],              "unknown_22   ");      
-        strcpy(msg_id[MSG_GET_BLE_VERSION],         "ble_version  ");
-
-        if (packet[0] == 0x09) { 
-            printf(COLOR_RED "out> " COLOR_RESET);
-        } else {
-            printf(COLOR_GREEN "< in " COLOR_RESET);
-        }
-
-        printf(COLOR_BLUE "size:[%02d] " COLOR_RESET, packet[1]-2);
-
-        printf(COLOR_CYAN "ctr:[%02d] " COLOR_RESET, packet[2]);
-
-        printf(COLOR_YELLOW "cmd: %s\t" COLOR_RESET, msg_id[packet[3]]);
-
-        for (i = 4; i < size; i++)
-            printf("%02X", packet[i]);
-        printf("\n");
+        pretty_print_packet(packet, size);
     }
+}
+
+//------------------------------------------------------------------------------
+void pretty_print_packet(uint8_t *packet, uint8_t size)
+{
+    int i;
+
+    char msg_id[0xFF][128];
+    for (i = 0; i < 0xFF; i++) {
+        sprintf(msg_id[i],                      "unknown_%0X ", i);
+    }
+
+    strcpy(msg_id[MSG_OPEN_FILE_WRITE],         "ofile_write  ");
+    strcpy(msg_id[MSG_DELETE_FILE],             "delete_file  ");
+    strcpy(msg_id[MSG_WRITE_FILE_DATA],         "write_fdata  ");
+    strcpy(msg_id[MSG_GET_FILE_SIZE],           "get_fsize    ");
+    strcpy(msg_id[MSG_OPEN_FILE_READ],          "ofile_read   ");
+    strcpy(msg_id[MSG_READ_FILE_DATA_REQUEST],  "rfile_request");
+    strcpy(msg_id[MSG_READ_FILE_DATA_RESPONSE], "rfile_reply  ");
+    strcpy(msg_id[MSG_FIND_CLOSE],              "find_close   ");
+    strcpy(msg_id[MSG_CLOSE_FILE],              "close_file   ");
+    strcpy(msg_id[MSG_UNKNOWN_0D],              "unknown_0D   ");
+    strcpy(msg_id[MSG_RESET_DEVICE],            "reset_device ");
+    strcpy(msg_id[MSG_FIND_FIRST_FILE],         "ffirst_file  ");
+    strcpy(msg_id[MSG_FIND_NEXT_FILE],          "fnext_file   ");
+    strcpy(msg_id[MSG_GET_CURRENT_TIME],        "get_time     ");
+    strcpy(msg_id[MSG_UNKNOWN_1A],              "unknown_1A   ");
+    strcpy(msg_id[MSG_RESET_GPS_PROCESSOR],     "reset_gps    ");
+    strcpy(msg_id[MSG_UNKNOWN_1F],              "unknown_1F   ");
+    strcpy(msg_id[MSG_GET_PRODUCT_ID],          "get_prod_id  ");
+    strcpy(msg_id[MSG_GET_FIRMWARE_VERSION],    "fw_version   ");
+    strcpy(msg_id[MSG_UNKNOWN_22],              "unknown_22   ");      
+    strcpy(msg_id[MSG_GET_BLE_VERSION],         "ble_version  ");
+
+    if (packet[0] == 0x09) { 
+        printf(COLOR_RED "out> " COLOR_RESET);
+    } else {
+        printf(COLOR_GREEN "< in " COLOR_RESET);
+    }
+
+    printf(COLOR_BLUE "size:[%02d] " COLOR_RESET, packet[1]-2);
+
+    printf(COLOR_CYAN "ctr:[%02d] " COLOR_RESET, packet[2]);
+
+    printf(COLOR_YELLOW "cmd: %s\t" COLOR_RESET, msg_id[packet[3]]);
+
+    for (i = 4; i < size; i++)
+        printf("%02X", packet[i]);
+    printf("\n");
 }
 
 //------------------------------------------------------------------------------
