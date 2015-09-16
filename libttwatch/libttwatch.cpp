@@ -185,8 +185,13 @@ static int s_show_packets;
 //------------------------------------------------------------------------------
 void print_packet(uint8_t *packet, uint8_t size)
 {
-    if (s_show_packets)
+    if (s_show_packets == 1)
     {
+        int i;
+        for (i = 0; i < size; ++i)
+            printf("%02X ", packet[i]);
+        printf("\n");
+    } else if (s_show_packets == 2) {
         pretty_print_packet(packet, size);
     }
 }
