@@ -50,7 +50,7 @@ void print_packet(uint8_t *packet, uint8_t size) {
 }
 
 int send_raw_packet(TTWATCH *watch, uint8_t tx_length,
-    const uint8_t *tx_data, uint8_t rx_length, uint8_t *rx_data)
+    const uint8_t *tx_data, uint8_t *rx_data)
 {
     uint8_t packet[64] = {0};
 
@@ -63,8 +63,6 @@ int send_raw_packet(TTWATCH *watch, uint8_t tx_length,
     //auto set counter;
     packet[2] = g_msg_counter++;
 
-    print_packet(packet, tx_length);
-
     // send the packet
     result = libusb_interrupt_transfer(watch->device, 0x05, packet, tx_length, &count, 10000);
     if (result || (count != tx_length))
@@ -75,7 +73,7 @@ int send_raw_packet(TTWATCH *watch, uint8_t tx_length,
     if (result)
         return TTWATCH_UnableToReceivePacket;
 
-    print_packet(packet, packet[1] + 2);
+    
 
     // copy the back data to the caller
     if (rx_data)
@@ -124,27 +122,21 @@ void read_from_pcapfile(char *filename) {
 
 }
 
-void read_from_textfile(char *filename) {
+void read_from_file (FILE *fp) {
     uint8_t cmdbuf[MAXCMD];
     uint8_t sz = 0;
 
     uint8_t response[MAXCMD];
-    uint8_t rsz = 0;
 
     char line[MAXLINECMD];
     char *p;
 
-    FILE *fp = NULL;
-    fp = fopen(filename, "r");
-    if (fp == NULL) {
-        fprintf(stderr, "Can't open file %s\n", filename);
-        exit(1);
-    }
-
-    while (fgets (line, MAXLINECMD, fp)) {
+    while (fgets (line, MAXLINECMD, fp)) 
+    {
         p = line;
         sz = 0;
-        while (*p && sz < MAXCMD) {
+        while (*p && sz < MAXCMD)
+        {
             if (*p == ' ') {
                 p++;
                 continue;
@@ -154,25 +146,38 @@ void read_from_textfile(char *filename) {
             }
 
             if (isxdigit(*p) && isxdigit(p[1])) {
-                sscanf(p, "%02x", (unsigned int *)&cmdbuf[sz]);
-                                sz++;
-                                p += 2;
-                            } else {
-                break;
-            }
+                    sscanf(p, "%02x", (unsigned int *)&cmdbuf[sz]);
+                    sz++;
+                    p += 2;
+                } else {
+                    break;
+                }
         }
-        if (sz > 0) {
-            print_packet(cmdbuf, sz);
-
-            if (optsendpackets && cmdbuf[0] == 0x09) {
-                printf("sending packet...\n");
-                send_raw_packet(watch, sz, cmdbuf, sizeof(response), response);
+        if (sz > 0) 
+        {
+            if (optsendpackets && cmdbuf[0] == 0x09) 
+            {
+                print_packet(cmdbuf, sz);
+                send_raw_packet(watch, sz, cmdbuf, response);
+                print_packet(response, response[1] + 2);
+            } else {
+                // we're not going to send anything to the watch, just print it
+                print_packet(cmdbuf, sz);
             }
         }
     }
+}
+
+void read_from_textfile(char *filename) {
+    FILE *fp = NULL;
+    fp = fopen(filename, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "Can't open file %s\n", filename);
+        exit(1);
+    }
+
+    read_from_file(fp);
     fclose(fp);
-
-
 }
 
 
@@ -222,13 +227,12 @@ int main(int argc, char *argv[]) {
        
     }
 
-    if (optpcapfile) {
+    if (optpcapfile) 
         read_from_pcapfile (pcapfile);
-    }
-    if (opttextfile) {
+    else if (opttextfile)
         read_from_textfile (textfile);
-    }
-
+    // By default read commands from standard input;
+    else read_from_file(stdin);
     return 0;
 }
 
