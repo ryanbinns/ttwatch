@@ -11,6 +11,7 @@ all:
 	$(MAKE) -C ttwatch
 	$(MAKE) -C ttbincnv
 	$(MAKE) -C ttbinmod
+	$(MAKE) -C ttdiag
 
 clean:
 	$(MAKE) -C ttbin clean
@@ -18,11 +19,13 @@ clean:
 	$(MAKE) -C ttwatch clean
 	$(MAKE) -C ttbincnv clean
 	$(MAKE) -C ttbinmod clean
+	$(MAKE) -C ttdiag clean
 
 install:
 	$(MAKE) -C ttwatch install
 	$(MAKE) -C ttbincnv install
 	$(MAKE) -C ttbinmod install
+	$(MAKE) -C ttdiag install
 
 # vim: noet
 
