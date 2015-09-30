@@ -58,6 +58,11 @@ typedef struct
     time_t   timestamp;     /* utc time */
 } STATUS_RECORD;
 
+#define TTBIN_STATUS_READY      (0)
+#define TTBIN_STATUS_ACTIVE     (1)
+#define TTBIN_STATUS_PAUSED     (2)
+#define TTBIN_STATUS_STOPPED    (3)
+
 typedef struct
 {
     time_t   timestamp;     /* utc time */
@@ -149,10 +154,19 @@ typedef struct
     uint8_t  sets;
 } INTERVAL_SETUP_RECORD;
 
+#define TTBIN_INTERVAL_TYPE_DISTANCE    (0)
+#define TTBIN_INTERVAL_TYPE_TIME        (1)
+
 typedef struct
 {
     uint8_t type;   /* 1 = warmup, 2 = work, 3 = rest, 4 = cooldown, 5 = finished */
 } INTERVAL_START_RECORD;
+
+#define TTBIN_INTERVAL_TYPE_WARMUP      (1)
+#define TTBIN_INTERVAL_TYPE_WORK        (2)
+#define TTBIN_INTERVAL_TYPE_REST        (3)
+#define TTBIN_INTERVAL_TYPE_COOLDOWN    (4)
+#define TTBIN_INTERVAL_TYPE_FINISHED    (5)
 
 typedef struct
 {
