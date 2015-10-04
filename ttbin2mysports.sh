@@ -59,7 +59,7 @@ for dir in "${DEVICE_DIR}"/*/; do
         if [ ! -f "${dir}/.${file}-uploaded_to_mysports" ]; then
             if [ ! -f "${dir}/${file}.tcx" ]; then
                 [ ${verbose} -eq 1 ] && echo "Converting ${file}.ttbin to ${file}.tcx..."
-                ( cd "${dir}" && ttbincnv -t "${dir}/${file}.ttbin" )
+                ( cd "${dir}" && cat "${file}.ttbin" | ttbincnv -t >"${file}.tcx" )
             fi
             # Initialise the cookie, as the MapMyFitness website will return 400 otherwise
             curl -c ${COOKIE_JAR} -b ${COOKIE_JAR} -s -o /dev/null \
