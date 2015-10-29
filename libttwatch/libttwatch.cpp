@@ -1220,8 +1220,8 @@ int ttwatch_remove_offline_format(TTWATCH *watch, const char *format)
     free(watch->preferences_file);
     watch->preferences_file = (char*)malloc(file.length() + 1);
     memcpy(watch->preferences_file, file.data(), file.length());
-    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_file_length = file.length();
+    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
