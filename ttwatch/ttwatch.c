@@ -521,6 +521,7 @@ void do_update_firmware(TTWATCH *watch)
     int file_count = 0;
     int i;
     char *ptr, *fw_url;
+    unsigned long id;
 
     product_id = watch->product_id;
     current_version = watch->firmware_version;
@@ -552,6 +553,70 @@ void do_update_firmware(TTWATCH *watch)
         goto cleanup;
     }
     latest_ble_version = strtoul(ptr + 14, NULL, 0);
+
+    /* check to see if we need to do anything */
+    if (latest_ble_version <= current_ble_version)
+        write_log(1, "Current BLE firmware is already at latest version\n");
+    else
+    {
+        write_log(0, "Current BLE Firmware Version: %u\n", current_ble_version);
+        write_log(0, "Latest BLE Firmware Version : %u\n", latest_ble_version);
+
+        /* find the download URL of the BLE firmware */
+        ptr = strstr(ptr, "URL=\"");
+        if (!ptr)
+        {
+            write_log(1, "Unable to determine BLE firmware download URL\n");
+            goto cleanup;
+        }
+        fw_url = ptr + 5;
+        ptr = strstr(fw_url, "\"");
+        if (!ptr)
+        {
+            write_log(1, "Unable to determine BLE firmware download URL\n");
+            goto cleanup;
+        }
+        *ptr = 0;
+
+        /* find the BLE firmware file ID */
+        ptr = strrchr(fw_url, '/');
+        if (!ptr)
+        {
+            write_log(1, "Unable to determine BLE file ID\n");
+            goto cleanup;
+        }
+        id = strtoul(ptr + 1, NULL, 0);
+        if (!id)
+        {
+            write_log(1, "Unable to determine BLE file ID\n");
+            goto cleanup;
+        }
+
+        /* create the full URL and download the file */
+        sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/%s", product_id, fw_url);
+
+        free(download.data);
+
+        write_log(0, "Download %s ... ", url);
+        fflush(stdout);
+        if (download_file(url, &download))
+        {
+            write_log(0, "Failed\n");
+            goto cleanup;
+        }
+        else
+            write_log(0, "Done\n");
+
+        /* update the file; even if it fails, still update the next file */
+        write_log(0, "Updating firmware file: %08x ... ", TTWATCH_FILE_BLE_FIRMWARE);
+        fflush(stdout);
+        if (ttwatch_write_verify_whole_file(watch, TTWATCH_FILE_BLE_FIRMWARE, download.data, download.length) != TTWATCH_NoError)
+            write_log(0, "Failed\n");
+        else
+            write_log(0, "Done\n");
+
+        write_log(0, "BLE firmware updated\n");
+    }
 
     /* check to see if we need to update the firmware */
     if (latest_version <= current_version)
@@ -615,72 +680,6 @@ void do_update_firmware(TTWATCH *watch)
 
         write_log(0, "Firmware updated\n");
     }
-
-    if (current_ble_version < latest_ble_version)
-    {
-        write_log(1, "Sorry, BLE firmware updating not supported yet\n");
-        goto cleanup;
-    }
-
-#if 0
-    /* check to see if we need to do anything */
-    if (latest_ble_version <= current_ble_version)
-        write_log(1, "Current BLE firmware is already at latest version\n");
-    else
-    {
-        write_log(0, "Current BLE Firmware Version: %u\n", current_ble_version);
-        write_log(0, "Latest BLE Firmware Version : %u\n", latest_ble_version);
-
-        /* find the download URL of the BLE firmware */
-        ptr = strstr(ptr, "URL=\"");
-        if (!ptr)
-        {
-            write_log(1, "Unable to determine BLE firmware download URL\n");
-            goto cleanup;
-        }
-        fw_url = ptr + 5;
-        ptr = strstr(fw_url, "\"");
-        if (!ptr)
-        {
-            write_log(1, "Unable to determine BLE firmware download URL\n");
-            goto cleanup;
-        }
-        *ptr = 0;
-
-        /* find the BLE firmware file ID */
-        ptr = strrchr(fw_url, '/');
-        if (!ptr)
-        {
-            write_log(1, "Unable to determine BLE file ID\n");
-            goto cleanup;
-        }
-        id = strtoul(ptr + 1, NULL, 0);
-        if (!id)
-        {
-            write_log(1, "Unable to determine BLE file ID\n");
-            goto cleanup;
-        }
-
-        /* create the full URL and download the file */
-        sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/%s", product_id, fw_url);
-
-        free(download.data);
-
-        write_log(0, "Download %s ... ", url);
-        fflush(stdout);
-        if (download_file(url, &download))
-        {
-            write_log(0, "Failed\n");
-            goto cleanup;
-        }
-        else
-            write_log(0, "Done\n");
-
-        /* TODO: wait until the BLE version is updated, then work out how to... */
-
-        write_log(0, "BLE firmware updated\n");
-    }
-#endif
 
 cleanup:
     /* free all the allocated data */

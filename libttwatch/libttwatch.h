@@ -138,6 +138,7 @@ typedef struct __attribute__((packed))
 /******************************************************************************
 * File IDs                                                                    *
 ******************************************************************************/
+#define TTWATCH_FILE_BLE_FIRMWARE           (0x00000012)
 #define TTWATCH_FILE_SYSTEM_FIRMWARE        (0x000000f0)
 #define TTWATCH_FILE_GPSQUICKFIX_DATA       (0x00010100)
 #define TTWATCH_FILE_GPS_FIRMWARE           (0x00010200)
