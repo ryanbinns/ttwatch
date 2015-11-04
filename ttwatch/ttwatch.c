@@ -1614,6 +1614,8 @@ void help(char *argv[])
     write_log(0, "                               saved when the watch is automatically processed\n");
     write_log(0, "      --get-name             Displays the current watch name\n");
     write_log(0, "      --get-time             Returns the current GPS time on the watch\n");
+    write_log(0, "      --initial-setup        Performs an initial setup for the watch, adding a\n");
+    write_log(0, "                               default preferences file and default race files\n");
 #ifdef UNSAFE
     write_log(0, "  -l, --list                 List files currently available on the device\n");
 #endif
