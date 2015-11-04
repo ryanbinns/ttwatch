@@ -40,6 +40,7 @@
 #define MSG_FIND_CLOSE              (0x0a)
 #define MSG_CLOSE_FILE              (0x0c)
 #define MSG_UNKNOWN_0D              (0x0d)
+#define MSG_FORMAT_WATCH            (0x0e)
 #define MSG_RESET_DEVICE            (0x10)  /* issued after updating firmware,
                                                causes USB disconnect and reconnect
                                                after approximately 90 seconds */
@@ -166,6 +167,12 @@ typedef struct
     char message[60];
 } RXRebootWatchPacket;
 
+typedef struct
+{
+    uint32_t _unk1[4];
+    uint32_t error;
+} RXFormatWatchPacket;
+
 typedef std::vector<std::pair<uint32_t,uint32_t> >  FileList;
 
 //------------------------------------------------------------------------------
@@ -209,7 +216,10 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
         return TTWATCH_UnableToSendPacket;
 
     // read the reply
-    result = libusb_interrupt_transfer(watch->device, 0x84, packet, 64, &count, 10000);
+    unsigned timeout = 10000;   // 10 seconds for most message types
+    if (msg == MSG_FORMAT_WATCH)
+        timeout = 120000;       // formatting takes about 60 seconds, so make the timeout 120 seconds
+    result = libusb_interrupt_transfer(watch->device, 0x84, packet, 64, &count, timeout);
     if (result)
         return TTWATCH_UnableToReceivePacket;
 
@@ -382,9 +392,6 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
         ttwatch_get_product_id(*watch, &(*watch)->product_id);
         ttwatch_get_firmware_version(*watch, &(*watch)->firmware_version);
         ttwatch_get_ble_version(*watch, &(*watch)->ble_version);
-
-        if (!(*watch)->preferences_file)
-            ttwatch_create_default_preferences_file(*watch);
 
         return TTWATCH_NoError;
     }
@@ -849,6 +856,21 @@ int ttwatch_clear_data(TTWATCH *watch)
 }
 
 //------------------------------------------------------------------------------
+int ttwatch_format(TTWATCH *watch)
+{
+    if (!watch)
+        return TTWATCH_InvalidParameter;
+
+    RXFormatWatchPacket response;
+    RETURN_ERROR(send_packet(watch, MSG_FORMAT_WATCH, 0, 0, sizeof(response), (uint8_t*)&response));
+
+    if (be32toh(response.error) != 0)
+        return TTWATCH_InvalidResponse;
+
+    return TTWATCH_NoError;
+}
+
+//------------------------------------------------------------------------------
 // preferences file functions
 int ttwatch_create_default_preferences_file(TTWATCH *watch)
 {
@@ -949,8 +971,8 @@ int ttwatch_update_preferences_modified_time(TTWATCH *watch)
     free(watch->preferences_file);
     watch->preferences_file = (char*)malloc(file.length() + 1);
     memcpy(watch->preferences_file, file.data(), file.length());
-    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_file_length = file.length();
+    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -1023,8 +1045,8 @@ int ttwatch_set_watch_name(TTWATCH *watch, const char *name)
     free(watch->preferences_file);
     watch->preferences_file = (char*)malloc(file.length() + 1);
     memcpy(watch->preferences_file, file.data(), file.length());
-    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_file_length = file.length();
+    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -1155,8 +1177,8 @@ int ttwatch_add_offline_format(TTWATCH *watch, const char *format, int auto_open
     free(watch->preferences_file);
     watch->preferences_file = (char*)malloc(file.length() + 1);
     memcpy(watch->preferences_file, file.data(), file.length());
-    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_file_length = file.length();
+    watch->preferences_file[watch->preferences_file_length] = 0;
     watch->preferences_changed = true;
 
     return TTWATCH_NoError;
@@ -1347,6 +1369,15 @@ int ttwatch_enumerate_races(TTWATCH *watch, TTWATCH_RACE_ENUMERATOR enumerator, 
 int ttwatch_update_race(TTWATCH *watch, TTWATCH_ACTIVITY activity, int index,
     const char *name, uint32_t distance, uint32_t duration, int checkpoints)
 {
+    return ttwatch_create_race(watch, activity, index, name,
+        distance, duration, checkpoints, 0);
+}
+
+//------------------------------------------------------------------------------
+int ttwatch_create_race(TTWATCH *watch, TTWATCH_ACTIVITY activity, int index,
+    const char *name, uint32_t distance, uint32_t duration, int checkpoints,
+    const uint8_t *unknown_data)
+{
     if (!watch)
         return TTWATCH_InvalidParameter;
 
@@ -1355,12 +1386,19 @@ int ttwatch_update_race(TTWATCH *watch, TTWATCH_ACTIVITY activity, int index,
 
     uint32_t id = TTWATCH_FILE_RACE_DATA | (activity << 8) | index;
 
-    TTWATCH_RACE_FILE *race_file;
+    TTWATCH_RACE_FILE *race_file = 0;
     uint32_t length;
-    RETURN_ERROR(ttwatch_read_whole_file(watch, id, (void**)&race_file, &length));
+    if (!unknown_data)
+        RETURN_ERROR(ttwatch_read_whole_file(watch, id, (void**)&race_file, &length));
 
     length = sizeof(TTWATCH_RACE_FILE) - 1 + required_length;
     race_file = (TTWATCH_RACE_FILE*)realloc(race_file, length);
+
+    if (unknown_data)
+    {
+        memset(race_file, 0, length);
+        memcpy(&race_file->_unk1, unknown_data, 22);
+    }
 
     strncpy(race_file->name, name, sizeof(race_file->name));
     race_file->distance    = distance;

@@ -16,6 +16,7 @@ typedef struct
     int write_file;
     int delete_file;
     uint32_t file_id;
+    char *file;
 #endif
     int select_device;
     char *device;
@@ -33,9 +34,6 @@ typedef struct
     int daemon_mode;
     int run_as;
     char *run_as_user;
-#ifdef UNSAFE
-    char *file;
-#endif
     char *activity_store;
     int list_races;
     int update_race;
@@ -50,6 +48,8 @@ typedef struct
     int list_settings;
     int skip_elevation;
     char *post_processor;
+    int factory_reset;
+    int initial_setup;
 } OPTIONS;
 
 /*****************************************************************************/

@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define LIBTTWATCH_VERSION  (0x000103)  /* version 0.1.3 */
+#define LIBTTWATCH_VERSION  (0x000105)  /* version 0.1.5 */
 
 /*****************************************************************************/
 typedef struct
@@ -387,6 +387,15 @@ int ttwatch_send_startup_message_group(TTWATCH *watch);
 int ttwatch_clear_data(TTWATCH *watch);
 
 /******************************************************************************
+* Formats the watch as part of a factory reset. Removes ALL user data and the *
+* preferences file, manifest file, history files, races files and language    *
+* files. The watch will be unusable until the firmware is reprogrammed, and   *
+* the manifest and preferences files are rewritten. Races will not be         *
+* available until the race files are rewritten                                *
+******************************************************************************/
+int ttwatch_format(TTWATCH *watch);
+
+/******************************************************************************
 * Preferences file functions                                                  *
 ******************************************************************************/
 
@@ -515,6 +524,15 @@ int ttwatch_enumerate_races(TTWATCH *watch, TTWATCH_RACE_ENUMERATOR enumerator, 
 ******************************************************************************/
 int ttwatch_update_race(TTWATCH *watch, TTWATCH_ACTIVITY activity, int index,
     const char *name, uint32_t distance, uint32_t duration, int checkpoints);
+
+/******************************************************************************
+* Similar to ttwatch_update_race, but creates the race file from scratch,     *
+* using the specified data for the unknown fields of the race file. The data  *
+* array must be at least 22 bytes long, only the first 22 bytes are used.     *
+******************************************************************************/
+int ttwatch_create_race(TTWATCH *watch, TTWATCH_ACTIVITY activity, int index,
+    const char *name, uint32_t distance, uint32_t duration, int checkpoints,
+    const uint8_t *unknown_data);
 
 /******************************************************************************
 * History functions                                                           *
