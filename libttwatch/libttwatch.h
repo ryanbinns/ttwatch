@@ -135,6 +135,48 @@ typedef struct __attribute__((packed))
     uint8_t  data[1];   /* cannot be TT_HISTORY_ENTRY's because they are variable size... */
 } TTWATCH_HISTORY_FILE;
 
+/*****************************************************************************/
+typedef struct __attribute__((packed))
+{
+    uint32_t file_type;     /* always 0x00720000 */
+    uint32_t _unk;          /* always 0x0001e240 (123456dec) */
+    uint8_t  split_time;    /* seconds */
+    uint16_t split_distances[1]; /* centimeters (!) */
+    /* the file length specifies how many entries there are... */
+} TTWATCH_RACE_HISTORY_DATA_FILE;
+
+/*****************************************************************************/
+typedef struct __attribute__((packed))
+{
+    uint8_t  _unk;
+    uint32_t entry_count;
+    struct __attribute__((packed))
+    {
+        uint8_t tag;
+        union
+        {
+            uint32_t int_val;
+            float    float_val;
+        };
+    } entries[1];   /* entries[entry_count] */
+} TTWATCH_HISTORY_DATA_FILE;
+
+typedef enum
+{
+    TTWATCH_HISTORY_ENTRY_TAG_Duration     = 0x01,  /* int_val   = seconds       */
+    TTWATCH_HISTORY_ENTRY_TAG_Distance     = 0x02,  /* float_val = metres        */
+    TTWATCH_HISTORY_ENTRY_TAG_AveragePace  = 0x05,  /* float_val = metres/second */
+    TTWATCH_HISTORY_ENTRY_TAG_AverageSpeed = 0x07,  /* float_val = metres/second */
+    TTWATCH_HISTORY_ENTRY_TAG_Lengths      = 0x08,  /* int_val                   */
+    TTWATCH_HISTORY_ENTRY_TAG_Laps         = 0x09,  /* int_val                   */
+    TTWATCH_HISTORY_ENTRY_TAG_Swolf        = 0x0f,  /* int_val                   */
+    TTWATCH_HISTORY_ENTRY_TAG_Strokes      = 0x13,  /* int_val                   */
+    TTWATCH_HISTORY_ENTRY_TAG_Calories     = 0x14,  /* int_val                   */
+    TTWATCH_HISTORY_ENTRY_TAG_RacePosition = 0x25,  /* int_val                   */
+    TTWATCH_HISTORY_ENTRY_TAG_RaceSpeed    = 0x26,  /* float_val = metres/second */
+    TTWATCH_HISTORY_ENTRY_TAG_RaceTime     = 0x27   /* int_val   = seconds       */
+} TTWATCH_HISTORY_ENTRY_TAG;
+
 /******************************************************************************
 * File IDs                                                                    *
 ******************************************************************************/

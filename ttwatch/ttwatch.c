@@ -812,6 +812,54 @@ void do_list_races(TTWATCH *watch)
 }
 
 /*****************************************************************************/
+static int decode_activity_character(char ch, int *activity)
+{
+    switch (ch)
+    {
+    case 'r': *activity = ACTIVITY_RUNNING;   break;
+    case 'c': *activity = ACTIVITY_CYCLING;   break;
+    case 's': *activity = ACTIVITY_SWIMMING;  break;
+    case 't': *activity = ACTIVITY_TREADMILL; break;
+    case 'f': *activity = ACTIVITY_FREESTYLE; break;
+    default:
+        return 0;
+    }
+    return 1;
+}
+
+/*****************************************************************************/
+static int extract_time_specification(const char *str, uint32_t *time)
+{
+    const char *ptr = str;
+    int i;
+
+    *time = 0;
+    for (i = 0; i < 3; ++i)
+    {
+        int num, count;
+        if (sscanf(ptr, "%d%n", &num, &count) < 1)
+            return 0;
+        *time += num;
+        ptr += count;
+        if (!*ptr)
+            break;
+        if (*ptr == ':')
+        {
+            if (i == 2)
+                return 0;
+            ++ptr;
+            *time *= 60;
+        }
+        else if (*ptr == ',')
+            break;
+        else
+            return 0;
+    }
+
+    return ptr - str;
+}
+
+/*****************************************************************************/
 void do_update_race(TTWATCH *watch, char *race)
 {
     int activity;
@@ -821,17 +869,10 @@ void do_update_race(TTWATCH *watch, char *race)
     uint32_t distance;
     uint32_t checkpoints;
     int num;
-    int i;
 
     /* parse the race data */
-    switch (race[0])
+    if (!decode_activity_character(race[0], &activity))
     {
-    case 'r': activity = ACTIVITY_RUNNING;   break;
-    case 'c': activity = ACTIVITY_CYCLING;   break;
-    case 's': activity = ACTIVITY_SWIMMING;  break;
-    case 't': activity = ACTIVITY_TREADMILL; break;
-    case 'f': activity = ACTIVITY_FREESTYLE; break;
-    default:
         write_log(1, "Invalid activity type specified, must be one of r, c, s, t or f\n");
         return;
     }
@@ -865,41 +906,18 @@ void do_update_race(TTWATCH *watch, char *race)
 
     /* find the duration (just seconds, minutes:seconds or hours:minutes:seconds */
     duration = 0;
-    for (i = 0; i < 3; ++i)
+    num = extract_time_specification(race, &duration);
+    if (!num)
     {
-        if (sscanf(race, "%d", &num) < 1)
-        {
-            write_log(1, "Invalid race data specified\n");
-            return;
-        }
-        duration += num;
-        while (isdigit(*race) && *race)
-            race++;
-        if (!*race)
-        {
-            write_log(1, "Insufficient race data specified\n");
-            return;
-        }
-        if (*race == ':')
-        {
-            if (i == 2)
-            {
-                write_log(1, "Invalid race data specified\n");
-                return;
-            }
-            ++race;
-            duration *= 60;
-        }
-        else if (*race == ',')
-        {
-            ++race;
-            break;
-        }
-        else
-        {
-            write_log(1, "Invalid race data specified\n");
-            return;
-        }
+        write_log(1, "Invalid race data specified\n");
+        return;
+    }
+    race += num;
+    if (!*race++)
+    {
+        return;
+        write_log(1, "Invalid race data specified\n");
+        return;
     }
 
     /* find the distance and number of checkpoints */
@@ -914,6 +932,239 @@ void do_update_race(TTWATCH *watch, char *race)
     {
         write_log(1, "Unable to update race\n");
     }
+}
+
+/*****************************************************************************/
+typedef struct
+{
+    TTWATCH *watch;
+    int activity;
+    float    distance;
+    uint32_t duration;
+    uint32_t race_data_file_length;
+    uint32_t history_data_file_length;
+    TTWATCH_RACE_HISTORY_DATA_FILE *race_data_file;
+    TTWATCH_HISTORY_DATA_FILE *history_data_file;
+} DCCRCBData;
+static void do_create_continuous_race_file_callback(uint32_t id, uint32_t length, void *cbdata)
+{
+    DCCRCBData *data = (DCCRCBData*)cbdata;
+    TTWATCH_HISTORY_FILE *file;
+    TTWATCH_HISTORY_ENTRY *entry;
+    time_t t;
+    struct tm timestamp;
+    uint32_t race_file_mask    = 0x00720000;
+    uint32_t history_file_mask = 0x00730000;
+    uint32_t index;
+    uint32_t i;
+
+    if (ttwatch_read_whole_file(data->watch, id, (void*)&file, &length) != TTWATCH_NoError)
+        return;
+
+    if (file->activity != data->activity)
+    {
+        free(file);
+        return;
+    }
+
+    /* find the highest index */
+    index = 0xffffffff;
+    for (i = 0; i < file->entry_count; ++i)
+    {
+        entry = (TTWATCH_HISTORY_ENTRY*)(file->data + i * file->entry_length);
+        if ((index == 0xffffffff) || (entry->index > index))
+            index = entry->index;
+    }
+    ++index;
+    race_file_mask    = TTWATCH_FILE_RACE_HISTORY_DATA | (data->activity << 8) | (index & 0xff);
+    history_file_mask = TTWATCH_FILE_HISTORY_DATA      | (data->activity << 8) | (index & 0xff);
+
+    /* write the race data file */
+    if (ttwatch_write_whole_file(data->watch, race_file_mask,
+                                 data->race_data_file, data->race_data_file_length) != TTWATCH_NoError)
+    {
+        write_log(1, "Unable to write race history data file\n");
+        return;
+    }
+
+    /* write the history data file */
+    if (ttwatch_write_whole_file(data->watch, history_file_mask,
+                                 data->history_data_file, data->history_data_file_length) != TTWATCH_NoError)
+    {
+        write_log(1, "Unable to write history data file\n");
+        ttwatch_delete_file(data->watch, race_file_mask);    /* don't leave orphans */
+        return;
+    }
+
+    t = time(NULL);
+    localtime_r(&t, &timestamp);
+
+    length += file->entry_length;
+
+    file = (TTWATCH_HISTORY_FILE*)realloc(file, length);
+    entry = (TTWATCH_HISTORY_ENTRY*)(file->data + file->entry_count * file->entry_length);
+    memset(entry, 0, file->entry_length);
+    entry->index    = file->entry_count++;
+    entry->activity = data->activity;
+    entry->year     = timestamp.tm_year + 1900;
+    entry->month    = timestamp.tm_mon + 1;
+    entry->day      = timestamp.tm_mday;
+    entry->hour     = timestamp.tm_hour;
+    entry->minute   = timestamp.tm_min;
+    entry->second   = timestamp.tm_sec;
+    entry->duration = data->duration;
+    entry->distance = data->distance;
+    entry->file_id  = index;
+
+    if (ttwatch_write_whole_file(data->watch, id, file, length) != TTWATCH_NoError)
+    {
+        ttwatch_delete_file(data->watch, race_file_mask);    /* don't leave orphans */
+        ttwatch_delete_file(data->watch, history_file_mask);
+    }
+    free(file);
+}
+void do_create_continuous_race(TTWATCH *watch, char *race)
+{
+    int activity;
+    float total_distance;
+    uint32_t total_time;
+    DCCRCBData cbdata;
+
+    /* the first character should be race type */
+    if (!decode_activity_character(*race++, &activity))
+    {
+        write_log(1, "Invalid activity type specified, must be one of r, c, s, t or f\n");
+        return;
+    }
+
+    /* allocate data for the race file */
+    cbdata.race_data_file_length = 9;
+    cbdata.race_data_file = (TTWATCH_RACE_HISTORY_DATA_FILE*)malloc(cbdata.race_data_file_length);
+    cbdata.race_data_file->file_type = TTWATCH_FILE_RACE_HISTORY_DATA;
+    cbdata.race_data_file->_unk = 123456;
+    cbdata.race_data_file->split_time = 1;
+
+    /* loop through and create the race file */
+    total_distance = 0.0f;
+    total_time = 0;
+    while (*race)
+    {
+        float distance;
+        int count;
+        char *ptr;
+        char type;
+        uint32_t time;
+        int imperial;
+        uint32_t cum_distance;
+        uint16_t *entry_ptr;
+        uint32_t i;
+
+        /* skip the comma */
+        if (*race++ != ',')
+            goto error;
+
+        /* extract the distance from the specification string */
+        if ((sscanf(race, "%f%n", &distance, &count) < 1) || (distance < 1.0f))
+            goto error;
+        race += count;
+
+        /* extract the speed type (time or pace) */
+        ptr = race;
+        while (*ptr && isalpha(*ptr))
+            ++ptr;
+        if (!*ptr)
+            goto error;
+        type = *ptr;
+        *ptr = 0;
+        if ((type != '/') && (type != '@'))
+            goto error;
+
+        /* convert from requested units (must be specified) to centimeters */
+        imperial = 0;
+        if (strcmp(race, "km") == 0)
+            distance *= 100000.0f;
+        else if (strcmp(race, "mi") == 0)
+        {
+            distance *= 160934.4f;
+            imperial = 1;
+        }
+        else if (strcmp(race, "m") == 0)
+            distance *= 100.0f;
+        else if (strcmp(race, "yd") == 0)
+        {
+            distance *= 91.44;
+            imperial = 1;
+        }
+        else
+            goto error;
+        race = ptr + 1;
+
+        /* extract the time specification from the string */
+        count = extract_time_specification(race, &time);
+        if (!count || (time == 0))
+            goto error;
+        race += count;
+
+        /* convert from pace to total time if required */
+        if (type == '@')
+        {
+            if (imperial)
+                time = (uint32_t)(time * (distance / 160934.4f) + 0.5f);    /* time per mile */
+            else
+                time = (uint32_t)(time * (distance / 100000.0f) + 0.5f);    /* time per km */
+        }
+
+        /* update the length of the file */
+        i = cbdata.race_data_file_length;
+        cbdata.race_data_file_length += time * sizeof(uint16_t);
+        cbdata.race_data_file = (TTWATCH_RACE_HISTORY_DATA_FILE*)realloc(cbdata.race_data_file, cbdata.race_data_file_length);
+        entry_ptr = (uint16_t*)((char*)cbdata.race_data_file + i);
+
+        /* write out the file data */
+        cum_distance = 0;
+        for (i = 1; i <= time; ++i)
+        {
+            *entry_ptr = (uint16_t)((distance * i / time) - cum_distance + 0.5f);
+            cum_distance += *entry_ptr++;
+        }
+        total_distance += distance;
+        total_time += time;
+    }
+    total_distance /= 100.0f;
+
+    if ((total_distance < 1.0f) || (total_time == 0))
+        goto error;
+
+    /* make the history data file */
+    cbdata.history_data_file_length = 25;
+    cbdata.history_data_file = (TTWATCH_HISTORY_DATA_FILE*)malloc(cbdata.history_data_file_length);
+    cbdata.history_data_file->_unk = 1;
+    cbdata.history_data_file->entry_count = 4;
+    cbdata.history_data_file->entries[0].tag = TTWATCH_HISTORY_ENTRY_TAG_Duration;
+    cbdata.history_data_file->entries[0].int_val = total_time;
+    cbdata.history_data_file->entries[1].tag = TTWATCH_HISTORY_ENTRY_TAG_Distance;
+    cbdata.history_data_file->entries[1].float_val = total_distance;
+    cbdata.history_data_file->entries[2].tag = TTWATCH_HISTORY_ENTRY_TAG_AveragePace;
+    cbdata.history_data_file->entries[2].float_val = total_distance / total_time;
+    cbdata.history_data_file->entries[3].tag = TTWATCH_HISTORY_ENTRY_TAG_AverageSpeed;
+    cbdata.history_data_file->entries[3].float_val = total_distance / total_time;
+
+    cbdata.watch    = watch;
+    cbdata.activity = activity;
+    cbdata.distance = total_distance;
+    cbdata.duration = total_time;
+    ttwatch_enumerate_files(watch, TTWATCH_FILE_HISTORY_SUMMARY, do_create_continuous_race_file_callback, &cbdata);
+
+    free(cbdata.race_data_file);
+    free(cbdata.history_data_file);
+    return;
+
+error:
+    write_log(1, "Invalid race data specified\n");
+    if (cbdata.race_data_file)
+        free(cbdata.race_data_file);
+    if (cbdata.history_data_file)
+        free(cbdata.history_data_file);
 }
 
 /*****************************************************************************/
@@ -1599,6 +1850,8 @@ void help(char *argv[])
     write_log(0, "      --all-settings         List all the current settings on the watch\n");
     write_log(0, "      --clear-data           Delete all activities and history data from the\n");
     write_log(0, "                               watch. Does NOT save the data before deleting it\n");
+    write_log(0, "      --create-continuous-race [RACE] Create a continuously monitored race and\n");
+    write_log(0, "                               uploads it to the watch (see below)\n");
     write_log(0, "      --daemon               Run the program in daemon mode\n");
 #ifdef UNSAFE
     write_log(0, "      --delete               Deletes a single file from the device\n");
@@ -1706,6 +1959,29 @@ void help(char *argv[])
     write_log(0, "If the name has spaces in it, the entire race specification must be\n");
     write_log(0, "surrounded in quotes, or the space can be escaped with a '\\'.\n");
     write_log(0, "\n");
+    write_log(0, "--create-continuous-race creates a different type of race that shows\n");
+    write_log(0, "progress on the watch every second. It appears as a recent activity race\n");
+    write_log(0, "rather than a MySports race. It is listed under the date and time that\n");
+    write_log(0, "the race is created. It has a different specification string to the\n");
+    write_log(0, "--update-race command, and is as follows:\n");
+    write_log(0, "  <activity>,<distance/time>[,<distance/time>]...\n");
+    write_log(0, "Where: <activity>      is a single-character activity type (r, c, s, f or t)\n");
+    write_log(0, "       <distance/time> is a distance and time specification given as\n");
+    write_log(0, "                       \"<distance>/<time>\" to race a set distance in a\n");
+    write_log(0, "                       set time, or \"<distance>@<pace>\" to race a set\n");
+    write_log(0, "                       distance at a given pace.\n");
+    write_log(0, "The distance specification consists of a number followed by a unit suffix,\n");
+    write_log(0, "either \"km\", \"mi\", \"m\" or \"yd\". Fractional numbers are allowed.\n");
+    write_log(0, "The time/pace specification is in seconds, minutes:seconds or\n");
+    write_log(0, "hours:minutes:seconds and represents the time per km (if a \"km\" or \"m\"\n");
+    write_log(0, "distance is specified) or time per mile (if a \"mi\" or \"yd\" distance is\n");
+    write_log(0, "specified. Multiple specifications can be given, separated by commas, which\n");
+    write_log(0, "are concatenated in the race.\n");
+    write_log(0, "For example:  --create-continuous-race \"r,400m/1:00,10km@4:00\"\n");
+    write_log(0, "    specifies a race for running 400m in 1 minute, followed by 10km at 4min/km\n");
+    write_log(0, "Note that the watch cannot differentiate between multiple segments, so it\n");
+    write_log(0, "will not notify you when you have finished a segment.\n");
+    write_log(0, "\n");
     write_log(0, "The program can be run as a daemon, which will automatically perform\n");
     write_log(0, "the operations specified on the command line whenever a watch is\n");
     write_log(0, "connected. The program must be run as root initially, but the --runas\n");
@@ -1777,6 +2053,7 @@ int main(int argc, char *argv[])
         { "delete-history", required_argument, 0, 4   },
         { "update-race",    required_argument, 0, 5   },
         { "setting",        required_argument, 0, 6   },
+        { "create-continuous-race", required_argument, 0, 9 },
 #ifdef UNSAFE
         { "list",           no_argument,       0, 'l' },
         { "read",           required_argument, 0, 'r' },
@@ -1832,6 +2109,12 @@ int main(int argc, char *argv[])
             break;
         case 8:     /* factory reset */
             ++options->factory_reset;
+            break;
+        case 9:     /* create continuous race */
+            options->create_continuous_race = 1;
+            if (options->race)
+                free(options->race);
+            options->race = strdup(optarg);
             break;
 
         case 'a':   /* auto mode */
@@ -2005,7 +2288,8 @@ int main(int argc, char *argv[])
         !options->list_formats && !options->set_formats && !options->list_races &&
         !options->list_history && !options->delete_history && !options->update_race &&
         !options->clear_data && !options->display_settings && !options->setting &&
-        !options->list_settings && !options->factory_reset && !options->initial_setup)
+        !options->list_settings && !options->factory_reset && !options->initial_setup &&
+        !options->create_continuous_race)
     {
         help(argv);
         free_options(options);
@@ -2144,6 +2428,9 @@ int main(int argc, char *argv[])
 
     if (options->update_race)
         do_update_race(watch, options->race);
+
+    if (options->create_continuous_race)
+        do_create_continuous_race(watch, options->race);
 
     if (options->list_history)
         do_list_history(watch);
