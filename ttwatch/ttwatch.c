@@ -34,7 +34,55 @@
 
 #define TT_MANIFEST_ENTRY_UTC_OFFSET    (169)
 
+#define MANIFEST_TYPE_ENUM  (0)
+#define MANIFEST_TYPE_INT   (1)
+#define MANIFEST_TYPE_FLOAT (2)
+
+struct MANIFEST_DEFINITION
+{
+    const char *name;
+    int writable;
+    int type;
+};
+
+struct MANIFEST_INT_DEFINITION
+{
+    const char *name;
+    int writable;
+    int type;
+    const char *units;
+    uint32_t min;
+    uint32_t max;
+};
+
+struct MANIFEST_FLOAT_DEFINITION
+{
+    const char *name;
+    int writable;
+    int type;
+    const char *units;
+    float scaling_factor;
+    float min;
+    float max;
+};
+
+struct MANIFEST_ENUM_VALUE
+{
+    uint32_t value;
+    const char *name;
+};
+
+struct MANIFEST_ENUM_DEFINITION
+{
+    const char *name;
+    int writable;
+    int type;
+    int value_count;
+    struct MANIFEST_ENUM_VALUE values[];
+};
+
 #include "manifest_definitions.h"
+#include "manifest_definitions_0001082e.h"
 
 struct
 {
@@ -47,7 +95,7 @@ struct
     { 0x00010822, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
     { 0x00010823, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
     { 0x0001082a, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
-    { 0x0001082e, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
+    { 0x0001082e, MANIFEST_DEFINITION_0001082e_COUNT, MANIFEST_DEFINITIONS_0001082e },
 };
 
 #define MANIFEST_DEFINITION_COUNT (sizeof(MANIFEST_DEFINITIONS) / sizeof(MANIFEST_DEFINITIONS[0]))

@@ -11,7 +11,7 @@ $(OUTPUT): $(SRC:.c=.o) ../ttbin/libttbin.a ../libttwatch/libttwatch.a
 	@echo Linking $(OUTPUT)...
 	@$(CC) -o $(OUTPUT) $(SRC:.c=.o) $(LDFLAGS)
 
-ttwatch.o: manifest_definitions.h
+ttwatch.o: manifest_definitions.h manifest_definitions_0001082e.h
 
 %.o: %.c
 	@echo Compiling $@...
@@ -24,6 +24,9 @@ ttwatch.o: manifest_definitions.h
 	@rm -f $*.d.tmp
 
 manifest_definitions.h: manifest.txt make_manifest.pl
+	@./make_manifest.pl <$< >$@
+
+manifest_definitions_0001082e.h: manifest_0001082e.txt make_manifest.pl
 	@./make_manifest.pl <$< >$@
 
 clean:
