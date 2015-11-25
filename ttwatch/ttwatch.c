@@ -1229,6 +1229,7 @@ static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const
         case TTWATCH_Swimming:  write_log(0, "Swimming:\n");  break;
         case TTWATCH_Treadmill: write_log(0, "Treadmill:\n"); break;
         case TTWATCH_Freestyle: write_log(0, "Freestyle:\n"); break;
+        case TTWATCH_Gym:       write_log(0, "Gym:\n"); break;
         }
         *(int*)data = activity;
     }
@@ -1259,8 +1260,9 @@ void do_delete_history_item(TTWATCH *watch, const char *item)
     case 's': activity = TTWATCH_Swimming;  break;
     case 't': activity = TTWATCH_Treadmill; break;
     case 'f': activity = TTWATCH_Freestyle; break;
+    case 'g': activity = TTWATCH_Gym;       break;
     default:
-        write_log(1, "Invalid activity type specified, must be one of r, c, s, t or f\n");
+        write_log(1, "Invalid activity type specified, must be one of r, c, s, t, f or g\n");
         return;
     }
 

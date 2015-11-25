@@ -74,7 +74,8 @@ typedef enum
     TTWATCH_Cycling,
     TTWATCH_Swimming,
     TTWATCH_Treadmill = 7,
-    TTWATCH_Freestyle
+    TTWATCH_Freestyle,
+    TTWATCH_Gym
 } TTWATCH_ACTIVITY;
 
 /*****************************************************************************/

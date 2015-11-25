@@ -107,6 +107,13 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
+    uint32_t timestamp;
+    uint16_t total_calories;
+    uint32_t total_cycles;
+} FILE_GYM_RECORD;
+
+typedef struct __attribute__((packed))
+{
     uint32_t total_time;        /* seconds since activity start */
     float    total_distance;    /* metres */
     uint16_t total_calories;
@@ -288,6 +295,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
                 FILE_STATUS_RECORD              status;
                 FILE_TREADMILL_RECORD           treadmill;
                 FILE_SWIM_RECORD                swim;
+                FILE_GYM_RECORD                 gym;
                 FILE_LAP_RECORD                 lap;
                 FILE_RACE_SETUP_RECORD          race_setup;
                 FILE_RACE_STATUS_RECORD         race_status;
@@ -497,6 +505,13 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record = append_record(file, p.record->tag, length);
             record->race_status.status = p.record->race_status.status;
             append_array(&file->race_status_records, record);
+            break;
+        case TAG_GYM:
+            record = append_record(file, p.record->tag, length);
+            record->gym.timestamp = p.record->gym.timestamp;
+            record->gym.total_calories  = p.record->gym.total_calories;
+            record->gym.total_cycles    = p.record->gym.total_cycles;
+            append_array(&file->gym_records, record);
             break;
         default:
             record = append_record(file, p.record->tag, length);
@@ -729,6 +744,14 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
             fwrite(&r, 1, sizeof(FILE_RACE_STATUS_RECORD), file);
             break;
         }
+        case TAG_GYM: {
+            FILE_GYM_RECORD r = {
+                record->gym.timestamp,
+                record->gym.total_calories,
+                record->gym.total_cycles
+            };
+            fwrite(&r, 1, sizeof(FILE_GYM_RECORD), file);
+        }
         default: {
             fwrite(record->data, 1, record->length - 1, file);
             break;
@@ -808,6 +831,7 @@ void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
     case TAG_INTERVAL_FINISH: remove_array(&ttbin->interval_finish_records, record); break;
     case TAG_ALTITUDE_UPDATE: remove_array(&ttbin->altitude_records, record); break;
     case TAG_RACE_STATUS: remove_array(&ttbin->race_status_records, record); break;
+    case TAG_GYM: remove_array(&ttbin->gym_records, record); break;
     }
 
     if (record != ttbin->first)
@@ -836,6 +860,7 @@ const char *create_filename(TTBIN_FILE *ttbin, const char *ext)
     case ACTIVITY_SWIMMING:  type = "Pool_swim"; break;
     case ACTIVITY_TREADMILL: type = "Treadmill"; break;
     case ACTIVITY_FREESTYLE: type = "Freestyle"; break;
+    case ACTIVITY_GYM:       type = "Gym"; break;
     }
     sprintf(filename, "%s_%02d-%02d-%02d.%s", type, time->tm_hour, time->tm_min, time->tm_sec, ext);
 
@@ -1026,6 +1051,7 @@ void free_ttbin(TTBIN_FILE *ttbin)
     if (ttbin->interval_finish_records.records) free(ttbin->interval_finish_records.records);
     if (ttbin->altitude_records.records)        free(ttbin->altitude_records.records);
     if (ttbin->race_status_records.records)     free(ttbin->race_status_records.records);
+    if (ttbin->gym_records.records)             free(ttbin->gym_records.records);
     free(ttbin);
 }
 
@@ -1117,6 +1143,12 @@ static void update_summary_information(TTBIN_FILE *ttbin)
         ttbin->total_calories = record->treadmill.calories;
         ttbin->duration       = record->treadmill.timestamp - ttbin->timestamp_utc;
         break;
+    case ACTIVITY_GYM:
+        record = ttbin->gym_records.records[ttbin->gym_records.count - 1];
+        ttbin->total_distance = 0.0f;
+        ttbin->total_calories = record->gym.total_calories;
+        ttbin->duration       = record->gym.timestamp - ttbin->timestamp_utc;
+        break;
     }
 }
 
@@ -1134,7 +1166,7 @@ int truncate_laps(TTBIN_FILE *ttbin)
     while (end->next)
     {
         end = end->next;
-        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag = TAG_TREADMILL))
+        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag == TAG_TREADMILL) || (end->tag == TAG_GYM))
             break;
     }
 
@@ -1166,7 +1198,7 @@ int truncate_race(TTBIN_FILE *ttbin)
     while (end->next)
     {
         end = end->next;
-        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag = TAG_TREADMILL))
+        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag == TAG_TREADMILL) || (end->tag == TAG_GYM))
             break;
     }
 
@@ -1209,7 +1241,7 @@ int truncate_goal(TTBIN_FILE *ttbin)
     while (end->next)
     {
         end = end->next;
-        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag = TAG_TREADMILL))
+        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag == TAG_TREADMILL) || (end->tag == TAG_GYM))
             break;
     }
 
@@ -1241,7 +1273,7 @@ int truncate_intervals(TTBIN_FILE *ttbin)
     while (end->next)
     {
         end = end->next;
-        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag = TAG_TREADMILL))
+        if ((end->tag == TAG_GPS) || (end->tag == TAG_SWIM) || (end->tag = TAG_TREADMILL) || (end->tag == TAG_GYM))
             break;
     }
 

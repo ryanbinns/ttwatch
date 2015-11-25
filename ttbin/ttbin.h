@@ -29,6 +29,7 @@
 #define TAG_RACE_RESULT         (0x3d)
 #define TAG_ALTITUDE_UPDATE     (0x3e)
 #define TAG_HEART_RATE_RECOVERY (0x3f)
+#define TAG_GYM                 (0x41)
 #define TAG_RACE_STATUS         (0x42)
 
 #define ACTIVITY_RUNNING    (0)
@@ -37,6 +38,7 @@
 #define ACTIVITY_STOPWATCH  (6) /* doesn't actually log any data */
 #define ACTIVITY_TREADMILL  (7)
 #define ACTIVITY_FREESTYLE  (8)
+#define ACTIVITY_GYM        (9)
 
 typedef struct
 {
@@ -83,6 +85,13 @@ typedef struct
     uint32_t completed_laps;
     uint16_t total_calories;
 } SWIM_RECORD;
+
+typedef struct
+{
+    time_t   timestamp;
+    uint16_t total_calories;
+    uint32_t total_cycles;
+} GYM_RECORD;
 
 typedef struct
 {
@@ -225,6 +234,7 @@ typedef struct _TTBIN_RECORD
         STATUS_RECORD              status;
         TREADMILL_RECORD           treadmill;
         SWIM_RECORD                swim;
+        GYM_RECORD                 gym;
         LAP_RECORD                 lap;
         HEART_RATE_RECORD          heart_rate;
         RACE_SETUP_RECORD          race_setup;
@@ -274,6 +284,7 @@ typedef struct
     RECORD_ARRAY status_records;
     RECORD_ARRAY treadmill_records;
     RECORD_ARRAY swim_records;
+    RECORD_ARRAY gym_records;
     RECORD_ARRAY lap_records;
     RECORD_ARRAY heart_rate_records;
     RECORD_ARRAY goal_progress_records;
