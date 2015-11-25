@@ -19,6 +19,7 @@
 #define TAG_WHEEL_SIZE          (0x2b)
 #define TAG_TRAINING_SETUP      (0x2d)
 #define TAG_LAP                 (0x2f)
+#define TAG_CYCLING_CADENCE     (0x31)
 #define TAG_TREADMILL           (0x32)
 #define TAG_SWIM                (0x34)
 #define TAG_GOAL_PROGRESS       (0x35)
@@ -216,6 +217,14 @@ typedef struct
 
 typedef struct
 {
+    uint32_t wheel_revolutions;
+    uint16_t wheel_revolutions_time;
+    uint16_t crank_revolutions;
+    uint16_t crank_revolutions_time;
+} CYCLING_CADENCE_RECORD;
+
+typedef struct
+{
     time_t   timestamp;     /* utc time */
     uint16_t length;
     uint8_t  *data;
@@ -249,6 +258,7 @@ typedef struct _TTBIN_RECORD
         ALTITUDE_RECORD            altitude;
         POOL_SIZE_RECORD           pool_size;
         WHEEL_SIZE_RECORD          wheel_size;
+        CYCLING_CADENCE_RECORD     cycling_cadence;
     };
 } TTBIN_RECORD;
 
@@ -292,6 +302,7 @@ typedef struct
     RECORD_ARRAY interval_finish_records;
     RECORD_ARRAY altitude_records;
     RECORD_ARRAY race_status_records;
+    RECORD_ARRAY cycling_cadence_records;
 
     TTBIN_RECORD *first;
     TTBIN_RECORD *last;
