@@ -193,7 +193,7 @@ typedef struct
 
 typedef struct
 {
-    uint32_t status;            /* 3 = good, 4 = excellent */
+    uint32_t status;            /* 1 = poor, 2 = decent, 3 = good, 4 = excellent */
     uint32_t heart_rate;        /* heart rate recovery in bpm */
 } HEART_RATE_RECOVERY_RECORD;
 
