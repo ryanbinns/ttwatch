@@ -29,6 +29,7 @@
 #define TAG_RACE_RESULT         (0x3d)
 #define TAG_ALTITUDE_UPDATE     (0x3e)
 #define TAG_HEART_RATE_RECOVERY (0x3f)
+#define TAG_RACE_STATUS         (0x42)
 
 #define ACTIVITY_RUNNING    (0)
 #define ACTIVITY_CYCLING    (1)
@@ -103,6 +104,11 @@ typedef struct
     uint32_t duration;  /* seconds */
     char     name[16];  /* always null-terminated */
 } RACE_SETUP_RECORD;
+
+typedef struct
+{
+    uint8_t status;     /* 1 = 2nd position, 2 = 1st position */
+} RACE_STATUS_RECORD;
 
 typedef struct
 {
@@ -222,6 +228,7 @@ typedef struct _TTBIN_RECORD
         LAP_RECORD                 lap;
         HEART_RATE_RECORD          heart_rate;
         RACE_SETUP_RECORD          race_setup;
+        RACE_STATUS_RECORD         race_status;
         RACE_RESULT_RECORD         race_result;
         TRAINING_SETUP_RECORD      training_setup;
         GOAL_PROGRESS_RECORD       goal_progress;
@@ -244,7 +251,7 @@ typedef struct
 typedef struct
 {
     uint8_t  file_version;
-    uint8_t  firmware_version[4];
+    uint8_t  firmware_version[3];
     uint16_t product_id;
     time_t   timestamp_local;
     time_t   timestamp_utc;
@@ -273,6 +280,7 @@ typedef struct
     RECORD_ARRAY interval_start_records;
     RECORD_ARRAY interval_finish_records;
     RECORD_ARRAY altitude_records;
+    RECORD_ARRAY race_status_records;
 
     TTBIN_RECORD *first;
     TTBIN_RECORD *last;
