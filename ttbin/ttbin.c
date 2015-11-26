@@ -129,11 +129,6 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
-    uint8_t status;     /* 1 = 2nd position, 2 = 1st position */
-} FILE_RACE_STATUS_RECORD;
-
-typedef struct __attribute__((packed))
-{
     uint32_t duration;  /* seconds */
     float    distance;  /* metres */
     uint16_t calories;
@@ -306,7 +301,6 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
                 FILE_GYM_RECORD                 gym;
                 FILE_LAP_RECORD                 lap;
                 FILE_RACE_SETUP_RECORD          race_setup;
-                FILE_RACE_STATUS_RECORD         race_status;
                 FILE_RACE_RESULT_RECORD         race_result;
                 FILE_TRAINING_SETUP_RECORD      training_setup;
                 FILE_GOAL_PROGRESS_RECORD       goal_progress;
@@ -517,11 +511,6 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             record->heart_rate_recovery.status     = p.record->heart_rate_recovery.status;
             record->heart_rate_recovery.heart_rate = p.record->heart_rate_recovery.heart_rate;
             file->heart_rate_recovery = record;
-            break;
-        case TAG_RACE_STATUS:
-            record = append_record(file, p.record->tag, length);
-            record->race_status.status = p.record->race_status.status;
-            append_array(&file->race_status_records, record);
             break;
         case TAG_GYM:
             record = append_record(file, p.record->tag, length);
@@ -766,11 +755,6 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
             fwrite(&r, 1, sizeof(FILE_HEART_RATE_RECOVERY_RECORD), file);
             break;
         }
-        case TAG_RACE_STATUS: {
-            FILE_RACE_STATUS_RECORD r = { record->race_status.status };
-            fwrite(&r, 1, sizeof(FILE_RACE_STATUS_RECORD), file);
-            break;
-        }
         case TAG_GYM: {
             FILE_GYM_RECORD r = {
                 record->gym.timestamp,
@@ -857,7 +841,6 @@ void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
     case TAG_INTERVAL_START: remove_array(&ttbin->interval_start_records, record); break;
     case TAG_INTERVAL_FINISH: remove_array(&ttbin->interval_finish_records, record); break;
     case TAG_ALTITUDE_UPDATE: remove_array(&ttbin->altitude_records, record); break;
-    case TAG_RACE_STATUS: remove_array(&ttbin->race_status_records, record); break;
     case TAG_GYM: remove_array(&ttbin->gym_records, record); break;
     case TAG_CYCLING_CADENCE: remove_array(&ttbin->cycling_cadence_records, record); break;
     }
@@ -1078,7 +1061,6 @@ void free_ttbin(TTBIN_FILE *ttbin)
     if (ttbin->interval_start_records.records)  free(ttbin->interval_start_records.records);
     if (ttbin->interval_finish_records.records) free(ttbin->interval_finish_records.records);
     if (ttbin->altitude_records.records)        free(ttbin->altitude_records.records);
-    if (ttbin->race_status_records.records)     free(ttbin->race_status_records.records);
     if (ttbin->gym_records.records)             free(ttbin->gym_records.records);
     if (ttbin->cycling_cadence_records.records) free(ttbin->cycling_cadence_records.records);
     free(ttbin);
