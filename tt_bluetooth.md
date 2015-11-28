@@ -235,7 +235,7 @@ becomes `91 01 00`).
         Possibly repeated {
           2b ->  response bytes
         }
-        25 <-  00 00 00 00
+        25 ->  00 00 00 00
 
 * **The meaning of the returned bytes is currently unknown to me. _Any guesses?_**
 * There can be long delays before the response, when deleting a large file such as a GPS activity; a timeout of 20&nbsp;s seems to work for me.
@@ -256,7 +256,7 @@ becomes `91 01 00`).
           2e ->  ack_counter (uint32_le)
           ack_counter := ack_counter + 1
         }
-        25 <-  00 00 00 00
+        25 ->  00 00 00 00
 
 * The host needs to compute the CRC16 as data is sent, and send
   correct CRC16 at the points shown (at the end of every 256 data
@@ -316,7 +316,7 @@ becomes `91 01 00`).
           2b ->  [18 bytes of file contents] [CRC16 of data bytes since reset, uint16_le]
           2e <-  ack_counter (uint32_le)
         }
-        25 <-  00 00 00 00
+        25 ->  00 00 00 00
 
 ## Normal operation
 
