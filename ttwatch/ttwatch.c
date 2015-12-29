@@ -30,7 +30,8 @@
 /*************************************************************************************************/
 
 #define TOMTOM_VENDOR_ID    (0x1390)
-#define TOMTOM_PRODUCT_ID   (0x7474)
+#define TOMTOM_MULTISPORT_PRODUCT_ID   (0x7474)
+#define TOMTOM_SPARK_PRODUCT_ID   (0x7477)
 
 #define TT_MANIFEST_ENTRY_UTC_OFFSET    (169)
 
@@ -596,64 +597,66 @@ void do_update_firmware(TTWATCH *watch, int force)
         goto cleanup;
     }
 
-    /* find the latest BLE version */
-    ptr = strstr((char*)download.data, "<BLE version=\"");
-    if (!ptr)
-    {
-        write_log(1, "Unable to determine latest BLE version\n");
-        goto cleanup;
-    }
-    latest_ble_version = strtoul(ptr + 14, NULL, 0);
-
-    /* check to see if we need to do anything */
-    if (!force && (latest_ble_version <= current_ble_version))
-        write_log(1, "Current BLE firmware is already at latest version\n");
-    else
-    {
-        write_log(0, "Current BLE Firmware Version: %u\n", current_ble_version);
-        write_log(0, "Latest BLE Firmware Version : %u\n", latest_ble_version);
-
-        /* find the download URL of the BLE firmware */
-        ptr = strstr(ptr, "URL=\"");
+    /* find the latest BLE version for the Multisport version*/
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID) {
+        ptr = strstr((char*)download.data, "<BLE version=\"");
         if (!ptr)
         {
-            write_log(1, "Unable to determine BLE firmware download URL\n");
+            write_log(1, "Unable to determine latest BLE version\n");
             goto cleanup;
         }
-        fw_url = ptr + 5;
-        ptr = strstr(fw_url, "\"");
-        if (!ptr)
-        {
-            write_log(1, "Unable to determine BLE firmware download URL\n");
-            goto cleanup;
-        }
-        *ptr = 0;
+        latest_ble_version = strtoul(ptr + 14, NULL, 0);
 
-        /* find the BLE firmware file ID */
-        ptr = strrchr(fw_url, '/');
-        if (!ptr)
-        {
-            write_log(1, "Unable to determine BLE file ID\n");
-            goto cleanup;
-        }
-
-        firmware_files = (FIRMWARE_FILE*)realloc(firmware_files, ++file_count * sizeof(FIRMWARE_FILE));
-
-        firmware_files[file_count - 1].id = strtoul(ptr + 1, NULL, 0);
-        firmware_files[file_count - 1].download.data   = 0;
-        firmware_files[file_count - 1].download.length = 0;
-
-        /* create the full URL and download the file */
-        sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/%s", product_id, fw_url);
-        /*free(fw_url);*/
-        write_log(0, "Download %s ... ", url);
-        if (download_file(url, &firmware_files[file_count - 1].download))
-        {
-            write_log(0, "Failed\n");
-            goto cleanup;
-        }
+        /* check to see if we need to do anything */
+        if (!force && (latest_ble_version <= current_ble_version))
+            write_log(1, "Current BLE firmware is already at latest version\n");
         else
-            write_log(0, "Done\n");
+        {
+            write_log(0, "Current BLE Firmware Version: %u\n", current_ble_version);
+            write_log(0, "Latest BLE Firmware Version : %u\n", latest_ble_version);
+
+            /* find the download URL of the BLE firmware */
+            ptr = strstr(ptr, "URL=\"");
+            if (!ptr)
+            {
+                write_log(1, "Unable to determine BLE firmware download URL\n");
+                goto cleanup;
+            }
+            fw_url = ptr + 5;
+            ptr = strstr(fw_url, "\"");
+            if (!ptr)
+            {
+                write_log(1, "Unable to determine BLE firmware download URL\n");
+                goto cleanup;
+            }
+            *ptr = 0;
+
+            /* find the BLE firmware file ID */
+            ptr = strrchr(fw_url, '/');
+            if (!ptr)
+            {
+                write_log(1, "Unable to determine BLE file ID\n");
+                goto cleanup;
+            }
+
+            firmware_files = (FIRMWARE_FILE*)realloc(firmware_files, ++file_count * sizeof(FIRMWARE_FILE));
+
+            firmware_files[file_count - 1].id = strtoul(ptr + 1, NULL, 0);
+            firmware_files[file_count - 1].download.data   = 0;
+            firmware_files[file_count - 1].download.length = 0;
+
+            /* create the full URL and download the file */
+            sprintf(url, "http://download.tomtom.com/sweet/fitness/Firmware/%08X/%s", product_id, fw_url);
+            /*free(fw_url);*/
+            write_log(0, "Download %s ... ", url);
+            if (download_file(url, &firmware_files[file_count - 1].download))
+            {
+                write_log(0, "Failed\n");
+                goto cleanup;
+            }
+            else
+                write_log(0, "Done\n");
+        }
     }
 
     /* check to see if we need to update the firmware */
@@ -2307,12 +2310,21 @@ int main(int argc, char *argv[])
         {
             int result;
             if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
-                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_PRODUCT_ID,
+                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_MULTISPORT_PRODUCT_ID,
                 LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
             {
                 write_log(1, "Unable to register hotplug callback: %d\n", result);
                 _exit(1);
             }
+
+            if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
+                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_PRODUCT_ID,
+                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
+            {
+                write_log(1, "Unable to register hotplug callback: %d\n", result);
+                _exit(1);
+            }
+
 
             /* infinite loop - handle events every 10 seconds */
             while (1)
