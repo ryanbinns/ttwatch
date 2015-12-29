@@ -17,7 +17,8 @@
 // macros
 
 #define TOMTOM_VENDOR_ID    (0x1390)
-#define TOMTOM_PRODUCT_ID   (0x7474)
+#define TOMTOM_MULTISPORT_PRODUCT_ID   (0x7474)
+#define TOMTOM_SPARK_PRODUCT_ID   (0x7477)
 
 #define RETURN_ERROR(err)               \
     do                                  \
@@ -92,7 +93,7 @@ typedef struct
 typedef struct
 {
     uint32_t id;
-    uint8_t data[54];
+    uint8_t data[246];
 } TXWriteFileDataPacket;
 
 // RX packets
@@ -131,7 +132,7 @@ typedef struct
 {
     uint32_t id;
     uint32_t data_length;
-    uint8_t  data[50];
+    uint8_t  data[242];
 } RXReadFileDataPacket;
 
 typedef struct
@@ -197,7 +198,7 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
     const uint8_t *tx_data, uint8_t rx_length, uint8_t *rx_data)
 {
     static uint8_t message_counter = 0;
-    uint8_t packet[64] = {0};
+    uint8_t packet[256] = {0};
     int count  = 0;
     int result = 0;
 
@@ -208,18 +209,27 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
     packet[3] = msg;
     memcpy(packet + 4, tx_data, tx_length);
 
-    print_packet(packet, tx_length + 4);
+    uint16_t packet_size;
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+	    packet_size = tx_length + 4;
+    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+	    packet_size = 256;
+
+    print_packet(packet, packet_size);
 
     // send the packet
-    result = libusb_interrupt_transfer(watch->device, 0x05, packet, tx_length + 4, &count, 10000);
-    if (result || (count != tx_length + 4))
+    result = libusb_interrupt_transfer(watch->device, 0x02, packet, packet_size, &count, 10000);
+    if (result || (count != packet_size))
         return TTWATCH_UnableToSendPacket;
+
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+	    packet_size = 64;
 
     // read the reply
     unsigned timeout = 10000;   // 10 seconds for most message types
     if (msg == MSG_FORMAT_WATCH)
         timeout = 120000;       // formatting takes about 60 seconds, so make the timeout 120 seconds
-    result = libusb_interrupt_transfer(watch->device, 0x84, packet, 64, &count, timeout);
+    result = libusb_interrupt_transfer(watch->device, 0x81, packet, packet_size, &count, timeout);
     if (result)
         return TTWATCH_UnableToReceivePacket;
 
@@ -323,7 +333,8 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
     // ignore any non-TomTom devices
     // PID 0x7474 is Multisport and Multisport Cardio
     if ((desc.idVendor  != TOMTOM_VENDOR_ID) ||
-        (desc.idProduct != TOMTOM_PRODUCT_ID))
+        ((desc.idProduct != TOMTOM_MULTISPORT_PRODUCT_ID) &&
+         (desc.idProduct != TOMTOM_SPARK_PRODUCT_ID)))
     {
         *watch = 0;
         return TTWATCH_NotAWatch;
@@ -339,6 +350,7 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
     *watch = (TTWATCH*)malloc(sizeof(TTWATCH));
     memset(*watch, 0, sizeof(TTWATCH));
     (*watch)->device = handle;
+    (*watch)->usb_product_id = desc.idProduct;
 
     // Claim the device interface. If the device is busy (such as opened
     // by a daemon), wait up to 60 seconds for it to become available
@@ -613,11 +625,17 @@ int ttwatch_read_whole_file(TTWATCH *watch, uint32_t id, void **data, uint32_t *
         *length = size;
     if (size > 0)
     {
+	    uint16_t packet_size;
+	    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+		    packet_size = 50;
+	    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+		    packet_size = 242;
+
         *data = malloc(size);
         ptr = (uint8_t*)*data;
         while (size > 0)
         {
-            int len = (size > 50) ? 50 : size;
+            int len = (size > packet_size) ? packet_size : size;
             if ((result = ttwatch_read_file_data(file, ptr, len)) != TTWATCH_NoError)
             {
                 free(*data);
@@ -644,11 +662,17 @@ int ttwatch_write_whole_file(TTWATCH *watch, uint32_t id, const void *data, uint
 
     RETURN_ERROR(ttwatch_open_file(watch, id, false, &file));
 
+    uint16_t packet_size;
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+	    packet_size = 54;
+    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+	    packet_size = 246;
+
     uint8_t *ptr = (uint8_t*)data;
     int result = TTWATCH_NoError;
     while (length > 0)
     {
-        int len = (length > 54) ? 54 : length;
+        int len = (length > packet_size) ? packet_size : length;
         if ((result = ttwatch_write_file_data(file, ptr, len)) != TTWATCH_NoError)
             break;
         length -= len;

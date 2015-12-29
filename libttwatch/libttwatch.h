@@ -27,6 +27,8 @@ typedef struct
     uint32_t    ble_version;
     const char  serial_number[64];
 
+    uint16_t    usb_product_id;
+
     uint32_t    current_file;
 
     char       *preferences_file;
