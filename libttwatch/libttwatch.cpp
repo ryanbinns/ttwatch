@@ -210,15 +210,22 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
     memcpy(packet + 4, tx_data, tx_length);
 
     uint16_t packet_size;
-    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    uint8_t write_usb_endpoint;
+    uint8_t read_usb_endpoint;
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID) {
 	    packet_size = tx_length + 4;
-    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+	    write_usb_endpoint = 0x05;
+	    read_usb_endpoint = 0x84;
+    } else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID) {
 	    packet_size = 256;
+	    write_usb_endpoint = 0x02;
+	    read_usb_endpoint = 0x81;
+    }
 
     print_packet(packet, packet_size);
 
     // send the packet
-    result = libusb_interrupt_transfer(watch->device, 0x02, packet, packet_size, &count, 10000);
+    result = libusb_interrupt_transfer(watch->device, write_usb_endpoint, packet, packet_size, &count, 10000);
     if (result || (count != packet_size))
         return TTWATCH_UnableToSendPacket;
 
@@ -229,7 +236,7 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
     unsigned timeout = 10000;   // 10 seconds for most message types
     if (msg == MSG_FORMAT_WATCH)
         timeout = 120000;       // formatting takes about 60 seconds, so make the timeout 120 seconds
-    result = libusb_interrupt_transfer(watch->device, 0x81, packet, packet_size, &count, timeout);
+    result = libusb_interrupt_transfer(watch->device, read_usb_endpoint, packet, packet_size, &count, timeout);
     if (result)
         return TTWATCH_UnableToReceivePacket;
 
