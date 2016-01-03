@@ -439,72 +439,6 @@ int main(int argc, const char **argv)
             }
         }
 
-        if (get_activities) {
-            uint16_t *list;
-            int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-            char filetime[16], filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
-            fprintf(stderr, "Found %d activity files on watch.\n", n_files);
-            for (int ii=0; ii<n_files; ii++) {
-                uint32_t fileno = 0x00910000 + list[ii];
-
-                fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
-                term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
-                if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
-                    fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
-                    goto fail;
-                } else {
-                    time_t t = time(NULL);
-                    struct tm *tmp = localtime(&t);
-                    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                    sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
-
-                    int result = save_buf_to_file(filename, "wxb", fbuf, length, 4, true);
-                    free(fbuf);
-                    if (result < 0)
-                        goto fail;
-                    else {
-                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        tt_delete_file(fd, fileno);
-                        if (postproc) {
-                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
-                            fflush(stderr);
-
-                            switch (fork()) {
-                            case 0:
-                                dup2(1, 2); // redirect stdout to stderr
-                                execlp(postproc, postproc, filename, NULL);
-                                exit(1); // if exec fails?
-                            default:
-                                wait(&result);
-                                if (result==0)
-                                    fputc('\n', stderr);
-                                else
-                                // Ridiculous syntax but I'm extremely proud of it :-P
-                            case -1:
-                                    fprintf(stderr, " FAILED\n");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (debug > 1) {
-            uint32_t fileno = 0x00020005;
-            fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
-            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
-                fprintf(stderr, "Could not read file 0x%08x from watch.", fileno);
-            } else {
-                char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
-                time_t t = time(NULL);
-                struct tm *tmp = localtime(&t);
-                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                sprintf(filename, "%08x_%s.bin", fileno, filetime);
-                save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
-                free(fbuf);
-            }
-        }
-
         if (update_gps) {
             fputs("Updating QuickFixGPS...\n", stderr);
             term_title("ttblue: Updating QuickFixGPS");
@@ -577,6 +511,72 @@ int main(int argc, const char **argv)
                         }
                     }
                 }
+            }
+        }
+
+        if (get_activities) {
+            uint16_t *list;
+            int n_files = tt_list_sub_files(fd, 0x00910000, &list);
+            char filetime[16], filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
+            fprintf(stderr, "Found %d activity files on watch.\n", n_files);
+            for (int ii=0; ii<n_files; ii++) {
+                uint32_t fileno = 0x00910000 + list[ii];
+
+                fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
+                term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
+                if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+                    fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
+                    goto fail;
+                } else {
+                    time_t t = time(NULL);
+                    struct tm *tmp = localtime(&t);
+                    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                    sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
+
+                    int result = save_buf_to_file(filename, "wxb", fbuf, length, 4, true);
+                    free(fbuf);
+                    if (result < 0)
+                        goto fail;
+                    else {
+                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        tt_delete_file(fd, fileno);
+                        if (postproc) {
+                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
+                            fflush(stderr);
+
+                            switch (fork()) {
+                            case 0:
+                                dup2(1, 2); // redirect stdout to stderr
+                                execlp(postproc, postproc, filename, NULL);
+                                exit(1); // if exec fails?
+                            default:
+                                wait(&result);
+                                if (result==0)
+                                    fputc('\n', stderr);
+                                else
+                                // Ridiculous syntax but I'm extremely proud of it :-P
+                            case -1:
+                                    fprintf(stderr, " FAILED\n");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (debug > 1) {
+            uint32_t fileno = 0x00020005;
+            fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
+            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+                fprintf(stderr, "Could not read file 0x%08x from watch.", fileno);
+            } else {
+                char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
+                time_t t = time(NULL);
+                struct tm *tmp = localtime(&t);
+                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+                sprintf(filename, "%08x_%s.bin", fileno, filetime);
+                save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
+                free(fbuf);
             }
         }
 
