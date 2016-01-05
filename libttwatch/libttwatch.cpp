@@ -16,9 +16,9 @@
 //------------------------------------------------------------------------------
 // macros
 
-#define TOMTOM_VENDOR_ID    (0x1390)
-#define TOMTOM_MULTISPORT_PRODUCT_ID   (0x7474)
-#define TOMTOM_SPARK_PRODUCT_ID   (0x7477)
+#define TOMTOM_VENDOR_ID                (0x1390)
+#define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
+#define TOMTOM_SPARK_PRODUCT_ID         (0x7477)
 
 #define RETURN_ERROR(err)               \
     do                                  \
@@ -212,15 +212,20 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
     uint16_t packet_size;
     uint8_t write_usb_endpoint;
     uint8_t read_usb_endpoint;
-    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID) {
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    {
 	    packet_size = tx_length + 4;
 	    write_usb_endpoint = 0x05;
 	    read_usb_endpoint = 0x84;
-    } else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID) {
+    }
+    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+    {
 	    packet_size = 256;
 	    write_usb_endpoint = 0x02;
 	    read_usb_endpoint = 0x81;
     }
+    else
+        return TTWATCH_UnableToSendPacket;
 
     print_packet(packet, packet_size);
 
@@ -1521,8 +1526,16 @@ int ttwatch_delete_history_entry(TTWATCH *watch, TTWATCH_ACTIVITY activity, int 
         if (activity != TTWATCH_Swimming)
         {
             TTWATCH_HISTORY_ENTRY *entry = (TTWATCH_HISTORY_ENTRY*)(history->data + (index * history->entry_length));
-            ttwatch_delete_file(watch, TTWATCH_FILE_HISTORY_DATA | entry->file_id);
-            ttwatch_delete_file(watch, TTWATCH_FILE_RACE_HISTORY_DATA | entry->file_id);
+            if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+            {
+                ttwatch_delete_file(watch, TTWATCH_FILE_HISTORY_DATA | entry->multisport.file_id);
+                ttwatch_delete_file(watch, TTWATCH_FILE_RACE_HISTORY_DATA | entry->multisport.file_id);
+            }
+            else
+            {
+                ttwatch_delete_file(watch, TTWATCH_FILE_HISTORY_DATA | entry->spark.file_id);
+                ttwatch_delete_file(watch, TTWATCH_FILE_RACE_HISTORY_DATA | entry->spark.file_id);
+            }
         }
 
         if (index != (history->entry_count - 1))

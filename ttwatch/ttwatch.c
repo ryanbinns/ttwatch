@@ -598,7 +598,8 @@ void do_update_firmware(TTWATCH *watch, int force)
     }
 
     /* find the latest BLE version for the Multisport version*/
-    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID) {
+    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    {
         ptr = strstr((char*)download.data, "<BLE version=\"");
         if (!ptr)
         {
@@ -1064,9 +1065,18 @@ static void do_create_continuous_race_file_callback(uint32_t id, uint32_t length
     entry->hour     = timestamp.tm_hour;
     entry->minute   = timestamp.tm_min;
     entry->second   = timestamp.tm_sec;
-    entry->duration = data->duration;
-    entry->distance = data->distance;
-    entry->file_id  = index;
+    if (data->watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    {
+        entry->multisport.duration = data->duration;
+        entry->multisport.distance = data->distance;
+        entry->multisport.file_id  = index;
+    }
+    else
+    {
+        entry->spark.duration = data->duration;
+        entry->spark.distance = data->distance;
+        entry->spark.file_id  = index;
+    }
 
     if (ttwatch_write_whole_file(data->watch, id, file, length) != TTWATCH_NoError)
     {
@@ -1220,10 +1230,15 @@ error:
 }
 
 /*****************************************************************************/
+typedef struct
+{
+    TTWATCH_ACTIVITY activity;
+    TTWATCH *watch;
+} ListHistoryCallbackData;
 static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const TTWATCH_HISTORY_ENTRY *entry, void *data)
 {
-    TTWATCH_ACTIVITY act = *(TTWATCH_ACTIVITY*)data;
-    if (act != activity)
+    ListHistoryCallbackData *d = (ListHistoryCallbackData*)data;
+    if (d->activity != activity)
     {
         switch (activity)
         {
@@ -1234,19 +1249,30 @@ static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const
         case TTWATCH_Freestyle: write_log(0, "Freestyle:\n"); break;
         case TTWATCH_Gym:       write_log(0, "Gym:\n"); break;
         }
-        *(int*)data = activity;
+        d->activity = activity;
     }
-    write_log(0, "%d: %04d/%02d/%02d %02d:%02d:%02d, %4ds, %8.2fm, %4d calories", index + 1,
-        entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second,
-        entry->duration, entry->distance, entry->calories);
-    if (entry->activity == TTWATCH_Swimming)
-        write_log(0, ", %d swolf, %d spl", entry->swolf, entry->strokes_per_lap);
+    write_log(0, "%d: %04d/%02d/%02d %02d:%02d:%02d", index + 1,
+        entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second);
+    if (d->watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    {
+        write_log(0, ", %4ds, %8.2fm, %4d calories", index + 1,
+            entry->multisport.duration, entry->multisport.distance, entry->multisport.calories);
+        if (entry->activity == TTWATCH_Swimming)
+            write_log(0, ", %d swolf, %d spl", entry->multisport.swolf, entry->multisport.strokes_per_lap);
+    }
+    else
+    {
+        write_log(0, ", %4ds, %8.2fm, %4d calories", index + 1,
+            entry->spark.duration, entry->spark.distance, entry->spark.calories);
+        if (entry->activity == TTWATCH_Swimming)
+            write_log(0, ", %d swolf, %d spl", entry->spark.swolf, entry->spark.strokes_per_lap);
+    }
     write_log(0, "\n");
 }
 void do_list_history(TTWATCH *watch)
 {
-    unsigned act = -1;
-    if (ttwatch_enumerate_history_entries(watch, do_list_history_callback, &act) != TTWATCH_NoError)
+    ListHistoryCallbackData cbdata = { -1, watch };
+    if (ttwatch_enumerate_history_entries(watch, do_list_history_callback, &cbdata) != TTWATCH_NoError)
         write_log(1, "Unable to enumerate history entries\n");
 }
 
