@@ -18,7 +18,8 @@
 
 #define TOMTOM_VENDOR_ID                (0x1390)
 #define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
-#define TOMTOM_SPARK_PRODUCT_ID         (0x7477)
+#define TOMTOM_SPARK_MUSIC_PRODUCT_ID   (0x7475)
+#define TOMTOM_SPARK_CARDIO_PRODUCT_ID  (0x7477)
 
 #define RETURN_ERROR(err)               \
     do                                  \
@@ -27,6 +28,10 @@
         if (result != TTWATCH_NoError)  \
             return result;              \
     } while (0)                         \
+
+#define IS_SPARK(id)                        \
+    (id == TOMTOM_SPARK_MUSIC_PRODUCT_ID || \
+     id == TOMTOM_SPARK_CARDIO_PRODUCT_ID)  \
 
 #define foreach(var, container) for (__decltype(container)::iterator var = container.begin(); var != container.end(); ++var)
 
@@ -218,7 +223,7 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
 	    write_usb_endpoint = 0x05;
 	    read_usb_endpoint = 0x84;
     }
-    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+    else if (IS_SPARK(watch->usb_product_id))
     {
 	    packet_size = 256;
 	    write_usb_endpoint = 0x02;
@@ -346,7 +351,7 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
     // PID 0x7474 is Multisport and Multisport Cardio
     if ((desc.idVendor  != TOMTOM_VENDOR_ID) ||
         ((desc.idProduct != TOMTOM_MULTISPORT_PRODUCT_ID) &&
-         (desc.idProduct != TOMTOM_SPARK_PRODUCT_ID)))
+         !(IS_SPARK(desc.idProduct))))
     {
         *watch = 0;
         return TTWATCH_NotAWatch;
@@ -640,7 +645,7 @@ int ttwatch_read_whole_file(TTWATCH *watch, uint32_t id, void **data, uint32_t *
 	    uint16_t packet_size;
 	    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
 		    packet_size = 50;
-	    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+	    else if (IS_SPARK(watch->usb_product_id))
 		    packet_size = 242;
 
         *data = malloc(size);
@@ -677,7 +682,7 @@ int ttwatch_write_whole_file(TTWATCH *watch, uint32_t id, const void *data, uint
     uint16_t packet_size;
     if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
 	    packet_size = 54;
-    else if (watch->usb_product_id == TOMTOM_SPARK_PRODUCT_ID)
+    else if (IS_SPARK(watch->usb_product_id))
 	    packet_size = 246;
 
     uint8_t *ptr = (uint8_t*)data;

@@ -29,9 +29,10 @@
 
 /*************************************************************************************************/
 
-#define TOMTOM_VENDOR_ID    (0x1390)
-#define TOMTOM_MULTISPORT_PRODUCT_ID   (0x7474)
-#define TOMTOM_SPARK_PRODUCT_ID   (0x7477)
+#define TOMTOM_VENDOR_ID                (0x1390)
+#define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
+#define TOMTOM_SPARK_MUSIC_PRODUCT_ID   (0x7475)
+#define TOMTOM_SPARK_CARDIO_PRODUCT_ID  (0x7477)
 
 #define TT_MANIFEST_ENTRY_UTC_OFFSET    (169)
 
@@ -2344,13 +2345,20 @@ int main(int argc, char *argv[])
             }
 
             if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
-                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_PRODUCT_ID,
+                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_CARDIO_PRODUCT_ID,
                 LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
             {
                 write_log(1, "Unable to register hotplug callback: %d\n", result);
                 _exit(1);
             }
 
+            if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
+                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_MUSIC_PRODUCT_ID,
+                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
+            {
+                write_log(1, "Unable to register hotplug callback: %d\n", result);
+                _exit(1);
+            }
 
             /* infinite loop - handle events every 10 seconds */
             while (1)
