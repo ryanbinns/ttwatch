@@ -130,24 +130,27 @@ typedef struct __attribute__((packed))
     uint32_t second;
     union
     {
-        uint32_t _unk3[2];
-        uint32_t duration;
-        float    distance;
-        uint32_t calories;
-        uint32_t file_id;           /* does not contain valid data for swim entries */
-        uint32_t swolf;             /* only exists for swim entries */
-        uint32_t strokes_per_lap;   /* only exists for swim entries */
-    } multisport;
-    union
-    {
-        uint8_t _unk3[11];
-        uint32_t duration;
-        float    distance;
-        uint32_t calories;
-        uint32_t file_id;           /* does not contain valid data for swim entries */
-        uint32_t swolf;             /* only exists for swim entries */
-        uint32_t strokes_per_lap;   /* only exists for swim entries */
-    } spark;
+        struct  __attribute__((packed))
+        {
+            uint32_t _unk3[2];
+            uint32_t duration;
+            float    distance;
+            uint32_t calories;
+            uint32_t file_id;           /* does not contain valid data for swim entries */
+            uint32_t swolf;             /* only exists for swim entries */
+            uint32_t strokes_per_lap;   /* only exists for swim entries */
+        } multisport;
+        struct __attribute__((packed))
+        {
+            uint8_t _unk3[11];
+            uint32_t duration;
+            float    distance;
+            uint32_t calories;
+            uint32_t file_id;           /* does not contain valid data for swim entries */
+            uint32_t swolf;             /* only exists for swim entries */
+            uint32_t strokes_per_lap;   /* only exists for swim entries */
+        } spark;
+    };
 } TTWATCH_HISTORY_ENTRY;
 
 /*****************************************************************************/
