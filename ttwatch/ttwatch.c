@@ -85,6 +85,7 @@ struct MANIFEST_ENUM_DEFINITION
 
 #include "manifest_definitions.h"
 #include "manifest_definitions_0001082e.h"
+#include "manifest_definitions_00010113.h"
 
 struct
 {
@@ -98,6 +99,7 @@ struct
     { 0x00010823, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
     { 0x0001082a, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
     { 0x0001082e, MANIFEST_DEFINITION_0001082e_COUNT, MANIFEST_DEFINITIONS_0001082e },
+    { 0x00010113, MANIFEST_DEFINITION_00010113_COUNT, MANIFEST_DEFINITIONS_00010113 },
 };
 
 #define MANIFEST_DEFINITION_COUNT (sizeof(MANIFEST_DEFINITIONS) / sizeof(MANIFEST_DEFINITIONS[0]))
@@ -1376,7 +1378,7 @@ void do_display_settings(TTWATCH *watch)
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
-            write_log(0, "%.2f %s", *(float*)&value / float_defn->scaling_factor, float_defn->units);
+            write_log(0, "%.2f %s", (float)value / float_defn->scaling_factor, float_defn->units);
             break;
         }
         write_log(0, "\n");
@@ -1551,7 +1553,7 @@ void do_get_setting(TTWATCH *watch, const char *setting)
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
-            write_log(0, "%.2f %s", *(float*)&value / float_defn->scaling_factor, float_defn->units);
+            write_log(0, "%.2f %s", (float)value / float_defn->scaling_factor, float_defn->units);
             break;
         }
         write_log(0, "\n");
