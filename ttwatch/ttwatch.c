@@ -29,9 +29,10 @@
 
 /*************************************************************************************************/
 
-#define TOMTOM_VENDOR_ID    (0x1390)
-#define TOMTOM_MULTISPORT_PRODUCT_ID   (0x7474)
-#define TOMTOM_SPARK_PRODUCT_ID   (0x7477)
+#define TOMTOM_VENDOR_ID                (0x1390)
+#define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
+#define TOMTOM_SPARK_MUSIC_PRODUCT_ID   (0x7475)
+#define TOMTOM_SPARK_CARDIO_PRODUCT_ID  (0x7477)
 
 #define TT_MANIFEST_ENTRY_UTC_OFFSET    (169)
 
@@ -84,6 +85,7 @@ struct MANIFEST_ENUM_DEFINITION
 
 #include "manifest_definitions.h"
 #include "manifest_definitions_0001082e.h"
+#include "manifest_definitions_00010113.h"
 
 struct
 {
@@ -97,6 +99,7 @@ struct
     { 0x00010823, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
     { 0x0001082a, MANIFEST_DEFINITION_00010819_COUNT, MANIFEST_DEFINITIONS_00010819 },
     { 0x0001082e, MANIFEST_DEFINITION_0001082e_COUNT, MANIFEST_DEFINITIONS_0001082e },
+    { 0x00010113, MANIFEST_DEFINITION_00010113_COUNT, MANIFEST_DEFINITIONS_00010113 },
 };
 
 #define MANIFEST_DEFINITION_COUNT (sizeof(MANIFEST_DEFINITIONS) / sizeof(MANIFEST_DEFINITIONS[0]))
@@ -1375,7 +1378,7 @@ void do_display_settings(TTWATCH *watch)
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
-            write_log(0, "%.2f %s", *(float*)&value / float_defn->scaling_factor, float_defn->units);
+            write_log(0, "%.2f %s", (float)value / float_defn->scaling_factor, float_defn->units);
             break;
         }
         write_log(0, "\n");
@@ -1550,7 +1553,7 @@ void do_get_setting(TTWATCH *watch, const char *setting)
             break;
         case MANIFEST_TYPE_FLOAT:
             float_defn = (struct MANIFEST_FLOAT_DEFINITION*)definitions[i];
-            write_log(0, "%.2f %s", *(float*)&value / float_defn->scaling_factor, float_defn->units);
+            write_log(0, "%.2f %s", (float)value / float_defn->scaling_factor, float_defn->units);
             break;
         }
         write_log(0, "\n");
@@ -2344,13 +2347,20 @@ int main(int argc, char *argv[])
             }
 
             if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
-                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_PRODUCT_ID,
+                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_CARDIO_PRODUCT_ID,
                 LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
             {
                 write_log(1, "Unable to register hotplug callback: %d\n", result);
                 _exit(1);
             }
 
+            if ((result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
+                LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, TOMTOM_SPARK_MUSIC_PRODUCT_ID,
+                LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL)) != 0)
+            {
+                write_log(1, "Unable to register hotplug callback: %d\n", result);
+                _exit(1);
+            }
 
             /* infinite loop - handle events every 10 seconds */
             while (1)
