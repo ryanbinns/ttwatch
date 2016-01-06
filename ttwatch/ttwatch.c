@@ -1258,14 +1258,14 @@ static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const
         entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second);
     if (d->watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
     {
-        write_log(0, ", %4ds, %8.2fm, %4d calories", index + 1,
+        write_log(0, ", %4ds, %8.2fm, %4d calories", index,
             entry->multisport.duration, entry->multisport.distance, entry->multisport.calories);
         if (entry->activity == TTWATCH_Swimming)
             write_log(0, ", %d swolf, %d spl", entry->multisport.swolf, entry->multisport.strokes_per_lap);
     }
     else
     {
-        write_log(0, ", %4ds, %8.2fm, %4d calories", index + 1,
+        write_log(0, ", %4ds, %8.2fm, %4d calories", index,
             entry->spark.duration, entry->spark.distance, entry->spark.calories);
         if (entry->activity == TTWATCH_Swimming)
             write_log(0, ", %d swolf, %d spl", entry->spark.swolf, entry->spark.strokes_per_lap);
