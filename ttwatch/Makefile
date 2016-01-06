@@ -33,7 +33,7 @@ manifest_definitions_00010113.h: manifest_00010113.txt make_manifest.pl
 	@./make_manifest.pl <$< >$@
 
 clean:
-	@-rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d) >/dev/null 2>&1
+	@-rm $(OUTPUT) $(SRC:.c=.o) $(SRC:.c=.d) manifest_definitions*.h >/dev/null 2>&1
 
 install: $(OUTPUT)
 	-install -m0755 $(OUTPUT) $(PREFIX)/bin

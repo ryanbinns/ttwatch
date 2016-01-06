@@ -16,6 +16,16 @@ extern "C" {
 
 #define LIBTTWATCH_VERSION  (0x000105)  /* version 0.1.5 */
 
+#define TOMTOM_VENDOR_ID                (0x1390)
+#define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
+#define TOMTOM_SPARK_MUSIC_PRODUCT_ID   (0x7475)
+#define TOMTOM_SPARK_CARDIO_PRODUCT_ID  (0x7477)
+
+#define IS_SPARK(id)                            \
+    (((id) == TOMTOM_SPARK_MUSIC_PRODUCT_ID) || \
+     ((id) == TOMTOM_SPARK_CARDIO_PRODUCT_ID))  \
+
+
 /*****************************************************************************/
 typedef struct
 {

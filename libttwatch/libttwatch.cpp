@@ -16,11 +16,6 @@
 //------------------------------------------------------------------------------
 // macros
 
-#define TOMTOM_VENDOR_ID                (0x1390)
-#define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
-#define TOMTOM_SPARK_MUSIC_PRODUCT_ID   (0x7475)
-#define TOMTOM_SPARK_CARDIO_PRODUCT_ID  (0x7477)
-
 #define RETURN_ERROR(err)               \
     do                                  \
     {                                   \
@@ -28,10 +23,6 @@
         if (result != TTWATCH_NoError)  \
             return result;              \
     } while (0)                         \
-
-#define IS_SPARK(id)                        \
-    (id == TOMTOM_SPARK_MUSIC_PRODUCT_ID || \
-     id == TOMTOM_SPARK_CARDIO_PRODUCT_ID)  \
 
 #define foreach(var, container) for (__decltype(container)::iterator var = container.begin(); var != container.end(); ++var)
 
@@ -351,7 +342,7 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
     // PID 0x7474 is Multisport and Multisport Cardio
     if ((desc.idVendor  != TOMTOM_VENDOR_ID) ||
         ((desc.idProduct != TOMTOM_MULTISPORT_PRODUCT_ID) &&
-         !(IS_SPARK(desc.idProduct))))
+         !IS_SPARK(desc.idProduct)))
     {
         *watch = 0;
         return TTWATCH_NotAWatch;
@@ -1531,7 +1522,7 @@ int ttwatch_delete_history_entry(TTWATCH *watch, TTWATCH_ACTIVITY activity, int 
         if (activity != TTWATCH_Swimming)
         {
             TTWATCH_HISTORY_ENTRY *entry = (TTWATCH_HISTORY_ENTRY*)(history->data + (index * history->entry_length));
-            if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+            if (!IS_SPARK(watch->usb_product_id))
             {
                 ttwatch_delete_file(watch, TTWATCH_FILE_HISTORY_DATA | entry->multisport.file_id);
                 ttwatch_delete_file(watch, TTWATCH_FILE_RACE_HISTORY_DATA | entry->multisport.file_id);

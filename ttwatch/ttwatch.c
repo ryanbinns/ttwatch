@@ -29,11 +29,6 @@
 
 /*************************************************************************************************/
 
-#define TOMTOM_VENDOR_ID                (0x1390)
-#define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
-#define TOMTOM_SPARK_MUSIC_PRODUCT_ID   (0x7475)
-#define TOMTOM_SPARK_CARDIO_PRODUCT_ID  (0x7477)
-
 #define TT_MANIFEST_ENTRY_UTC_OFFSET    (169)
 
 #define MANIFEST_TYPE_ENUM  (0)
@@ -601,7 +596,7 @@ void do_update_firmware(TTWATCH *watch, int force)
     }
 
     /* find the latest BLE version for the Multisport version*/
-    if (watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    if (!IS_SPARK(watch->usb_product_id))
     {
         ptr = strstr((char*)download.data, "<BLE version=\"");
         if (!ptr)
@@ -1068,7 +1063,7 @@ static void do_create_continuous_race_file_callback(uint32_t id, uint32_t length
     entry->hour     = timestamp.tm_hour;
     entry->minute   = timestamp.tm_min;
     entry->second   = timestamp.tm_sec;
-    if (data->watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    if (!IS_SPARK(data->watch->usb_product_id))
     {
         entry->multisport.duration = data->duration;
         entry->multisport.distance = data->distance;
@@ -1256,7 +1251,7 @@ static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const
     }
     write_log(0, "%d: %04d/%02d/%02d %02d:%02d:%02d", index + 1,
         entry->year, entry->month, entry->day, entry->hour, entry->minute, entry->second);
-    if (d->watch->usb_product_id == TOMTOM_MULTISPORT_PRODUCT_ID)
+    if (!IS_SPARK(d->watch->usb_product_id))
     {
         write_log(0, ", %4ds, %8.2fm, %4d calories", index + 1,
             entry->multisport.duration, entry->multisport.distance, entry->multisport.calories);
