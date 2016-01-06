@@ -54,8 +54,24 @@ $ cat /etc/udev/rules.d/99-tomtom.rules
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="1390", ATTRS{idProduct}=="7474", SYMLINK+="tomtom", GROUP="usb", MODE="660"
 ```
 
-This basically gives access to USB devices to members of the "usb" group.
-Create the "usb" group and add yourself to it using:
+The value for `idProduct` depends on the model of watch that you use. For
+original models, `7474` is correct. For Spark watches, the `idProduct` value is
+`7477`, although `7475` has also been found. Please check `dmesg` output, for
+the correct value.
+
+After creating the udev rule, you need to reload the rules to make udev aware
+of them, by running:
+
+```
+udevadm control --reload-rules
+```
+
+The above udev line basically gives access to USB devices to members of the
+"usb" group. Some systems already have a "usbuser" group, and feel free to
+reuse that one in the udev line.
+
+If you do not reuse an existing group, then you need to create the "usb" group
+and add yourself to it using:
 
 ```
 $ sudo addgroup usb
