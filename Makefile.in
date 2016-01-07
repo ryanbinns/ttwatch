@@ -1,4 +1,4 @@
-.PHONY: clean all install
+.PHONY: clean all install install_udev
 
 export CC = @CC@
 export AR = @AR@
@@ -23,6 +23,12 @@ install:
 	$(MAKE) -C ttwatch install
 	$(MAKE) -C ttbincnv install
 	$(MAKE) -C ttbinmod install
+
+install_udev:
+	cp 99-tomtom.rules /etc/udev/rules.d
+	udevadm control --reload-rules
+	-addgroup usb
+	-usermod -a -Gusb `logname`
 
 # vim: noet
 
