@@ -95,6 +95,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     bacpy(&dstaddr.l2_bdaddr, dst);
 
     if (connect(sock, (struct sockaddr *) &dstaddr, sizeof(dstaddr)) < 0) {
+        fprintf(stderr, "Failed to connect L2CAP socket: %s (%d)\n", strerror(errno), errno);
         close(sock);
         return -2;
     }
