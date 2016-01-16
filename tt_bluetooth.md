@@ -38,7 +38,8 @@ TomTom's official apps:
   apps, but still finicky and annoying.
 * Bluetooth LE sync is *only* supported through the official
   [Android](http://play.google.com/store/apps/details?id=com.tomtom.mysports)
-  or iOS apps. The Android app at least is terrible, combining a heavy
+  or [iOS](https://itunes.apple.com/us/app/tomtom-mysports/id783593018) apps.
+  The Android app at least is terrible, combining a heavy
   yet almost feature-free GUI with an extremely unreliable backend
   that regularly loses its connection to the watch and requires an
   infinite amount of constant fiddling on both the watch and the phone
