@@ -347,8 +347,8 @@ int main(int argc, const char **argv)
             }
         }
 
-        // check that it's actually a TomTom device and show device identifiers
-        struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU-3]; int len; } info[] = {
+        // check that it's actually a TomTom device with compatible firmware version
+        struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU-2]; int len; } info[] = {
             { 0x001e, "maker" },
             { 0x0016, "serial" },
             { 0x0003, "user_name" },
@@ -357,16 +357,42 @@ int main(int argc, const char **argv)
             { 0x001c, "firmware" },
             { 0 }
         };
-        for (struct tt_dev_info *p = info; p->handle; p++)
+        for (struct tt_dev_info *p = info; p->handle; p++) {
             p->len = att_read(fd, p->handle, p->buf);
-        if (strncmp(info[0].buf, "TomTom Fitness", 14) != 0) {
-            fprintf(stderr, "Maker is not TomTom Fitness but '%.*s', exiting!\n", (int)(sizeof info[1].buf), info[1].buf);
-            if (first) goto fatal; else goto fail; // sometimes my watch randomly gives the wrong maker name
+            if (p->len < 0) {
+                fprintf(stderr, "Could not read device information (handle 0x%04x, %s): %s (%d)", p->handle, p->name, strerror(errno), errno);
+                if (first) goto fatal; else goto fail;
+            }
+            p->buf[p->len] = 0;
         }
+
+        if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
+            fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
+            goto fatal;
+        } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
+            fprintf(stderr, "Firmware v%s is too old; at least v%s is required\n"
+                            "* TomTom firmware release notes:\n"
+                            "\thttp://us.support.tomtom.com/app/release_notes/type/watches\n"
+                            "* Use USB cable and ttwatch to update your firmware:\n"
+                            "\thttp://github.com/ryanbinns/ttwatch\n",
+                            info[5].buf, OLDEST_TESTED_FIRMWARE);
+            goto fatal;
+        }
+
+        if (first && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
+            fprintf(stderr, "WARNING: Firmware v%s has not been tested with ttblue\n"
+                            "  Please email dlenski@gmail.com and let me know if it works or not\n",
+                            info[5].buf);
+        if (first && !IS_TESTED_MODEL(info[4].buf))
+            fprintf(stderr, "WARNING: Model number %s has not been tested with ttblue\n"
+                            "  Please email dlenski@gmail.com and let me know if it works or not\n",
+                            info[4].buf);
+
+        // show device identifiers if --version
         fprintf(stderr, "Connected to %s.\n", info[1].buf);
         if (version && first) {
             for (struct tt_dev_info *p = info; p->handle; p++)
-                fprintf(stderr, "  %-10.10s: %.*s\n", p->name, p->len, p->buf);
+                fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
             int8_t rssi=0;
             if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
                 fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
