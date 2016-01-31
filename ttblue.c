@@ -423,7 +423,7 @@ int main(int argc, const char **argv)
             uint32_t fileno = 0x000f20000;
             fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
             if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
-                fprintf(stderr, "Could not read preferences file 0x%08x from watch.", fileno);
+                fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", fileno);
             } else {
                 char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
                 time_t t = time(NULL);
@@ -437,8 +437,9 @@ int main(int argc, const char **argv)
         }
 
         if (set_time) {
-            if ((length = tt_read_file(fd, 0x00850000, debug, &fbuf)) < 0) {
-                fprintf(stderr, "Could not read settings manifest file 0x0085000 from watch!\n");
+            uint32_t fileno = 0x00850000;
+            if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+                fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", fileno);
             } else {
                 // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
                 int32_t *watch_timezone = NULL;
@@ -449,7 +450,7 @@ int main(int argc, const char **argv)
                     }
                 }
                 if (!watch_timezone) {
-                    fprintf(stderr, "Could not find watch timezone setting!\n");
+                    fprintf(stderr, "WARNING: Could not find watch timezone setting!\n");
                 } else {
                     time_t t = time(NULL);
                     struct tm *lt = localtime(&t);
@@ -473,7 +474,7 @@ int main(int argc, const char **argv)
             time_t last_qfg_update = 0;
             uint32_t fileno = 0x00020001;
             if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
-                fprintf(stderr, "Could not read GPS status file 0x%08x from watch.", fileno);
+                fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
             } else {
                 struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
                                   .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
@@ -595,7 +596,7 @@ int main(int argc, const char **argv)
             uint32_t fileno = 0x00020005;
             fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
             if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
-                fprintf(stderr, "Could not read file 0x%08x from watch.", fileno);
+                fprintf(stderr, "Could not read file 0x%08x from watch.\n", fileno);
             } else {
                 char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
                 time_t t = time(NULL);
