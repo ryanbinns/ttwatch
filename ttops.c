@@ -138,7 +138,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 
 fail:
     free(*buf);
-    fprintf(stderr, "File read failed at file position 0x%04x\n", (int)(optr-*buf));
+    fprintf(stderr, "File read failed at file position 0x%04x of 0x%04x\n", (int)(optr-*buf), flen);
     perror("fail");
 prealloc_fail:
     return -EBADMSG;
@@ -224,7 +224,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
             if (iptr<end)
                 fprintf(stderr, "%d: wrote %d/%d bytes so far (%d/sec)\r", counter, (int)(iptr-buf), (int)(end-buf), rate);
             else
-                fprintf(stderr, "%d: wrote %d bytes to watch (%d/sec)       \n", counter, flen, rate);
+                fprintf(stderr, "%d: wrote %d bytes to watch (%d/sec)       \n", counter, length, rate);
             fflush(stdout);
         }
     }
@@ -234,7 +234,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     return iptr-buf;
 
 fail_write:
-    fprintf(stderr, "File write failed at file position 0x%04x\n", (int)(iptr-buf));
+    fprintf(stderr, "File write failed at file position 0x%04x of 0x%04x\n", (int)(iptr-buf), length);
     perror("fail");
     return -EBADMSG;
 }
