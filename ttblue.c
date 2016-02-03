@@ -356,9 +356,15 @@ int main(int argc, const char **argv)
             fprintf(stderr, "Could not read device PPCP (handle 0x000b): %s (%d)", strerror(errno), errno);
             goto fail;
         } else {
+            ppcp.min_interval = btohs(ppcp.min_interval);
+            ppcp.max_interval = btohs(ppcp.max_interval);
+            ppcp.slave_latency = btohs(ppcp.slave_latency);
+            ppcp.timeout_mult = btohs(ppcp.timeout_mult);
             write_delay = 1250 * ppcp.min_interval; // (microseconds)
-            if (debug > 1)
+            if (debug > 1) {
                 fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
+                fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+            }
         }
 
         // check that it's actually a TomTom device with compatible firmware version
