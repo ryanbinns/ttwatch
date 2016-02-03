@@ -32,7 +32,8 @@
 #include "ttops.h"
 
 #define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
-#define GQF_URL "http://gpsquickfix.services.tomtom.com/fitness/sif%s.f2p3enc.ee?timestamp=%ld"
+#define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
+#define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
 
 /**
  * taken from bluez/tools/btgatt-client.c
@@ -170,7 +171,7 @@ isleep(int seconds, int verbose)
 /****************************************************************************/
 
 int debug=1;
-int get_activities=0, set_time=0, update_gps=0, version=0, daemonize=0, new_pair=1;
+int get_activities=0, set_time=0, update_gps=0, use_glonass=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
@@ -181,8 +182,8 @@ struct poptOption options[] = {
     { "set-time", 0, POPT_ARG_NONE, &set_time, 0, "Set time zone on the watch to match this computer" },
     { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
     { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
-    { "update-gps", 0, POPT_ARG_VAL, &update_gps, 1, "Download TomTom QuickFixGPS update file and send it to the watch" },
-    { "glonass", 0, POPT_ARG_VAL, &update_gps, 2, "Use GLONASS version of QuickFix update file." },
+    { "update-gps", 0, POPT_ARG_NONE, NULL, 'G', "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
+    { "glonass", 0, POPT_ARG_VAL, &use_glonass, 2, "Use GLONASS version of QuickFix update file." },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
@@ -216,6 +217,7 @@ int main(int argc, const char **argv)
         case 'c': new_pair=false; break;
         case 'D': debug++; break;
         case 'a': get_activities = update_gps = set_time = version = true; break;
+        case 'G': update_gps++; break;
         }
     }
     if (ch<-1) {
@@ -485,7 +487,9 @@ int main(int argc, const char **argv)
 
             time_t last_qfg_update = 0;
             uint32_t fileno = 0x00020001;
-            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+            if (update_gps > 1) {
+                /* forced update */
+            } else if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
                 fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
             } else {
                 struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
@@ -504,9 +508,11 @@ int main(int argc, const char **argv)
             }
 
             if (time(NULL) - last_qfg_update < 24*3600) {
-                fprintf(stderr, "  No update needed, last was %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
+                fprintf(stderr, "  No update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
             } else {
-                fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
+                if (last_qfg_update)
+                    fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
+
                 CURLcode res;
                 char curlerr[CURL_ERROR_SIZE];
                 CURL *curl = curl_easy_init();
@@ -515,7 +521,7 @@ int main(int argc, const char **argv)
                     goto fail;
                 } else {
                     char url[128];
-                    sprintf(url, GQF_URL, update_gps==1 ? "gps" : "glo", (long)time(NULL));
+                    sprintf(url, use_glonass ? GQF_GLONASS_URL : GQF_GPS_URL, (long)time(NULL));
                     fprintf(stderr, "  Downloading %s\n", url);
 
                     f = tmpfile();
