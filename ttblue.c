@@ -450,7 +450,7 @@ int main(int argc, const char **argv)
 
         if (set_time) {
             uint32_t fileno = 0x00850000;
-            if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+            if ((length = tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
                 fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", fileno);
             } else {
                 // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
