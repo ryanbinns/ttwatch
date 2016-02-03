@@ -514,8 +514,7 @@ int main(int argc, const char **argv)
                     res = curl_easy_perform(curl);
                     curl_easy_cleanup(curl);
                     if (res != 0) {
-                        fprintf(stderr, "Download failed: %s\n", curlerr);
-                        goto fail;
+                        fprintf(stderr, "WARNING: Download failed: %s\n", curlerr);
                     } else {
                         length = ftell(f);
                         fprintf(stderr, "  Sending update to watch (%d bytes)...\n", length);
