@@ -155,8 +155,7 @@ UUID   | Handle | Name | Properties | Read value (for me)
 `2a01` | `0005` | Appearance | READ | `11 00` ([not a well-known value](https://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.gap.appearance.xml))
 `2a02` | `0007` | Peripheral Privacy Flag | READ | `00` (no privacy mode)
 `2a03` | `0009` | Reconnection Address | WRITE |
-`2a04` | `000b` | Peripheral Preferred Connection Parameters | READ | `50 00 a0 00 00 00 e8 03`
-
+`2a04` | `000b` | [Peripheral Preferred Connection Parameters](https://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.gap.peripheral_preferred_connection_parameters.xml) | READ | `50 00 a0 00 00 00 e8 03` = (80, 10, 0, 1000)
 
 They also support the standard [Device Information](https://developer.bluetooth.org/gatt/services/Pages/ServiceViewer.aspx?u=org.bluetooth.service.device_information.xml) service (service UUID=`0x180a`, handles `0x0010` to `0x0022`):
 
@@ -379,10 +378,12 @@ Here is what the Android app does in normal operation:
       closes the connection.
     * Sometimes the device ends the command normally (`25 -> 00 00 00
       00`).
-    * On at least one occasion that I have logged, the host sends a
+    * On at least two occasions that I have logged, the host sends a
       command (`25 <-- 05 01 00 01`) that seems to hint at some
       further processing of the ephemeris data file, then reads the
       file `0x00020001` (again!) before closing the connection.
+    * Newer versions of the app finish up by deleting and then writing
+      various race-related files on the watch (`0x71****`).
 
 # Mysteries
 
