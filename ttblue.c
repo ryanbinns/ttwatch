@@ -171,7 +171,7 @@ isleep(int seconds, int verbose)
 
 int debug=1;
 int get_activities=0, set_time=0, update_gps=0, version=0, daemonize=0, new_pair=1;
-int sleep_success=3600, sleep_fail=10, gps_write_delay=20000;
+int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
 
@@ -192,7 +192,6 @@ struct poptOption options[] = {
     { "daemon", 0, POPT_ARG_NONE, &daemonize, 0, "Run as a daemon which will try to connect repeatedly" },
     { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 0, "Wait time after successful connection to watch", "SECONDS" },
     { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 10, "Wait time after failed connection to watch", "SECONDS" },
-    { "gps-write-delay", 0, POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &gps_write_delay, 0, "QuickFixGPS write delay (microseconds), increase if you have problems with failed QuickFixGPS updates" },
 //    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
     POPT_AUTOHELP
     POPT_TABLEEND
@@ -206,6 +205,7 @@ int main(int argc, const char **argv)
     bdaddr_t src_addr, dst_addr;
     int success;
     time_t last_qfg_update;
+    int write_delay;
 
     // parse args
     char ch;
@@ -347,6 +347,18 @@ int main(int argc, const char **argv)
             }
         }
 
+        // figure out the maximum speed at which we can send packets to the device from
+        // the Preferred Peripheral Connection Parameters
+        struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
+        if (att_read(fd, 0x000b, &ppcp) < 0) {
+            fprintf(stderr, "Could not read device PPCP (handle 0x000b): %s (%d)", strerror(errno), errno);
+            if (first) goto fatal; else goto fail;
+        } else {
+            write_delay = 1250 * ppcp.min_interval; // (microseconds)
+            if (debug > 1)
+                fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
+        }
+
         // check that it's actually a TomTom device with compatible firmware version
         struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU-2]; int len; } info[] = {
             { 0x001e, "maker" },
@@ -417,7 +429,7 @@ int main(int argc, const char **argv)
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hciname);
         tt_delete_file(fd, 0x00020002);
-        tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname), 0);
+        tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname), write_delay);
 
         if (debug > 1) {
             uint32_t fileno = 0x000f20000;
@@ -459,7 +471,7 @@ int main(int argc, const char **argv)
                         fprintf(stderr, "Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htobl(lt->tm_gmtoff);
                         tt_delete_file(fd, 0x00850000);
-                        tt_write_file(fd, 0x00850000, false, fbuf, length, 0);
+                        tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
                         att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x85, 0x00, 0x00), 4); // update magic?
                     }
                 }
@@ -528,7 +540,7 @@ int main(int argc, const char **argv)
                         } else {
                             fclose (f);
                             tt_delete_file(fd, 0x00010100);
-                            result = tt_write_file(fd, 0x00010100, debug, fbuf, length, gps_write_delay);
+                            result = tt_write_file(fd, 0x00010100, debug, fbuf, length, write_delay);
                             free(fbuf);
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);

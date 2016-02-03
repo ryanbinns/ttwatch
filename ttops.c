@@ -216,9 +216,8 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
 
             iptr += wlen;
 
-            // wait at least 20 ms between packets, because the devices
-            // don't like having them spit out at max speed with min
-            // connection interval
+            // wait between packets, because the devices don't like having them spit out
+            // at max speed with min connection interval
             gettimeofday(&now, NULL);
             if (now.tv_sec==lastpkt.tv_sec && now.tv_usec-lastpkt.tv_usec < write_delay)
                 usleep(write_delay);
