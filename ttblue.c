@@ -277,10 +277,10 @@ int main(int argc, const char **argv)
             uint8_t features[8];
             if (hci_read_local_ext_features(dd, 0, NULL, features, 1000) < 0) {
                 fprintf(stderr, "Could not read hci%d features: %s (%d)", dd, strerror(errno), errno);
-                goto pre_fatal;
+                goto preopen_fail;
             } else if ((features[4] & LMP_LE) == 0 || (features[6] & LMP_LE_BREDR) == 0) {
                 fprintf(stderr, "Bluetooth interface hci%d doesn't support 4.0 (Bluetooth LE+BR/EDR)", dd);
-                goto pre_fatal;
+                goto preopen_fail;
             }
         }
 
@@ -308,7 +308,7 @@ int main(int argc, const char **argv)
                     "Enter 6-digit pairing code shown on device: ");
             if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
                 fprintf(stderr, "Pairing code should be 6-digit number.\n");
-                if (first) goto fatal; else goto fail;
+                goto fail;
             }
         }
 
@@ -354,7 +354,7 @@ int main(int argc, const char **argv)
         struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
         if (att_read(fd, 0x000b, &ppcp) < 0) {
             fprintf(stderr, "Could not read device PPCP (handle 0x000b): %s (%d)", strerror(errno), errno);
-            if (first) goto fatal; else goto fail;
+            goto fail;
         } else {
             write_delay = 1250 * ppcp.min_interval; // (microseconds)
             if (debug > 1)
@@ -375,14 +375,14 @@ int main(int argc, const char **argv)
             p->len = att_read(fd, p->handle, p->buf);
             if (p->len < 0) {
                 fprintf(stderr, "Could not read device information (handle 0x%04x, %s): %s (%d)", p->handle, p->name, strerror(errno), errno);
-                if (first) goto fatal; else goto fail;
+                goto fail;
             }
             p->buf[p->len] = 0;
         }
 
         if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
             fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
-            goto fatal;
+            goto fail;
         } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
             fprintf(stderr, "Firmware v%s is too old; at least v%s is required\n"
                             "* TomTom firmware release notes:\n"
@@ -390,7 +390,7 @@ int main(int argc, const char **argv)
                             "* Use USB cable and ttwatch to update your firmware:\n"
                             "\thttp://github.com/ryanbinns/ttwatch\n",
                             info[5].buf, OLDEST_TESTED_FIRMWARE);
-            goto fatal;
+            goto fail;
         }
 
         if (first && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
@@ -415,7 +415,7 @@ int main(int argc, const char **argv)
         // authorize with the device
         if (tt_authorize(fd, dev_code, new_pair) < 0) {
             fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
-            goto fatal;
+            goto fail;
         }
 
         term_title("ttblue: Connected");
@@ -636,13 +636,9 @@ int main(int argc, const char **argv)
     preopen_fail:
         hci_close_dev(dd);
         success = false;
+        if (first)
+            return 1;
     }
 
     return 0;
-
-fatal:
-    close(fd);
-pre_fatal:
-    hci_close_dev(dd);
-    return 1;
 }
