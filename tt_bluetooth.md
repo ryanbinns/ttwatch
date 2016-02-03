@@ -237,7 +237,7 @@ verify data integrity.
 
 Files on the TomTom devices have `uint32` identifiers in which the top
 byte is always `00`. A
-[partial list can be found in `libttwatch.h`](https://github.com/ryanbinns/ttwatch/blob/master/libttwatch/libttwatch.h#L141-L154). The
+[partial list can be found in `libttwatch.h`](https://github.com/dlenski/ttwatch/blob/master/libttwatch/libttwatch.h#L212-L229). The
 byte-ordering of the file numbers is scrambled in a strange way in the
 Bluetooth protocol: `fileno_bytes = (fileno&0xff0000) ,
 ((fileno&0xff00)>>8) , ((fileno&0xff)<<8)` (e.g. file `0x00910001`
