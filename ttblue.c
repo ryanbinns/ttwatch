@@ -11,8 +11,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <ctype.h>
-#include <signal.h>
-#include <stdarg.h>
 
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -30,6 +28,20 @@
 
 #include "bbatt.h"
 #include "ttops.h"
+#include "util.h"
+
+const char *PLEASE_SETCAP_ME =
+    "**********************************************************\n"
+    "NOTE: This program lacks the permissions necessary for\n"
+    "  manipulating the raw Bluetooth HCI socket, which\n"
+    "  is required to set the minimum connection inverval\n"
+    "  and speed up data transfer.\n\n"
+    "  To fix this, run it as root or, better yet, set the\n"
+    "  following capabilities on the ttblue executable:\n\n"
+    "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
+    "  For gory details, see the BlueZ mailing list:\n"
+    "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
+    "**********************************************************\n";
 
 #define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
 #define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
@@ -125,47 +137,6 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
             fprintf(stderr, "%sSaved %d bytes to %s\n", istr, length, filename);
         return 0;
     }
-}
-
-__attribute__ ((format (printf, 1, 2)))
-void
-term_title(const char *fmt, ...)
-{
-    if (isatty(1)) {
-        va_list va;
-        va_start(va, fmt);
-
-        fputs("\033]0;", stdout);
-        vfprintf(stdout, fmt, va);
-        fputc('\007', stdout);
-        fflush(stdout);
-    }
-}
-
-/****************************************************************************/
-
-void
-nullhandler(int signal) {}
-
-int
-isleep(int seconds, int verbose)
-{
-    if (verbose) {
-        fprintf(stderr, "Sleeping for %d seconds...", seconds);
-        fflush(stderr);
-    }
-    signal(SIGALRM, nullhandler);
-
-    // weird workaround for non-realtime-awareness of sleep:
-    // http://stackoverflow.com/questions/32152276/real-time-aware-sleep-call
-    int res=0, elapsed=0;
-    for (time_t t=time(NULL); (elapsed<seconds) && (res<=0); elapsed=time(NULL)-t)
-        res = sleep((seconds-elapsed > 30) ? 30 : seconds-elapsed);
-
-    signal(SIGALRM, SIG_IGN);
-    if (res && verbose)
-        fprintf(stderr, "%s\n\n", res ? " woken by signal!" : "");
-    return (res>0);
 }
 
 /****************************************************************************/
@@ -330,20 +301,9 @@ int main(int argc, const char **argv)
                                         2000);
         } while (errno==ETIMEDOUT);
         if (result < 0) {
-            if (errno==EPERM && first) {
-                fputs("**********************************************************\n"
-                      "NOTE: This program lacks the permissions necessary for\n"
-                      "  manipulating the raw Bluetooth HCI socket, which\n"
-                      "  is required to set the minimum connection inverval\n"
-                      "  and speed up data transfer.\n\n"
-                      "  To fix this, run it as root or, better yet, set the\n"
-                      "  following capabilities on the ttblue executable:\n\n"
-                      "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
-                      "  For gory details, see the BlueZ mailing list:\n"
-                      "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
-                      "**********************************************************\n",
-                      stderr);
-            } else {
+            if (errno==EPERM && first)
+                fputs(PLEASE_SETCAP_ME, stderr);
+            else {
                 perror("hci_le_conn_update");
                 goto fail;
             }

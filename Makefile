@@ -3,11 +3,13 @@ LDFLAGS += -lcurl -lbluetooth -lpopt
 
 SRC = ttblue.c \
       bbatt.c \
-      ttops.c
+      ttops.c \
+      util.c
 
 HEADERS = bbatt.h \
           ttops.h \
-          att-types.h
+          att-types.h \
+          util.h
 
 OUTPUT = ttblue
 
