@@ -1,8 +1,10 @@
 Table of Contents
 =================
 
-  * [Requirements](#requirements)
-  * [Compiling it](#compiling-it)
+  * [Introduction](#motivation)
+  * [Building](#building)
+    * [Requirements](#requirements)
+    * [Compiling](#compiling)
   * [Run it](#run-it)
     * [Why so slow?](#why-so-slow)
   * [TODO](#todo)
@@ -10,7 +12,19 @@ Table of Contents
   * [Credits](#credits)
   * [License](#license)
 
-# Requirements
+# Introduction
+
+The TomTom Multi-Sport and Runner are nice GPS watches and quite
+affordable, but they suffer from subpar official software. There is no
+official desktop app for interfacing *wirelessly* with the TomTom GPS watches,
+(only for Android and iPhone).
+
+Now you can use `ttblue` to download your activites wirelessly and
+keep the QuickFix GPS ephemeris data up-to-date.
+
+# Building
+
+## Requirements
 
 You need to be running a recent Linux kernel, with a Bluetooth **4.0** adapter
 supporting [Bluetooth Low Energy](http://en.wikipedia.org/wiki/Bluetooth_low_energy).
@@ -29,7 +43,7 @@ On Debian/Ubuntu-based systems, these can be installed with:
 $ sudo apt-get install libbluetooth-dev libcurl4-gnutls-dev libpopt-dev
 ```
 
-# Building
+## Compiling
 
 Compilation with `gcc` should be straightforward:
 
@@ -48,6 +62,10 @@ follows:
 ```bash
 sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue
 ```
+
+(Note that this is *more* secure than giving the binary
+[setuid root](http://wikipedia.org/wiki/setuid) permissions, because
+it only allows root-like privileges for these specific capabilities.)
 
 # Run it
 
