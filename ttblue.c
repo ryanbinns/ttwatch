@@ -174,7 +174,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
-    int success;
+    int success = false;
     time_t last_qfg_update;
     int write_delay;
 
@@ -267,9 +267,15 @@ int main(int argc, const char **argv)
         // create L2CAP socket connected to watch
         fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, first);
         if (fd < 0) {
-            if (!daemonize || errno!=ENOTCONN || debug>1)
+            if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
-            goto fail;
+            if (!daemonize)
+                goto fail;
+            else {
+                success = false;
+                isleep(sleep_fail, debug>1); // have to sleep here since won't happen on repeat
+                goto repeat;
+            }
         }
 
         // prompt for pairing code
@@ -592,10 +598,10 @@ int main(int argc, const char **argv)
 
         success = true;
         first = false;
+    repeat:
         close(fd);
         hci_close_dev(dd);
         continue;
-
     fail:
         close(fd);
     preopen_fail:
