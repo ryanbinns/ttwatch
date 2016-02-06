@@ -42,6 +42,64 @@ hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl)
         fputc('\n', where);
 }
 
+/****************************************************************************/
+
+const char *FIRMWARE_TOO_OLD =
+    "Firmware v%s is too old; at least v%s is required\n"
+    "* TomTom firmware release notes:\n"
+    "\thttp://us.support.tomtom.com/app/release_notes/type/watches\n"
+    "* Use USB cable and ttwatch to update your firmware:\n"
+    "\thttp://github.com/ryanbinns/ttwatch\n";
+
+const char *FIRMWARE_UNTESTED =
+    "WARNING: Firmware v%s has not been tested with ttblue\n"
+    "  Please email dlenski@gmail.com and let me know if it works or not\n";
+
+const char *MODEL_UNTESTED =
+    "WARNING: Model number %s has not been tested with ttblue\n"
+    "  Please email dlenski@gmail.com and let me know if it works or not\n";
+
+struct ble_dev_info info[] = {
+    { 0x001e, "maker" },
+    { 0x0016, "serial" },
+    { 0x0003, "user_name" },
+    { 0x0014, "model_name" },
+    { 0x001a, "model_num" },
+    { 0x001c, "firmware" },
+    { 0 }
+};
+
+struct ble_dev_info *
+tt_check_device_version(int fd, bool warning)
+{
+    for (struct ble_dev_info *p = info; p->handle; p++) {
+        p->len = att_read(fd, p->handle, p->buf);
+        if (p->len < 0) {
+            fprintf(stderr, "Could not read device information (handle 0x%04x, %s): %s (%d)", p->handle, p->name, strerror(errno), errno);
+            return NULL;
+        }
+        p->buf[p->len] = 0;
+    }
+
+    if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
+        fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
+        return NULL;
+    } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
+        fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, OLDEST_TESTED_FIRMWARE);
+        return NULL;
+    }
+
+    if (warning && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
+        fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
+
+    if (warning && !IS_TESTED_MODEL(info[4].buf))
+        fprintf(stderr, MODEL_UNTESTED, info[4].buf);
+
+    return info;
+}
+
+/****************************************************************************/
+
 int
 tt_authorize(int fd, uint32_t code, bool new_code)
 {

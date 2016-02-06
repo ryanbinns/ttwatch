@@ -53,21 +53,6 @@ const char *PAIRING_CODE_PROMPT =
     "\n**************************************************\n"
     "Enter 6-digit pairing code shown on device: ";
 
-const char *FIRMWARE_TOO_OLD =
-    "Firmware v%s is too old; at least v%s is required\n"
-    "* TomTom firmware release notes:\n"
-    "\thttp://us.support.tomtom.com/app/release_notes/type/watches\n"
-    "* Use USB cable and ttwatch to update your firmware:\n"
-    "\thttp://github.com/ryanbinns/ttwatch\n";
-
-const char *FIRMWARE_UNTESTED =
-    "WARNING: Firmware v%s has not been tested with ttblue\n"
-    "  Please email dlenski@gmail.com and let me know if it works or not\n";
-
-const char *MODEL_UNTESTED =
-    "WARNING: Model number %s has not been tested with ttblue\n"
-    "  Please email dlenski@gmail.com and let me know if it works or not\n";
-
 #define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
 #define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
 #define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
@@ -355,41 +340,14 @@ int main(int argc, const char **argv)
         }
 
         // check that it's actually a TomTom device with compatible firmware version
-        struct tt_dev_info { uint16_t handle; const char *name; char buf[BT_ATT_DEFAULT_LE_MTU-2]; int len; } info[] = {
-            { 0x001e, "maker" },
-            { 0x0016, "serial" },
-            { 0x0003, "user_name" },
-            { 0x0014, "model_name" },
-            { 0x001a, "model_num" },
-            { 0x001c, "firmware" },
-            { 0 }
-        };
-        for (struct tt_dev_info *p = info; p->handle; p++) {
-            p->len = att_read(fd, p->handle, p->buf);
-            if (p->len < 0) {
-                fprintf(stderr, "Could not read device information (handle 0x%04x, %s): %s (%d)", p->handle, p->name, strerror(errno), errno);
-                goto fail;
-            }
-            p->buf[p->len] = 0;
-        }
-
-        if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
-            fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
+        struct ble_dev_info *info = tt_check_device_version(fd, first);
+        if (!info)
             goto fail;
-        } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
-            fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, OLDEST_TESTED_FIRMWARE);
-            goto fail;
-        }
-
-        if (first && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
-            fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
-        if (first && !IS_TESTED_MODEL(info[4].buf))
-            fprintf(stderr, MODEL_UNTESTED, info[4].buf);
 
         // show device identifiers if --version
         fprintf(stderr, "Connected to %s.\n", info[1].buf);
         if (version && first) {
-            for (struct tt_dev_info *p = info; p->handle; p++)
+            for (struct ble_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
             int8_t rssi=0;
             if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
