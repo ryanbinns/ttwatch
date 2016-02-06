@@ -43,6 +43,31 @@ const char *PLEASE_SETCAP_ME =
     "    http://thread.gmane.org/gmane.linux.bluez.kernel/63778\n"
     "**********************************************************\n";
 
+const char *PAIRING_MODE_PROMPT =
+    "****************************************************************\n"
+    "Please put device in pairing mode (MENU -> PHONE -> PAIR NEW)...\n"
+    "****************************************************************\n"
+    "Press Enter to continue: ";
+
+const char *PAIRING_CODE_PROMPT =
+    "\n**************************************************\n"
+    "Enter 6-digit pairing code shown on device: ";
+
+const char *FIRMWARE_TOO_OLD =
+    "Firmware v%s is too old; at least v%s is required\n"
+    "* TomTom firmware release notes:\n"
+    "\thttp://us.support.tomtom.com/app/release_notes/type/watches\n"
+    "* Use USB cable and ttwatch to update your firmware:\n"
+    "\thttp://github.com/ryanbinns/ttwatch\n";
+
+const char *FIRMWARE_UNTESTED =
+    "WARNING: Firmware v%s has not been tested with ttblue\n"
+    "  Please email dlenski@gmail.com and let me know if it works or not\n";
+
+const char *MODEL_UNTESTED =
+    "WARNING: Model number %s has not been tested with ttblue\n"
+    "  Please email dlenski@gmail.com and let me know if it works or not\n";
+
 #define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
 #define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
 #define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
@@ -219,11 +244,7 @@ int main(int argc, const char **argv)
 
     // prompt user to put device in pairing mode
     if (new_pair) {
-        fputs("****************************************************************\n"
-              "Please put device in pairing mode (MENU -> PHONE -> PAIR NEW)...\n"
-              "****************************************************************\n"
-              "Press Enter to continue: ",
-              stderr);
+        fputs(PAIRING_MODE_PROMPT, stderr);
         getchar();
         fputs("\n", stderr);
     }
@@ -280,8 +301,7 @@ int main(int argc, const char **argv)
 
         // prompt for pairing code
         if (new_pair) {
-            fprintf(stderr, "\n**************************************************\n"
-                    "Enter 6-digit pairing code shown on device: ");
+            fputs(PAIRING_CODE_PROMPT, stderr);
             if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
                 fprintf(stderr, "Pairing code should be 6-digit number.\n");
                 goto fail;
@@ -355,23 +375,14 @@ int main(int argc, const char **argv)
             fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
             goto fail;
         } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
-            fprintf(stderr, "Firmware v%s is too old; at least v%s is required\n"
-                            "* TomTom firmware release notes:\n"
-                            "\thttp://us.support.tomtom.com/app/release_notes/type/watches\n"
-                            "* Use USB cable and ttwatch to update your firmware:\n"
-                            "\thttp://github.com/ryanbinns/ttwatch\n",
-                            info[5].buf, OLDEST_TESTED_FIRMWARE);
+            fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, OLDEST_TESTED_FIRMWARE);
             goto fail;
         }
 
         if (first && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
-            fprintf(stderr, "WARNING: Firmware v%s has not been tested with ttblue\n"
-                            "  Please email dlenski@gmail.com and let me know if it works or not\n",
-                            info[5].buf);
+            fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
         if (first && !IS_TESTED_MODEL(info[4].buf))
-            fprintf(stderr, "WARNING: Model number %s has not been tested with ttblue\n"
-                            "  Please email dlenski@gmail.com and let me know if it works or not\n",
-                            info[4].buf);
+            fprintf(stderr, MODEL_UNTESTED, info[4].buf);
 
         // show device identifiers if --version
         fprintf(stderr, "Connected to %s.\n", info[1].buf);
