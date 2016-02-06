@@ -242,6 +242,10 @@ int main(int argc, const char **argv)
         return 2;
     }
 
+    // get hostname
+    char hostname[32];
+    gethostname(hostname, sizeof hostname);
+
     // prompt user to put device in pairing mode
     if (new_pair) {
         fputs(PAIRING_MODE_PROMPT, stderr);
@@ -275,11 +279,9 @@ int main(int argc, const char **argv)
             }
         }
 
-        // get host name and address
-        char hciname[64];
+        // get host Bluetooth address
         struct hci_dev_info hci_info;
-        if (hci_read_local_name(dd, sizeof(hciname), hciname, 1000) < 0
-            || hci_devba(devid, &src_addr) < 0) {
+        if (hci_devba(devid, &src_addr) < 0) {
             fprintf(stderr, "Can't get hci%d info: %s (%d)\n", devid, strerror(errno), errno);
             hci_close_dev(dd);
             goto preopen_fail;
@@ -411,9 +413,9 @@ int main(int argc, const char **argv)
         uint8_t *fbuf;
         FILE *f;
 
-        fprintf(stderr, "Setting PHONE menu to '%s'.\n", hciname);
+        fprintf(stderr, "Setting PHONE menu to '%s'.\n", hostname);
         tt_delete_file(fd, 0x00020002);
-        tt_write_file(fd, 0x00020002, false, hciname, strlen(hciname), write_delay);
+        tt_write_file(fd, 0x00020002, false, hostname, strlen(hostname), write_delay);
 
         if (debug > 1) {
             uint32_t fileno = 0x000f20000;
