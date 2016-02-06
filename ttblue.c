@@ -365,7 +365,6 @@ int main(int argc, const char **argv)
         // set timeout to 20 seconds (delete and write operations can be slow)
         struct timeval to = {.tv_sec=20, .tv_usec=0};
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
-        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof(to));
 
         // transfer files
         uint8_t *fbuf;
