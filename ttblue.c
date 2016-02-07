@@ -276,17 +276,21 @@ int main(int argc, const char **argv)
         }
     }
     if (ch<-1) {
-        fprintf(stderr, "%s: %s\n",
+        fprintf(stderr, "%s: %s\n\n",
                 poptBadOption(optCon, POPT_BADOPTION_NOALIAS),
                 poptStrerror(ch));
+        poptPrintUsage(optCon, stderr, 0);
         return 2;
     }
     if (dev_address != NULL && str2ba(dev_address, &dst_addr) < 0) {
-        fprintf(stderr, "Could not understand Bluetooth device address: %s\n", dev_address);
+        fprintf(stderr, "Could not understand Bluetooth device address: %s\n"
+                        "It should be a TomTom MAC address like E4:04:39:__:__:__\n\n", dev_address);
+        poptPrintUsage(optCon, stderr, 0);
         return 2;
     }
     if (interface != NULL && (devid = hci_devid(interface)) < 0) {
-        fprintf(stderr, "Invalid Bluetooth interface: %s\n", interface);
+        fprintf(stderr, "Invalid Bluetooth interface: %s\n\n", interface);
+        poptPrintUsage(optCon, stderr, 0);
         return 2;
     } else if ((devid = hci_get_route(NULL)) < 0)
         devid = 0;
@@ -295,7 +299,8 @@ int main(int argc, const char **argv)
         fprintf(stderr,
                 "Daemon mode cannot be used together with initial pairing,\n"
                 "and Bluetooth device address must be specified.\n"
-                "Please specify pairing code and device address (see --help).\n");
+                "Please specify pairing code (-c) and device address (-d).\n\n");
+        poptPrintUsage(optCon, stderr, 0);
         return 2;
     }
 
