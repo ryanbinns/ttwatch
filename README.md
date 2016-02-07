@@ -5,7 +5,7 @@ Table of Contents
   * [Building](#building)
     * [Requirements](#requirements)
     * [Compiling](#compiling)
-  * [Run it](#run-it)
+  * [Use it](#use-it)
     * [Why so slow?](#why-so-slow)
   * [TODO](#todo)
   * [Protocol documentation](#protocol-documentation)
@@ -67,30 +67,37 @@ sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue
 [setuid root](http://wikipedia.org/wiki/setuid) permissions, because
 it only allows root-like privileges for these specific capabilities.)
 
-# Run it
+# Use it
+
+For initial pairing, you'll need to go to the **Phone|Pair New**
+menu on the watch.
+
+For subsequent reconnection, ensure that **Phone|Sync** is enabled,
+and you may need to "wake up" the device's BLE radio by pressing a
+few buttons.
+
+Try the following command line:
 
 ```
-./ttblue -a -d <bluetooth-address> [-c <pairing-code>] [-s <activity-store>]
+./ttblue -a [-d <bluetooth-address>] [-c <pairing-code>] [-s <activity-store>]
 ```
 
-Where `bluetooth-address` is the twelve-digit MAC address of your
-TomTom GPS watch (`E4:04:39:__:__:__`) and pairing-code is a
-previously-used pairing code (can be from one of the "official" TomTom
-mobile apps), or left blank to create a new pairing.
-The `-a`/`--auto` option tells `ttblue` to download all activities and
-update QuickFixGPS, while `-s` specifies a location for `.ttbin`
-activity files to be output (current directory is the default).
+* `bluetooth-address` is the MAC address of your TomTom GPS watch, for
+  example `E4:04:39:17:62:B1`. If not specified, `ttblue` will attempt
+  to scan for BLE devices, and try to connect to the first one
+  matching TomTom's vendor ID (`E4:04:39`).
 
-For the time being, you can use `sudo hcitool lescan` to find your
-device's BLE MAC address.
+* The `pairing-code` is a previously-used pairing code (can be from one of
+  the "official" TomTom mobile apps). If left blank, `ttblue` will try
+  to create a new pairing.
 
-* For initial pairing, you'll need to go to the **Phone|Pair New**
-  menu on the watch.
-* For subsequent reconnection, ensure that **Phone|Sync** is enabled,
-  and you may need to "wake up" the device's BLE radio by fiddling
-  with a few buttons.
+* The `-a`/`--auto` option tells `ttblue` to download all activities and
+  update QuickFixGPS.
 
-`ttblue` will download your activity files (saved as
+* The `-s`/`--activity-store` option specifies a location for `.ttbin`
+  activity files to be output (current directory is the default).
+
+As invoked above, `ttblue` will download your activity files (saved as
 `0091000n_YYYYMMDD_HHmmSS.ttbin`), and attempt to download the
 QuickGPSFix update and send it to the watch. (You can then use
 [`ttbincnv`](https://github.com/ryanbinns/ttwatch/tree/master/ttbincnv)

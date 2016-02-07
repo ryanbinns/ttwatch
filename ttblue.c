@@ -34,8 +34,8 @@ const char *PLEASE_SETCAP_ME =
     "**********************************************************\n"
     "NOTE: This program lacks the permissions necessary for\n"
     "  manipulating the raw Bluetooth HCI socket, which\n"
-    "  is required to set the minimum connection inverval\n"
-    "  and speed up data transfer.\n\n"
+    "  is required for scanning and for setting the minimum\n"
+    "  connection inverval to speed up data transfer.\n\n"
     "  To fix this, run it as root or, better yet, set the\n"
     "  following capabilities on the ttblue executable:\n\n"
     "    # sudo setcap 'cap_net_raw,cap_net_admin+eip' ttblue\n\n"
@@ -125,7 +125,82 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     return sock;
 }
 
-int
+/**
+ * based on bluez/tools/hcitool.c
+ *
+ */
+
+static void
+nullhandler(int signal) {}
+
+static int
+hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
+{
+    unsigned char buf[HCI_MAX_EVENT_SIZE];
+    struct hci_filter nf, of;
+    int len;
+    socklen_t olen = sizeof(of);
+    char addr_str[18];
+
+    hci_le_set_scan_enable(dd, 0, 0, 10000); // disable in case already enabled
+    if (hci_le_set_scan_parameters(dd, /* passive */ 0x00, htobs(0x10), htobs(0x10), LE_PUBLIC_ADDRESS, 0x00, 10000) < 0) {
+        fprintf(stderr, "Failed to set BLE scan parameters: %s (%d)\n", strerror(errno), errno);
+        return -1;
+    }
+    if (hci_le_set_scan_enable(dd, 0x01, 0, 10000) < 0) {
+        fprintf(stderr, "Failed to enable BLE scan: %s (%d)\n", strerror(errno), errno);
+        return -1;
+    }
+
+    // save HCI filter and set it to capture all LE events
+    if (getsockopt(dd, SOL_HCI, HCI_FILTER, &of, &olen) < 0)
+        return -1;
+
+    hci_filter_clear(&nf);
+    hci_filter_set_ptype(HCI_EVENT_PKT, &nf);
+    hci_filter_set_event(EVT_LE_META_EVENT, &nf);
+
+    if (setsockopt(dd, SOL_HCI, HCI_FILTER, &nf, sizeof(nf)) < 0)
+        return -1;
+
+    fprintf(stderr, "Scanning for TomTom BLE devices...\n");
+
+    struct sigaction sa = { .sa_handler = nullhandler };
+	sigaction(SIGINT, &sa, NULL);
+
+    for (;;) {
+        if ((len = read(dd, buf, sizeof(buf))) < 0) {
+            if (errno == EAGAIN)
+                continue;
+            else
+                goto done;
+        }
+
+        evt_le_meta_event *meta = (void *)(buf + HCI_EVENT_HDR_SIZE + 1);
+        if (meta->subevent == EVT_LE_ADVERTISING_REPORT) {
+            le_advertising_info *info = (void *)(meta->data + 1);
+            ba2str(&info->bdaddr, addr_str);
+            if (!strncmp(addr_str, "E4:04:39", 8)) {
+                bacpy(dst, &info->bdaddr);
+                goto done;
+            } else
+                fprintf(stderr, "Saw a non-TomTom device (%s)\n", addr_str);
+        }
+    }
+
+done:
+    signal(SIGINT, NULL);
+	if (setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of)) < 0)
+        return -1;
+    if (hci_le_set_scan_enable(dd, 0x00, 0, 10000) < 0)
+        return -1;
+	if (len < 0)
+		return -1;
+
+	return 0;
+}
+
+static int
 save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int length, int indent, int verbose)
 {
     char istr[indent+1];
@@ -164,7 +239,7 @@ struct poptOption options[] = {
     { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
     { "update-gps", 0, POPT_ARG_NONE, NULL, 'G', "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
     { "glonass", 0, POPT_ARG_VAL, &use_glonass, 2, "Use GLONASS version of QuickFix update file." },
-    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__)", "MACADDR" },
+    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will scan if unspecified", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
@@ -206,10 +281,7 @@ int main(int argc, const char **argv)
                 poptStrerror(ch));
         return 2;
     }
-    if (dev_address==NULL) {
-        fprintf(stderr, "Bluetooth MAC address of device must be specified (-d)\n");
-        return 2;
-    } else if (str2ba(dev_address, &dst_addr) < 0) {
+    if (dev_address != NULL && str2ba(dev_address, &dst_addr) < 0) {
         fprintf(stderr, "Could not understand Bluetooth device address: %s\n", dev_address);
         return 2;
     }
@@ -219,11 +291,11 @@ int main(int argc, const char **argv)
     } else if ((devid = hci_get_route(NULL)) < 0)
         devid = 0;
 
-    if (daemonize && new_pair) {
+    if (daemonize && (new_pair || !dev_address)) {
         fprintf(stderr,
-                "Daemon mode cannot be used together with initial pairing\n"
-                "Please specify existing pairing code, or run this first to pair:\n"
-                "\t%s -d %s\n", argv[0], dev_address);
+                "Daemon mode cannot be used together with initial pairing,\n"
+                "and Bluetooth device address must be specified.\n"
+                "Please specify pairing code and device address (see --help).\n");
         return 2;
     }
 
@@ -268,8 +340,18 @@ int main(int argc, const char **argv)
         struct hci_dev_info hci_info;
         if (hci_devba(devid, &src_addr) < 0) {
             fprintf(stderr, "Can't get hci%d info: %s (%d)\n", devid, strerror(errno), errno);
-            hci_close_dev(dd);
             goto preopen_fail;
+        }
+
+        // scan for TomTom devices, if destination address was unspecified
+        if (dev_address == NULL) {
+            if (hci_tt_scan(dd, &dst_addr, debug) < 0) {
+                if (errno==EPERM)
+                    fputs(PLEASE_SETCAP_ME, stderr);
+                else
+                    fprintf(stderr, "BLE scan failed: %s (%d)\n", strerror(errno), errno);
+                goto preopen_fail;
+            }
         }
 
         // create L2CAP socket connected to watch
