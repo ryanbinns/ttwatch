@@ -286,15 +286,6 @@ int main(int argc, const char **argv)
             }
         }
 
-        // prompt for pairing code
-        if (new_pair) {
-            fputs(PAIRING_CODE_PROMPT, stderr);
-            if (scanf("%d%c", &dev_code, &ch) && !isspace(ch)) {
-                fprintf(stderr, "Pairing code should be 6-digit number.\n");
-                goto fail;
-            }
-        }
-
         // request minimum connection interval
         struct l2cap_conninfo l2cci;
         int length = sizeof l2cci;
@@ -352,6 +343,15 @@ int main(int argc, const char **argv)
             int8_t rssi=0;
             if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
                 fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
+        }
+
+        // prompt for pairing code
+        if (new_pair) {
+            fputs(PAIRING_CODE_PROMPT, stderr);
+            if (!(scanf("%d%c", &dev_code, &ch) && isspace(ch))) {
+                fprintf(stderr, "Pairing code should be 6-digit number.\n");
+                goto fail;
+            }
         }
 
         // authorize with the device
