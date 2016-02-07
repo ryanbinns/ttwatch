@@ -256,10 +256,10 @@ int main(int argc, const char **argv)
         if (first) {
             uint8_t features[8];
             if (hci_read_local_ext_features(dd, 0, NULL, features, 1000) < 0) {
-                fprintf(stderr, "Could not read hci%d features: %s (%d)", dd, strerror(errno), errno);
+                fprintf(stderr, "Could not read hci%d features: %s (%d)", devid, strerror(errno), errno);
                 goto preopen_fail;
             } else if ((features[4] & LMP_LE) == 0 || (features[6] & LMP_LE_BREDR) == 0) {
-                fprintf(stderr, "Bluetooth interface hci%d doesn't support 4.0 (Bluetooth LE+BR/EDR)", dd);
+                fprintf(stderr, "Bluetooth interface hci%d doesn't support 4.0 (Bluetooth LE+BR/EDR)", devid);
                 goto preopen_fail;
             }
         }
