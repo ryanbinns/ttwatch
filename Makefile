@@ -32,4 +32,4 @@ $(OUTPUT): $(SRC:.c=.o)
 	$(CC) -o $(OUTPUT) $(SRC:.c=.o) $(LDFLAGS)
 
 clean:
-	@-rm $(OUTPUT) $(SRC:.c=.o) >/dev/null 2>&1
+	-rm $(OUTPUT) $(SRC:.c=.o) >/dev/null 2>&1
