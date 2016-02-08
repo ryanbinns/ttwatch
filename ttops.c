@@ -206,7 +206,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 
 fail:
     free(*buf);
-    fprintf(stderr, "File read failed at file position 0x%04x of 0x%04x\n", (int)(optr-*buf), flen);
+    fprintf(stderr, "File read failed at byte position %d of %d\n", (int)(optr-*buf), flen);
     perror("fail");
 prealloc_fail:
     return -EBADMSG;
@@ -301,7 +301,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     return iptr-buf;
 
 fail_write:
-    fprintf(stderr, "File write failed at file position 0x%04x of 0x%04x\n", (int)(iptr-buf), length);
+    fprintf(stderr, "File write failed at byte position %d of %d\n", (int)(iptr-buf), length);
     perror("fail");
     return -EBADMSG;
 }
@@ -355,16 +355,20 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
     for (; optr < (void *)(list+n_files); optr += rlen) {
         rlen=EXPECT_BYTES(fd, optr);
         hexlify(stdout, optr, rlen, true);
-        if (rlen<0)
+        if (rlen<0) {
+            free(list);
             return -EBADMSG;
+        }
     }
 
     // fix endianness
     for (int ii; ii<n_files; ii++)
         list[ii] = btohs(list[ii]);
 
-    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0) {
+        free(list);
         return -EBADMSG;
+    }
 
     return n_files;
 }

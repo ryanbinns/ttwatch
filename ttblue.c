@@ -198,6 +198,18 @@ done:
 	return 0;
 }
 
+const char *
+make_tt_filename(uint32_t fileno, char *ext)
+{
+    char filetime[16];
+    static char filename[32];
+    time_t t = time(NULL);
+    struct tm *tmp = localtime(&t);
+    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
+    sprintf(filename, "%08x_%s.%s", fileno, filetime, ext);
+    return filename;
+}
+
 static int
 save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int length, int indent, int verbose)
 {
@@ -460,22 +472,16 @@ int main(int argc, const char **argv)
         tt_delete_file(fd, 0x00020002);
         tt_write_file(fd, 0x00020002, false, hostname, strlen(hostname), write_delay);
 
-        if (debug > 1) {
-            uint32_t fileno = 0x000f20000;
-            fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
-            if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
-                fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", fileno);
-            } else {
-                char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
-                time_t t = time(NULL);
-                struct tm *tmp = localtime(&t);
-                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                sprintf(filename, "%08x_%s.xml", fileno, filetime);
-
-                save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
-                free(fbuf);
-            }
+#ifdef DUMP_0x000f20000
+        uint32_t fileno = 0x000f20000;
+        fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
+        if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+            fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", fileno);
+        } else {
+            save_buf_to_file(make_tt_filename(fileno, "xml"), "wxb", fbuf, length, 2, true);
+            free(fbuf);
         }
+#endif
 
         if (set_time) {
             uint32_t fileno = 0x00850000;
@@ -516,21 +522,15 @@ int main(int argc, const char **argv)
             uint32_t fileno = 0x00020001;
             if (update_gps > 1) {
                 /* forced update */
-            } else if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
+            } else if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 6) {
                 fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
             } else {
                 struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
                                   .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
                 last_qfg_update = timegm(&tmp);
-
-                if (debug > 1) {
-                    char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
-                    time_t t = time(NULL);
-                    struct tm *tmp = localtime(&t);
-                    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                    sprintf(filename, "%08x_%s.bin", fileno, filetime);
-                    save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
-                }
+#ifdef DUMP_0x00020001
+                save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
+#endif
                 free(fbuf);
             }
 
@@ -538,7 +538,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "  No update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
             } else {
                 if (last_qfg_update)
-                    fprintf(stderr, "  Last update was at %.24s.", ctime(&last_qfg_update));
+                    fprintf(stderr, "  Last update was at %.24s.\n", ctime(&last_qfg_update));
 
                 CURLcode res;
                 char curlerr[CURL_ERROR_SIZE];
@@ -589,7 +589,11 @@ int main(int argc, const char **argv)
         if (get_activities) {
             uint16_t *list;
             int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-            char filetime[16], filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
+
+            if (n_files < 0) {
+                fprintf(stderr, "Could not list activity files on watch!\n");
+                goto fail;
+            }
             fprintf(stderr, "Found %d activity files on watch.\n", n_files);
             for (int ii=0; ii<n_files; ii++) {
                 uint32_t fileno = 0x00910000 + list[ii];
@@ -600,10 +604,8 @@ int main(int argc, const char **argv)
                     fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
                     goto fail;
                 } else {
-                    time_t t = time(NULL);
-                    struct tm *tmp = localtime(&t);
-                    strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                    sprintf(filename, "%s/%08X_%s.ttbin", activity_store, fileno, filetime);
+                    char filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
+                    sprintf(filename, "%s/%s", activity_store, make_tt_filename(fileno, "ttbin"));
 
                     int result = save_buf_to_file(filename, "wxb", fbuf, length, 4, true);
                     free(fbuf);
@@ -636,21 +638,18 @@ int main(int argc, const char **argv)
             }
         }
 
+#ifdef DUMP_0x00020005
         if (debug > 1) {
             uint32_t fileno = 0x00020005;
             fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
             if ((length=tt_read_file(fd, fileno, 0, &fbuf)) < 0) {
                 fprintf(stderr, "Could not read file 0x%08x from watch.\n", fileno);
             } else {
-                char filetime[16], filename[strlen("12345678_20150101_010101.bin") + 1];
-                time_t t = time(NULL);
-                struct tm *tmp = localtime(&t);
-                strftime(filetime, sizeof filetime, "%Y%m%d_%H%M%S", tmp);
-                sprintf(filename, "%08x_%s.bin", fileno, filetime);
-                save_buf_to_file(filename, "wxb", fbuf, length, 2, true);
+                save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
                 free(fbuf);
             }
         }
+#endif
 
         success = true;
         first = false;
