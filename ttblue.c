@@ -163,8 +163,6 @@ hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
     if (setsockopt(dd, SOL_HCI, HCI_FILTER, &nf, sizeof(nf)) < 0)
         return -1;
 
-    fprintf(stderr, "Scanning for TomTom BLE devices...\n");
-
     struct sigaction sa = { .sa_handler = nullhandler };
 	sigaction(SIGINT, &sa, NULL);
 
@@ -183,7 +181,7 @@ hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
             if (!strncmp(addr_str, "E4:04:39", 8)) {
                 bacpy(dst, &info->bdaddr);
                 goto done;
-            } else
+            } else if (verbose)
                 fprintf(stderr, "Saw a non-TomTom device (%s)\n", addr_str);
         }
     }
@@ -350,6 +348,7 @@ int main(int argc, const char **argv)
 
         // scan for TomTom devices, if destination address was unspecified
         if (dev_address == NULL) {
+            fprintf(stderr, "Scanning for TomTom BLE devices...\n");
             if (hci_tt_scan(dd, &dst_addr, debug) < 0) {
                 if (errno==EPERM)
                     fputs(PLEASE_SETCAP_ME, stderr);
