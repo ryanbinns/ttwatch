@@ -514,6 +514,58 @@ int main(int argc, const char **argv)
             }
         }
 
+        if (get_activities) {
+            uint16_t *list;
+            int n_files = tt_list_sub_files(fd, 0x00910000, &list);
+
+            if (n_files < 0) {
+                fprintf(stderr, "Could not list activity files on watch!\n");
+                goto fail;
+            }
+            fprintf(stderr, "Found %d activity files on watch.\n", n_files);
+            for (int ii=0; ii<n_files; ii++) {
+                uint32_t fileno = 0x00910000 + list[ii];
+
+                fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
+                term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
+                if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+                    fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
+                    goto fail;
+                } else {
+                    char filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
+                    sprintf(filename, "%s/%s", activity_store, make_tt_filename(fileno, "ttbin"));
+
+                    int result = save_buf_to_file(filename, "wxb", fbuf, length, 4, true);
+                    free(fbuf);
+                    if (result < 0)
+                        goto fail;
+                    else {
+                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        tt_delete_file(fd, fileno);
+                        if (postproc) {
+                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
+                            fflush(stderr);
+
+                            switch (fork()) {
+                            case 0:
+                                dup2(1, 2); // redirect stdout to stderr
+                                execlp(postproc, postproc, filename, NULL);
+                                exit(1); // if exec fails?
+                            default:
+                                wait(&result);
+                                if (result==0)
+                                    fputc('\n', stderr);
+                                else
+                                // Ridiculous syntax but I'm extremely proud of it :-P
+                            case -1:
+                                    fprintf(stderr, " FAILED\n");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (update_gps) {
             fputs("Updating QuickFixGPS...\n", stderr);
             term_title("ttblue: Updating QuickFixGPS");
@@ -580,58 +632,6 @@ int main(int argc, const char **argv)
                                 goto fail;
                             } else
                                 att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
-                        }
-                    }
-                }
-            }
-        }
-
-        if (get_activities) {
-            uint16_t *list;
-            int n_files = tt_list_sub_files(fd, 0x00910000, &list);
-
-            if (n_files < 0) {
-                fprintf(stderr, "Could not list activity files on watch!\n");
-                goto fail;
-            }
-            fprintf(stderr, "Found %d activity files on watch.\n", n_files);
-            for (int ii=0; ii<n_files; ii++) {
-                uint32_t fileno = 0x00910000 + list[ii];
-
-                fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
-                term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
-                if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
-                    fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
-                    goto fail;
-                } else {
-                    char filename[strlen(activity_store) + strlen("/12345678_20150101_010101.ttbin") + 1];
-                    sprintf(filename, "%s/%s", activity_store, make_tt_filename(fileno, "ttbin"));
-
-                    int result = save_buf_to_file(filename, "wxb", fbuf, length, 4, true);
-                    free(fbuf);
-                    if (result < 0)
-                        goto fail;
-                    else {
-                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        tt_delete_file(fd, fileno);
-                        if (postproc) {
-                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
-                            fflush(stderr);
-
-                            switch (fork()) {
-                            case 0:
-                                dup2(1, 2); // redirect stdout to stderr
-                                execlp(postproc, postproc, filename, NULL);
-                                exit(1); // if exec fails?
-                            default:
-                                wait(&result);
-                                if (result==0)
-                                    fputc('\n', stderr);
-                                else
-                                // Ridiculous syntax but I'm extremely proud of it :-P
-                            case -1:
-                                    fprintf(stderr, " FAILED\n");
-                            }
                         }
                     }
                 }
