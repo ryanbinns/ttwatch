@@ -344,10 +344,10 @@ int main(int argc, const char **argv)
             uint8_t features[8];
             if (hci_read_local_ext_features(dd, 0, NULL, features, 1000) < 0) {
                 fprintf(stderr, "Could not read hci%d features: %s (%d)", devid, strerror(errno), errno);
-                goto preopen_fail;
+                goto pre_fatal;
             } else if ((features[4] & LMP_LE) == 0 || (features[6] & LMP_LE_BREDR) == 0) {
                 fprintf(stderr, "Bluetooth interface hci%d doesn't support 4.0 (Bluetooth LE+BR/EDR)", devid);
-                goto preopen_fail;
+                goto pre_fatal;
             }
         }
 
@@ -375,13 +375,7 @@ int main(int argc, const char **argv)
         if (fd < 0) {
             if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
-            if (!daemonize)
-                goto fail;
-            else {
-                success = false;
-                isleep(sleep_fail, debug>1); // have to sleep here since won't happen on repeat
-                goto repeat;
-            }
+            goto fail;
         }
 
         // request minimum connection interval
@@ -415,7 +409,7 @@ int main(int argc, const char **argv)
         struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
         if (att_read(fd, 0x000b, &ppcp) < 0) {
             fprintf(stderr, "Could not read device PPCP (handle 0x000b): %s (%d)", strerror(errno), errno);
-            goto fail;
+            if (first) goto fatal; else goto fail;
         } else {
             ppcp.min_interval = btohs(ppcp.min_interval);
             ppcp.max_interval = btohs(ppcp.max_interval);
@@ -430,8 +424,9 @@ int main(int argc, const char **argv)
 
         // check that it's actually a TomTom device with compatible firmware version
         struct ble_dev_info *info = tt_check_device_version(fd, first);
-        if (!info)
-            goto fail;
+        if (!info) {
+            if (first) goto fatal; else goto fail;
+        }
 
         // show device identifiers if --version
         fprintf(stderr, "Connected to %s.\n", info[1].buf);
@@ -448,14 +443,14 @@ int main(int argc, const char **argv)
             fputs(PAIRING_CODE_PROMPT, stderr);
             if (!(scanf("%d%c", &dev_code, &ch) && isspace(ch))) {
                 fprintf(stderr, "Pairing code should be 6-digit number.\n");
-                goto fail;
+                goto fatal;
             }
         }
 
         // authorize with the device
         if (tt_authorize(fd, dev_code, new_pair) < 0) {
             fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
-            goto fail;
+            if (first) goto fatal; else goto fail;
         }
 
         term_title("ttblue: Connected");
@@ -653,7 +648,6 @@ int main(int argc, const char **argv)
 
         success = true;
         first = false;
-    repeat:
         close(fd);
         hci_close_dev(dd);
         continue;
@@ -662,9 +656,13 @@ int main(int argc, const char **argv)
     preopen_fail:
         hci_close_dev(dd);
         success = false;
-        if (first)
-            return 1;
     }
 
     return 0;
+
+fatal:
+    close(fd);
+pre_fatal:
+    hci_close_dev(dd);
+    return 1;
 }
