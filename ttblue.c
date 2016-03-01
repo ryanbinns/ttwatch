@@ -540,8 +540,6 @@ int main(int argc, const char **argv)
                     if (result < 0)
                         goto fail;
                     else {
-                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        tt_delete_file(fd, fileno);
                         if (postproc) {
                             fprintf(stderr, "    Postprocessing with %s ...", postproc);
                             fflush(stderr);
@@ -561,6 +559,8 @@ int main(int argc, const char **argv)
                                     fprintf(stderr, " FAILED\n");
                             }
                         }
+                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        tt_delete_file(fd, fileno);
                     }
                 }
             }
