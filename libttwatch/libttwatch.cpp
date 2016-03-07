@@ -572,8 +572,8 @@ int ttwatch_find_first_file(TTWATCH *watch, uint32_t *file_id, uint32_t *length)
     RETURN_ERROR(send_packet(watch, MSG_FIND_FIRST_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
 
-    if (*file_id) *file_id = be32toh(response.id);
-    if (*length) *length   = be32toh(response.file_size);
+    if (file_id) *file_id = be32toh(response.id);
+    if (length) *length   = be32toh(response.file_size);
 
     return be32toh(response.end_of_list) ? TTWATCH_NoMoreFiles : TTWATCH_NoError;
 }
@@ -590,8 +590,8 @@ int ttwatch_find_next_file(TTWATCH *watch, uint32_t *file_id, uint32_t *length)
     RETURN_ERROR(send_packet(watch, MSG_FIND_NEXT_FILE, 0, 0,
         sizeof(response), (uint8_t*)&response));
 
-    if (*file_id) *file_id = be32toh(response.id);
-    if (*length) *length   = be32toh(response.file_size);
+    if (file_id) *file_id = be32toh(response.id);
+    if (length) *length   = be32toh(response.file_size);
 
     return be32toh(response.end_of_list) ? TTWATCH_NoMoreFiles : TTWATCH_NoError;
 }
