@@ -277,8 +277,9 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
             // wait between packets, because the devices don't like having them spit out
             // at max speed with min connection interval
             gettimeofday(&now, NULL);
-            if (now.tv_sec==lastpkt.tv_sec && now.tv_usec-lastpkt.tv_usec < write_delay)
-                usleep(write_delay);
+
+            useconds_t elapsed_usec = ((now.tv_sec-lastpkt.tv_sec)*1000000 + now.tv_usec-lastpkt.tv_usec);
+            if (elapsed_usec < write_delay) usleep(write_delay - elapsed_usec);
             memcpy(&lastpkt, &now, sizeof now);
         }
         iptr = checkpoint; // trim CRC bytes from input position
