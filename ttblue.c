@@ -429,7 +429,8 @@ int main(int argc, const char **argv)
         }
 
         // show device identifiers if --version
-        fprintf(stderr, "Connected to %s.\n", info[1].buf);
+        time_t now = time(NULL);
+        fprintf(stderr, "Connected at %.24s.\n", ctime(&now));
         if (version && first) {
             for (struct ble_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
