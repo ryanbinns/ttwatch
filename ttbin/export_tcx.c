@@ -16,6 +16,7 @@ enum LapState
 
 struct LapData
 {
+    const char *intensity;
     float avg_speed;
     unsigned step_count;
     unsigned time;
@@ -38,6 +39,7 @@ static void write_lap_finish(FILE *file, const struct LapData *lap)
     fputs(        "                       </LX>\r\n"
                   "                    </Extensions>\r\n", file);
     fputs(        "                </Track>\r\n", file);
+    fprintf(file, "                <Intensity>%s</Intensity>\r\n", lap->intensity);
     fprintf(file, "                <TriggerMethod>%s</TriggerMethod>\r\n", lap->trigger_method);
     fprintf(file, "                <TotalTimeSeconds>%d</TotalTimeSeconds>\r\n", lap->time);
     fprintf(file, "                <DistanceMeters>%.2f</DistanceMeters>\r\n", lap->distance);
@@ -73,16 +75,15 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_start_time = 0;
     float lap_start_distance = 0.0f;
     unsigned lap_start_calories = 0;
-    unsigned lap_heart_rate_count;
-    unsigned lap_start_heart_rate_count;
     float cadence_avg = 0.0f;
     double distance_factor = 1;
     uint32_t steps, steps_prev = 0;
     time_t timestamp;
     float distance;
 
-    struct LapData lap = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    struct LapData lap = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     lap.trigger_method = "Manual";
+    lap.intensity = "Active";
 
     if (ttbin->activity == ACTIVITY_TREADMILL)
     {
@@ -187,8 +188,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             if (lap_state == LapState_Start)
             {
                 fprintf(file, "            <Lap StartTime=\"%s\">\r\n", timestr);
-                fputs(        "                <Intensity>Active</Intensity>\r\n"
-                              "                <Track>\r\n", file);
+                fputs(        "                <Track>\r\n", file);
                 lap_state = LapState_None;
             }
 
@@ -252,7 +252,51 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
 
             heart_rate = record->heart_rate.heart_rate;
             break;
+        case TAG_INTERVAL_SETUP:
 
+        	break;
+        case TAG_INTERVAL_START:
+        	break;
+        case TAG_INTERVAL_FINISH:
+        	if (record->interval_start.type == TTBIN_INTERVAL_TYPE_WORK)
+        	{
+        		lap.intensity = "Active";
+        	}
+        	else
+        	{
+        		lap.intensity = "Resting";
+        	}
+        	lap.time = record->interval_finish.total_time - lap_start_time;
+            if (ttbin->activity == ACTIVITY_TREADMILL)
+            {
+                lap.distance = distance_factor * (double)(record->interval_finish.total_distance - lap_start_distance);
+                lap.avg_speed = lap.distance / move_count;
+            }
+            else
+            {
+                lap.distance = record->interval_finish.total_distance - lap_start_distance;
+                lap.avg_speed = total_speed / move_count;
+            }
+            lap.max_speed = max_speed;
+            lap.calories = record->interval_finish.total_calories - lap_start_calories;
+            if (heart_rate_count > 0)
+                lap.avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
+            else
+                lap.avg_heart_rate = 0;
+            lap.max_heart_rate = max_heart_rate;
+            lap.step_count = total_step_count;
+            move_count = 0;
+            heart_rate_count = 0;
+            total_speed = 0;
+            max_speed = 0;
+            max_heart_rate = 0;
+            total_heart_rate = 0;
+            total_step_count = 0;
+            lap_state = LapState_Finish;
+            lap_start_time = record->interval_finish.total_time;
+            lap_start_distance = record->interval_finish.total_distance;
+            lap_start_calories = record->interval_finish.total_calories;
+            break;
         case TAG_LAP:
             lap.time = record->lap.total_time - lap_start_time;
             if (ttbin->activity == ACTIVITY_TREADMILL)
@@ -267,9 +311,8 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             }
             lap.max_speed = max_speed;
             lap.calories = record->lap.total_calories - lap_start_calories;
-            lap_heart_rate_count = heart_rate_count - lap_start_heart_rate_count;;
-            if (lap_heart_rate_count > 0)
-                lap.avg_heart_rate = (total_heart_rate + (lap_heart_rate_count >> 1)) / lap_heart_rate_count;
+            if (heart_rate_count > 0)
+                lap.avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
             else
                 lap.avg_heart_rate = 0;
             lap.max_heart_rate = max_heart_rate;
@@ -285,7 +328,6 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             lap_start_time = record->lap.total_time;
             lap_start_distance = record->lap.total_distance;
             lap_start_calories = record->lap.total_calories;
-            lap_start_heart_rate_count = heart_rate_count;
             break;
         }
     }
@@ -302,9 +344,8 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 lap.avg_speed = total_speed / move_count;
             lap.max_speed = max_speed;
             lap.calories = ttbin->total_calories - lap_start_calories;
-            lap_heart_rate_count = heart_rate_count - lap_start_heart_rate_count;;
-            if (lap_heart_rate_count > 0)
-                lap.avg_heart_rate = (total_heart_rate + (lap_heart_rate_count >> 1)) / lap_heart_rate_count;
+            if (heart_rate_count > 0)
+                lap.avg_heart_rate = (total_heart_rate + (heart_rate_count >> 1)) / heart_rate_count;
             else
                 lap.avg_heart_rate = 0;
             lap.max_heart_rate = max_heart_rate;
