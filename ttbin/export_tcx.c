@@ -253,20 +253,19 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             heart_rate = record->heart_rate.heart_rate;
             break;
         case TAG_INTERVAL_SETUP:
-
-        	break;
+            break;
         case TAG_INTERVAL_START:
-        	break;
+            break;
         case TAG_INTERVAL_FINISH:
-        	if (record->interval_start.type == TTBIN_INTERVAL_TYPE_WORK)
-        	{
-        		lap.intensity = "Active";
-        	}
-        	else
-        	{
-        		lap.intensity = "Resting";
-        	}
-        	lap.time = record->interval_finish.total_time - lap_start_time;
+            if (record->interval_start.type == TTBIN_INTERVAL_TYPE_WORK)
+            {
+                lap.intensity = "Active";
+            }
+            else
+            {
+                lap.intensity = "Resting";
+            }
+            lap.time = record->interval_finish.total_time - lap_start_time;
             if (ttbin->activity == ACTIVITY_TREADMILL)
             {
                 lap.distance = distance_factor * (double)(record->interval_finish.total_distance - lap_start_distance);
