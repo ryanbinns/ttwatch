@@ -70,6 +70,14 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     struct sockaddr_l2 srcaddr, dstaddr;
     struct bt_security btsec;
 
+    const char *dst_type_name;
+    switch (dst_type) {
+    case BDADDR_BREDR: dst_type_name="BDADDR_BREDR"; break;
+    case BDADDR_LE_PUBLIC: dst_type_name="BDADDR_LE_PUBLIC"; break;
+    case BDADDR_LE_RANDOM: dst_type_name="BDADDR_LE_RANDOM"; break;
+    default: return -2;
+    }
+
     if (verbose) {
         char srcaddr_str[18], dstaddr_str[18];
 
@@ -77,8 +85,8 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
         ba2str(dst, dstaddr_str);
 
         fprintf(stderr, "Opening L2CAP LE connection on ATT "
-                        "channel:\n\t src: %s\n\tdest: %s\n",
-                srcaddr_str, dstaddr_str);
+                        "channel:\n\t src: %s\n\tdest: %s (%s)\n",
+                srcaddr_str, dstaddr_str, dst_type_name);
     }
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
@@ -134,7 +142,7 @@ static void
 nullhandler(int signal) {}
 
 static int
-hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
+hci_tt_scan(int dd, bdaddr_t *dst, uint8_t *dst_type, int verbose)
 {
     unsigned char buf[HCI_MAX_EVENT_SIZE];
     struct hci_filter nf, of;
@@ -179,7 +187,17 @@ hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
             le_advertising_info *info = (void *)(meta->data + 1);
             ba2str(&info->bdaddr, addr_str);
             if (!strncmp(addr_str, "E4:04:39", 8)) {
+                /**
+                 * confusion alert: Bluez defines these constants as
+                 * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
+                 * ... but in the le_advertising_info wire packets:
+                 * 0 means _PUBLIC and non-0 means _RANDOM
+                 * (see bluez/emulator/bthost.c
+                 *
+                 */
+                *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
                 bacpy(dst, &info->bdaddr);
+                //fprintf(stderr, "Saw a TomTom device (%s)\n", addr_str);
                 goto done;
             } else if (verbose)
                 fprintf(stderr, "Saw a non-TomTom device (%s)\n", addr_str);
@@ -269,6 +287,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
+    uint8_t dst_bdaddr_type = BDADDR_LE_RANDOM; // default for v1 devices
     int success = false;
     time_t last_qfg_update;
     int write_delay;
@@ -361,7 +380,7 @@ int main(int argc, const char **argv)
         // scan for TomTom devices, if destination address was unspecified
         if (dev_address == NULL) {
             fprintf(stderr, "Scanning for TomTom BLE devices...\n");
-            if (hci_tt_scan(dd, &dst_addr, debug) < 0) {
+            if (hci_tt_scan(dd, &dst_addr, &dst_bdaddr_type, debug) < 0) {
                 if (errno==EPERM)
                     fputs(PLEASE_SETCAP_ME, stderr);
                 else
@@ -371,7 +390,7 @@ int main(int argc, const char **argv)
         }
 
         // create L2CAP socket connected to watch
-        fd = l2cap_le_att_connect(&src_addr, &dst_addr, BDADDR_LE_RANDOM, BT_SECURITY_MEDIUM, first);
+        fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_bdaddr_type, BT_SECURITY_MEDIUM, first);
         if (fd < 0) {
             if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
