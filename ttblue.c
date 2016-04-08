@@ -147,7 +147,7 @@ hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
         fprintf(stderr, "Failed to set BLE scan parameters: %s (%d)\n", strerror(errno), errno);
         return -1;
     }
-    if (hci_le_set_scan_enable(dd, 0x01, 0, 10000) < 0) {
+    if (hci_le_set_scan_enable(dd, 0x01, /* include dupes */ 0x00, 10000) < 0) {
         fprintf(stderr, "Failed to enable BLE scan: %s (%d)\n", strerror(errno), errno);
         return -1;
     }
@@ -164,7 +164,7 @@ hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
         return -1;
 
     struct sigaction sa = { .sa_handler = nullhandler };
-	sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL);
 
     for (;;) {
         if ((len = read(dd, buf, sizeof(buf))) < 0) {
@@ -188,14 +188,14 @@ hci_tt_scan(int dd, bdaddr_t *dst, int verbose)
 
 done:
     signal(SIGINT, NULL);
-	if (setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of)) < 0)
+    if (setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of)) < 0)
         return -1;
-    if (hci_le_set_scan_enable(dd, 0x00, 0, 10000) < 0)
+    if (hci_le_set_scan_enable(dd, 0x00, 1, 10000) < 0)
         return -1;
-	if (len < 0)
-		return -1;
+    if (len < 0)
+        return -1;
 
-	return 0;
+    return 0;
 }
 
 const char *
