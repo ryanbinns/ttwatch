@@ -254,7 +254,7 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
 /****************************************************************************/
 
 int debug=1;
-int get_activities=0, set_time=0, update_gps=0, use_glonass=0, version=0, daemonize=0, new_pair=1;
+int get_activities=0, set_time=0, update_gps=0, use_glonass=0, version=0, daemonize=0, new_pair=1, default_addr_type=1;
 int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
@@ -276,6 +276,9 @@ struct poptOption options[] = {
     { "daemon", 0, POPT_ARG_NONE, &daemonize, 0, "Run as a daemon which will try to connect repeatedly" },
     { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 0, "Wait time after successful connection to watch", "SECONDS" },
     { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 10, "Wait time after failed connection to watch", "SECONDS" },
+#ifdef ADDR_TYPE
+    { "addr-type", 0, POPT_ARG_VAL, &default_addr_type, 0, "Change device BLE address type from random to public." },
+#endif
 //    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
     POPT_AUTOHELP
     POPT_TABLEEND
@@ -287,7 +290,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
-    uint8_t dst_bdaddr_type = BDADDR_LE_RANDOM; // default for v1 devices
+    uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_RANDOM : BDADDR_LE_PUBLIC; // default for v1 devices
     int success = false;
     time_t last_qfg_update;
     int write_delay;
