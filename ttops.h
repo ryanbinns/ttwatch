@@ -8,6 +8,7 @@
 #define NEWEST_TESTED_FIRMWARE "1.8.46"
 #define IS_TESTED_MODEL(model) (strcmp((model),"1001")==0 || strcmp((model),"1002")==0 || strcmp((model),"1003")==0 || strcmp((model),"1004")==0)
 
+#define H_PPCP 0x000b       // need to get the correct handle here from @drkingpo
 #define H_PASSCODE 0x0032
 #define H_MAGIC 0x0035
 #define H_CMD_STATUS 0x0025

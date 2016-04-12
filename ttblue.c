@@ -426,8 +426,8 @@ int main(int argc, const char **argv)
         // figure out the maximum speed at which we can send packets to the device from
         // the Preferred Peripheral Connection Parameters
         struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
-        if (att_read(fd, 0x000b, &ppcp) < 0) {
-            fprintf(stderr, "Could not read device PPCP (handle 0x000b): %s (%d)", strerror(errno), errno);
+        if (att_read(fd, H_PPCP, &ppcp) < 0) {
+            fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", H_PPCP, strerror(errno), errno);
             if (first) goto fatal; else goto fail;
         } else {
             ppcp.min_interval = btohs(ppcp.min_interval);
