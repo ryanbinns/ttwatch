@@ -290,7 +290,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
-    uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_RANDOM : BDADDR_LE_PUBLIC; // default for v1 devices
+    uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM; // default is reversed for v2 devices
     int success = false;
     time_t last_qfg_update;
     int write_delay;
@@ -409,6 +409,7 @@ int main(int argc, const char **argv)
             goto fail;
         }
 
+#ifdef H_PPCP
         do {
             result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
                                         0x0006 /* min_interval */,
@@ -443,6 +444,10 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
             }
         }
+#else
+        // Educated guess that it's the same as for the known v1 devices
+        write_delay = 100000; // (microseconds)
+#endif
 
         // check that it's actually a TomTom device with compatible firmware version
         struct ble_dev_info *info = tt_check_device_version(fd, first);
@@ -577,8 +582,11 @@ int main(int argc, const char **argv)
                                     fprintf(stderr, " FAILED\n");
                             }
                         }
-                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        tt_delete_file(fd, fileno);
+
+                        // Don't try to delete activity files on v2 devices until we have some idea that it works
+                        fprintf(stderr, "    ACTIVITY FILE IS NOT DELETED (until we know that v2 devices can download okay) ...\n");
+                        //fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        //tt_delete_file(fd, fileno);
                     }
                 }
             }

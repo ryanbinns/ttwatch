@@ -4,17 +4,18 @@
 #include "bbatt.h"
 
 #define EXPECTED_MAKER "TomTom Fitness"
-#define OLDEST_TESTED_FIRMWARE "1.8.34"
-#define NEWEST_TESTED_FIRMWARE "1.8.46"
-#define IS_TESTED_MODEL(model) (strcmp((model),"1001")==0 || strcmp((model),"1002")==0 || strcmp((model),"1003")==0 || strcmp((model),"1004")==0)
+#define OLDEST_TESTED_FIRMWARE "1.1.19" // from @drkingpo's btsnoop_hci.log
+#define NEWEST_TESTED_FIRMWARE "1.1.19" // from @drkingpo's btsnoop_hci.log
+#define IS_TESTED_MODEL(model) (strcmp((model),"2008")==0) // from @drkingpo's btsnoop_hci.log
 
-#define H_PPCP 0x000b       // need to get the correct handle here from @drkingpo
-#define H_PASSCODE 0x0032
-#define H_MAGIC 0x0035
-#define H_CMD_STATUS 0x0025
-#define H_LENGTH 0x0028
-#define H_TRANSFER 0x002b
-#define H_CHECK 0x002e
+// need to get the correct handle here from @drkingpo
+//#define H_PPCP 0x000b
+#define H_PASSCODE 0x0082   // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+#define H_MAGIC 0x0085      // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+#define H_CMD_STATUS 0x0072 // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
+#define H_LENGTH 0x0075     // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
+#define H_TRANSFER 0x0078   // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+#define H_CHECK 0x007b      // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
 
 static inline int
 EXPECT_BYTES(int fd, uint8_t *buf)

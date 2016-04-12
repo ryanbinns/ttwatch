@@ -60,12 +60,14 @@ const char *MODEL_UNTESTED =
     "  Please email dlenski@gmail.com and let me know if it works or not\n";
 
 struct ble_dev_info info[] = {
-    { 0x001e, "maker" },
-    { 0x0016, "serial" },
-    { 0x0003, "user_name" },
-    { 0x0014, "model_name" },
-    { 0x001a, "model_num" },
-    { 0x001c, "firmware" },
+    // from @drkingpo's btsnoop_hci.log: these are all the same as the v1 identifiers (+ 0x30)
+    { 0x004e, "maker" },
+    { 0x0046, "serial" },
+//    TomTom apps don't read this one, so it's not seen in @drkingpo's logs -- need confirmation of the correct handle
+//    { 0x0003, "user_name" }
+    { 0x0044, "model_name" },
+    { 0x004a, "model_num" },
+    { 0x004c, "firmware" },
     { 0 }
 };
 
@@ -105,32 +107,34 @@ tt_authorize(int fd, uint32_t code, bool new_code)
 {
     // authorize with the device
     const uint16_t auth_one = btohs(0x0001);
-    const uint8_t magic_bytes[] = { 0x01, 0x13, 0, 0, 0x01, 0x1f, 0, 0 };
+    const uint8_t magic_bytes[] = { 0x01, 0x15, 0, 0, 0x01, 0x1f, 0, 0 }; // from @drkingpo's btsnoop_hci.log
     uint32_t bcode = htobl(code);
 
     if (new_code) {
-        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
-        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
-        att_write(fd, 0x002f, &auth_one, sizeof auth_one);
-        att_write(fd, 0x0029, &auth_one, sizeof auth_one);
-        att_write(fd, 0x002c, &auth_one, sizeof auth_one);
+        // not seen in @drkingpo's logs -- educated guess
+        att_write(fd, 0x0083, &auth_one, sizeof auth_one);
+        att_wrreq(fd, 0x0073, &auth_one, sizeof auth_one);
+        att_write(fd, 0x007c, &auth_one, sizeof auth_one);
+        att_write(fd, 0x0076, &auth_one, sizeof auth_one);
+        att_write(fd, 0x0079, &auth_one, sizeof auth_one);
         att_wrreq(fd, H_MAGIC, magic_bytes, sizeof magic_bytes);
         att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
     } else {
-        att_write(fd, 0x0033, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_MAGIC, magic_bytes, sizeof magic_bytes);
-        att_write(fd, 0x0026, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
+        // based on btsnoop_hci.log from @drkingpo
+        att_write(fd, 0x0083, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+        att_wrreq(fd, H_MAGIC, magic_bytes, sizeof magic_bytes); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+        att_wrreq(fd, 0x0073, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d, and CHANGED FROM WRITE TO WRREQ
+        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
 
         int res = EXPECT_uint8(fd, H_PASSCODE, 1);
         if (res < 0)
             return res;
 
-        att_write(fd, 0x002f, &auth_one, sizeof auth_one);
-        att_write(fd, 0x0029, &auth_one, sizeof auth_one);
-        att_write(fd, 0x002c, &auth_one, sizeof auth_one);
-        att_wrreq(fd, H_MAGIC, magic_bytes, sizeof magic_bytes);
-        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode);
+        att_write(fd, 0x007c, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
+        att_write(fd, 0x0076, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
+        att_write(fd, 0x0079, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
+        att_wrreq(fd, H_MAGIC, magic_bytes, sizeof magic_bytes); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+        att_wrreq(fd, H_PASSCODE, &bcode, sizeof bcode); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
     }
 
     return EXPECT_uint8(fd, H_PASSCODE, 1);
