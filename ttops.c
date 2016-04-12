@@ -63,8 +63,7 @@ struct ble_dev_info info[] = {
     // from @drkingpo's btsnoop_hci.log: these are all the same as the v1 identifiers (+ 0x30)
     { 0x004e, "maker" },
     { 0x0046, "serial" },
-//    TomTom apps don't read this one, so it's not seen in @drkingpo's logs -- need confirmation of the correct handle
-//    { 0x0003, "user_name" }
+    { 0x0003, "user_name" }, // from gatttool, sent by @drkingpo
     { 0x0044, "model_name" },
     { 0x004a, "model_num" },
     { 0x004c, "firmware" },
@@ -83,6 +82,8 @@ tt_check_device_version(int fd, bool warning)
         p->buf[p->len] = 0;
     }
 
+// Disable all checks and warnings for now
+/*
     if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
         fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
         return NULL;
@@ -96,7 +97,7 @@ tt_check_device_version(int fd, bool warning)
 
     if (warning && !IS_TESTED_MODEL(info[4].buf))
         fprintf(stderr, MODEL_UNTESTED, info[4].buf);
-
+*/
     return info;
 }
 
