@@ -671,6 +671,10 @@ int main(int argc, const char **argv)
 
         success = true;
         first = false;
+        if(set_time) {
+            fprintf(stderr, "Rebooting watch...\n");
+            tt_reboot(fd);
+        }
         close(fd);
         hci_close_dev(dd);
         continue;
