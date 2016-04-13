@@ -279,16 +279,16 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
                 if (att_write(fd, H_TRANSFER, out+20, wlen-20) < 0)
                     goto fail_write;
 
-            if (debug>2) {
-                fprintf(stderr, "%04x: ", (int)(iptr-buf));
-                hexlify(stderr, out, wlen, true);
-            }
-
             iptr += wlen;
 
             // wait between packets, because the devices don't like having them spit out
             // at max speed with min connection interval
             gettimeofday(&now, NULL);
+
+            if (debug>2) {
+                fprintf(stderr, "%010ld.%06ld: %04x: ", now.tv_sec, now.tv_usec, (int)(iptr-buf));
+                hexlify(stderr, out, wlen, true);
+            }
 
             useconds_t elapsed_usec = ((now.tv_sec-lastpkt.tv_sec)*1000000 + now.tv_usec-lastpkt.tv_usec);
             if (elapsed_usec < write_delay) usleep(write_delay - elapsed_usec);
