@@ -63,7 +63,7 @@ struct ble_dev_info info[] = {
     // from @drkingpo's btsnoop_hci.log: these are all the same as the v1 identifiers (+ 0x30)
     { 0x004e, "maker" },
     { 0x0046, "serial" },
-    { 0x0003, "user_name" }, // from gatttool, sent by @drkingpo
+    { 0x0016, "user_name" }, // from gatttool, sent by @drkingpo
     { 0x0044, "model_name" },
     { 0x004a, "model_num" },
     { 0x004c, "firmware" },
