@@ -583,10 +583,8 @@ int main(int argc, const char **argv)
                             }
                         }
 
-                        // Don't try to delete activity files on v2 devices until we have some idea that it works
-                        fprintf(stderr, "    ACTIVITY FILE IS NOT DELETED (until we know that v2 devices can download okay) ...\n");
-                        //fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        //tt_delete_file(fd, fileno);
+                        fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
+                        tt_delete_file(fd, fileno);
                     }
                 }
             }
