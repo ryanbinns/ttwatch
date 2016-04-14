@@ -445,8 +445,8 @@ int main(int argc, const char **argv)
             }
         }
 #else
-        // Educated guess that it's the same as for the known v1 devices
-        write_delay = 100000; // (microseconds)
+        // With no attempt to speed up the connection, we shouldn't need any write_delay
+        write_delay = 0;
 #endif
 
         // check that it's actually a TomTom device with compatible firmware version
