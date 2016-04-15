@@ -400,7 +400,7 @@ int main(int argc, const char **argv)
             goto fail;
         }
 
-        // request minimum connection interval
+        // we need the hci_handle too
         struct l2cap_conninfo l2cci;
         int length = sizeof l2cci;
         int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
@@ -409,6 +409,10 @@ int main(int argc, const char **argv)
             goto fail;
         }
 
+        time_t now = time(NULL);
+        fprintf(stderr, "Connected at %.24s.\n", ctime(&now));
+
+        // request minimum connection interval
         do {
             result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
                                         0x0006 /* min_interval */,
@@ -418,29 +422,32 @@ int main(int argc, const char **argv)
                                         2000);
         } while (errno==ETIMEDOUT);
         if (result < 0) {
-            if (errno==EPERM && first)
+            if (errno==EPERM && first) {
                 fputs(PLEASE_SETCAP_ME, stderr);
-            else {
+                write_delay = 0; // we couldn't speed up the connection, so no write_delay
+            } else {
                 perror("hci_le_conn_update");
                 goto fail;
             }
-        }
-
-        // figure out the maximum speed at which we can send packets to the device from
-        // the Preferred Peripheral Connection Parameters
-        struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
-        if (att_read(fd, H_PPCP, &ppcp) < 0) {
-            fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", H_PPCP, strerror(errno), errno);
-            if (first) goto fatal; else goto fail;
         } else {
-            ppcp.min_interval = btohs(ppcp.min_interval);
-            ppcp.max_interval = btohs(ppcp.max_interval);
-            ppcp.slave_latency = btohs(ppcp.slave_latency);
-            ppcp.timeout_mult = btohs(ppcp.timeout_mult);
-            write_delay = 1250 * ppcp.min_interval; // (microseconds)
-            if (debug > 1) {
-                fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
-                fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+            // we successfully decreased the connection interval, but the device can't
+            // actually handle packets being written to it this quickly, so we
+            // figure out the maximum safe speed at which we can send packets to the device from
+            // the Preferred Peripheral Connection Parameters
+            struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
+            if (att_read(fd, H_PPCP, &ppcp) < 0) {
+                fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", H_PPCP, strerror(errno), errno);
+                if (first) goto fatal; else goto fail;
+            } else {
+                ppcp.min_interval = btohs(ppcp.min_interval);
+                ppcp.max_interval = btohs(ppcp.max_interval);
+                ppcp.slave_latency = btohs(ppcp.slave_latency);
+                ppcp.timeout_mult = btohs(ppcp.timeout_mult);
+                write_delay = 1250 * ppcp.min_interval; // (microseconds)
+                if (debug > 1) {
+                    fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
+                    fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+                }
             }
         }
 
@@ -451,8 +458,6 @@ int main(int argc, const char **argv)
         }
 
         // show device identifiers if --version
-        time_t now = time(NULL);
-        fprintf(stderr, "Connected at %.24s.\n", ctime(&now));
         if (version && first) {
             for (struct ble_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
