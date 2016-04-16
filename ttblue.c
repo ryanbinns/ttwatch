@@ -291,7 +291,7 @@ int main(int argc, const char **argv)
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
     uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_RANDOM : BDADDR_LE_PUBLIC; // default for v1 devices
-    int success = false;
+    int needs_reboot = false, success = false;
     time_t last_qfg_update;
     int write_delay;
 
@@ -531,6 +531,7 @@ int main(int argc, const char **argv)
                         tt_delete_file(fd, 0x00850000);
                         tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
                         att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x85, 0x00, 0x00), 4); // update magic?
+                        needs_reboot = true;
                     }
                 }
                 free(fbuf);
@@ -675,11 +676,11 @@ int main(int argc, const char **argv)
 #endif
 
         success = true;
-        first = false;
-        if(set_time) {
+        if(needs_reboot) {
             fprintf(stderr, "Rebooting watch...\n");
             tt_reboot(fd);
         }
+        first = needs_reboot = false;
         close(fd);
         hci_close_dev(dd);
         continue;
@@ -688,6 +689,7 @@ int main(int argc, const char **argv)
     preopen_fail:
         hci_close_dev(dd);
         success = false;
+        fprintf(stderr, "Failed communication with watch.\n");
     }
 
     return 0;
@@ -696,5 +698,6 @@ fatal:
     close(fd);
 pre_fatal:
     hci_close_dev(dd);
+    fprintf(stderr, "Fatal error, exiting.\n");
     return 1;
 }
