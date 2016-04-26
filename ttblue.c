@@ -565,7 +565,7 @@ int main(int argc, const char **argv)
                         goto fail;
                     else {
                         if (postproc) {
-                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
+                            fprintf(stderr, "    Postprocessing with %s ...\n", postproc);
                             fflush(stderr);
 
                             switch (fork()) {
@@ -573,14 +573,9 @@ int main(int argc, const char **argv)
                                 dup2(1, 2); // redirect stdout to stderr
                                 execlp(postproc, postproc, filename, NULL);
                                 exit(1); // if exec fails?
-                            default:
-                                wait(&result);
-                                if (result==0)
-                                    fputc('\n', stderr);
-                                else
-                                // Ridiculous syntax but I'm extremely proud of it :-P
                             case -1:
-                                    fprintf(stderr, " FAILED\n");
+                                fprintf(stderr, "Could not fork: %s (%d)\n", strerror(errno), errno);
+                                goto fatal;
                             }
                         }
                         fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
@@ -689,7 +684,14 @@ int main(int argc, const char **argv)
     preopen_fail:
         hci_close_dev(dd);
         success = false;
-        fprintf(stderr, "Failed communication with watch.\n");
+        fprintf(stderr, "Communication with watch failed...\n");
+
+        // wait for any child processes to finish
+        int child_status;
+        pid_t child_pid;
+        while ((child_pid = wait(&child_status)) >= 0)
+            if (child_status != 0)
+                fprintf(stderr, "WARNING: postprocess failed (pid %d, status %d)\n", child_pid, child_status);
     }
 
     return 0;
