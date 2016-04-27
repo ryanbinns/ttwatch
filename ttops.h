@@ -6,8 +6,8 @@
 #define EXPECTED_MAKER "TomTom Fitness"
 #define OLDEST_TESTED_FIRMWARE "1.1.19" // from @drkingpo's btsnoop_hci.log
 #define NEWEST_TESTED_FIRMWARE "1.1.19" // from @drkingpo's btsnoop_hci.log
-#define IS_TESTED_MODEL(model) (strcmp((model),"2008")==0     // from @drkingpo's btsnoop_hci.log
-                                || strcmp((model),"2006")==0)
+#define IS_TESTED_MODEL(model) (strcmp((model),"2008")==0 \
+                                || strcmp((model),"2006")==0) // from @drkingpo's btsnoop_hci.log
 
 // need to get the correct handle here from @drkingpo
 //#define H_PPCP 0x000b
