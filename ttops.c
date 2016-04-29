@@ -176,6 +176,7 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
     int counter = 0;
 
     time_t startat=time(NULL);
+    struct timeval now;
     while (optr < end) {
         // checkpoint occurs every (256*20-2) data bytes and at EOF
         checkpoint = optr + (256*20-2);
@@ -191,7 +192,8 @@ tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
             check = crc16(optr, rlen, check); // update CRC
 
             if (debug>2) {
-                fprintf(stderr, "%04x: ", (int)(optr-*buf));
+                gettimeofday(&now, NULL);
+                fprintf(stderr, "%010ld.%06ld: %04x: ", now.tv_sec, now.tv_usec, (int)(optr-*buf));
                 hexlify(stderr, optr, rlen, true);
             }
 
