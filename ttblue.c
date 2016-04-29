@@ -291,7 +291,7 @@ int main(int argc, const char **argv)
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr;
     uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM; // default is reversed for v2 devices
-    int success = false;
+    int needs_reboot = false, success = false;
     time_t last_qfg_update;
     int write_delay;
 
@@ -400,7 +400,7 @@ int main(int argc, const char **argv)
             goto fail;
         }
 
-        // request minimum connection interval
+        // we need the hci_handle too
         struct l2cap_conninfo l2cci;
         int length = sizeof l2cci;
         int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
@@ -410,6 +410,10 @@ int main(int argc, const char **argv)
         }
 
 #ifdef H_PPCP
+        time_t now = time(NULL);
+        fprintf(stderr, "Connected at %.24s.\n", ctime(&now));
+
+        // request minimum connection interval
         do {
             result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
                                         0x0006 /* min_interval */,
@@ -419,29 +423,32 @@ int main(int argc, const char **argv)
                                         2000);
         } while (errno==ETIMEDOUT);
         if (result < 0) {
-            if (errno==EPERM && first)
+            if (errno==EPERM && first) {
                 fputs(PLEASE_SETCAP_ME, stderr);
-            else {
+                write_delay = 0; // we couldn't speed up the connection, so no write_delay
+            } else {
                 perror("hci_le_conn_update");
                 goto fail;
             }
-        }
-
-        // figure out the maximum speed at which we can send packets to the device from
-        // the Preferred Peripheral Connection Parameters
-        struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
-        if (att_read(fd, H_PPCP, &ppcp) < 0) {
-            fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", H_PPCP, strerror(errno), errno);
-            if (first) goto fatal; else goto fail;
         } else {
-            ppcp.min_interval = btohs(ppcp.min_interval);
-            ppcp.max_interval = btohs(ppcp.max_interval);
-            ppcp.slave_latency = btohs(ppcp.slave_latency);
-            ppcp.timeout_mult = btohs(ppcp.timeout_mult);
-            write_delay = 1250 * ppcp.min_interval; // (microseconds)
-            if (debug > 1) {
-                fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
-                fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+            // we successfully decreased the connection interval, but the device can't
+            // actually handle packets being written to it this quickly, so we
+            // figure out the maximum safe speed at which we can send packets to the device from
+            // the Preferred Peripheral Connection Parameters
+            struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
+            if (att_read(fd, H_PPCP, &ppcp) < 0) {
+                fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", H_PPCP, strerror(errno), errno);
+                if (first) goto fatal; else goto fail;
+            } else {
+                ppcp.min_interval = btohs(ppcp.min_interval);
+                ppcp.max_interval = btohs(ppcp.max_interval);
+                ppcp.slave_latency = btohs(ppcp.slave_latency);
+                ppcp.timeout_mult = btohs(ppcp.timeout_mult);
+                write_delay = 1250 * ppcp.min_interval; // (microseconds)
+                if (debug > 1) {
+                    fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
+                    fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+                }
             }
         }
 #else
@@ -456,8 +463,6 @@ int main(int argc, const char **argv)
         }
 
         // show device identifiers if --version
-        time_t now = time(NULL);
-        fprintf(stderr, "Connected at %.24s.\n", ctime(&now));
         if (version && first) {
             for (struct ble_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
@@ -531,6 +536,7 @@ int main(int argc, const char **argv)
                         tt_delete_file(fd, 0x00850000);
                         tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
                         att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x85, 0x00, 0x00), 4); // update magic?
+                        needs_reboot = true;
                     }
                 }
                 free(fbuf);
@@ -564,7 +570,7 @@ int main(int argc, const char **argv)
                         goto fail;
                     else {
                         if (postproc) {
-                            fprintf(stderr, "    Postprocessing with %s ...", postproc);
+                            fprintf(stderr, "    Postprocessing with %s ...\n", postproc);
                             fflush(stderr);
 
                             switch (fork()) {
@@ -572,14 +578,9 @@ int main(int argc, const char **argv)
                                 dup2(1, 2); // redirect stdout to stderr
                                 execlp(postproc, postproc, filename, NULL);
                                 exit(1); // if exec fails?
-                            default:
-                                wait(&result);
-                                if (result==0)
-                                    fputc('\n', stderr);
-                                else
-                                // Ridiculous syntax but I'm extremely proud of it :-P
                             case -1:
-                                    fprintf(stderr, " FAILED\n");
+                                fprintf(stderr, "Could not fork: %s (%d)\n", strerror(errno), errno);
+                                goto fatal;
                             }
                         }
 
@@ -676,7 +677,11 @@ int main(int argc, const char **argv)
 #endif
 
         success = true;
-        first = false;
+        if(needs_reboot) {
+            fprintf(stderr, "Rebooting watch...\n");
+            tt_reboot(fd);
+        }
+        first = needs_reboot = false;
         close(fd);
         hci_close_dev(dd);
         continue;
@@ -685,6 +690,14 @@ int main(int argc, const char **argv)
     preopen_fail:
         hci_close_dev(dd);
         success = false;
+        fprintf(stderr, "Communication with watch failed...\n");
+
+        // wait for any child processes to finish
+        int child_status;
+        pid_t child_pid;
+        while ((child_pid = wait(&child_status)) >= 0)
+            if (child_status != 0)
+                fprintf(stderr, "WARNING: postprocess failed (pid %d, status %d)\n", child_pid, child_status);
     }
 
     return 0;
@@ -693,5 +706,6 @@ fatal:
     close(fd);
 pre_fatal:
     hci_close_dev(dd);
+    fprintf(stderr, "Fatal error, exiting.\n");
     return 1;
 }

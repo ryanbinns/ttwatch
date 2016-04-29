@@ -142,6 +142,18 @@ tt_authorize(int fd, uint32_t code, bool new_code)
 }
 
 int
+tt_reboot(int fd)
+{
+    // ... then overwhelm the device with a torrent of zeros to the status register
+    uint32_t bork = 0;
+    for (int ii=1; ii<=1000; ii++) {
+        if (att_wrreq(fd, H_CMD_STATUS, &bork, 4) < 0)
+            return ii;
+    }
+    return -1;
+}
+
+int
 tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf)
 {
     *buf = NULL;

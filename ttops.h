@@ -84,5 +84,6 @@ int tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf);
 int tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length, uint32_t write_delay);
 int tt_delete_file(int fd, uint32_t fileno);
 int tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist);
+int tt_reboot(int fd);
 
 #endif /* #ifndef __TTOPS_H__ */
