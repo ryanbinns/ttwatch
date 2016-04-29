@@ -82,12 +82,13 @@ tt_check_device_version(int fd, bool warning)
         p->buf[p->len] = 0;
     }
 
-// Disable all checks and warnings for now
-/*
-    if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
+
+    // Maker field always seems to be blank for v2 devices
+    /* if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
         fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
         return NULL;
-    } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
+    } else */
+    if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
         fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, OLDEST_TESTED_FIRMWARE);
         return NULL;
     }
@@ -97,7 +98,7 @@ tt_check_device_version(int fd, bool warning)
 
     if (warning && !IS_TESTED_MODEL(info[4].buf))
         fprintf(stderr, MODEL_UNTESTED, info[4].buf);
-*/
+
     return info;
 }
 
