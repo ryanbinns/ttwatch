@@ -75,7 +75,7 @@ tt_check_device_version(int fd, bool warning)
     for (struct ble_dev_info *p = info; p->handle; p++) {
         p->len = att_read(fd, p->handle, p->buf);
         if (p->len < 0) {
-            fprintf(stderr, "Could not read device information (handle 0x%04x, %s): %s (%d)", p->handle, p->name, strerror(errno), errno);
+            fprintf(stderr, "Could not read device information (handle 0x%04x, %s): %s (%d)\n", p->handle, p->name, strerror(errno), errno);
             return NULL;
         }
         p->buf[p->len] = 0;
