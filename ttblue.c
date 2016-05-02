@@ -66,7 +66,7 @@ const char *PAIRING_CODE_PROMPT =
 static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
                                 int sec, int verbose)
 {
-    int sock, result;
+    int sock;
     struct sockaddr_l2 srcaddr, dstaddr;
     struct bt_security btsec;
 
@@ -292,7 +292,6 @@ int main(int argc, const char **argv)
     bdaddr_t src_addr, dst_addr;
     uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM; // default is reversed for v2 devices
     int needs_reboot = false, success = false;
-    time_t last_qfg_update;
     int write_delay;
 
     // parse args
@@ -374,7 +373,6 @@ int main(int argc, const char **argv)
         }
 
         // get host Bluetooth address
-        struct hci_dev_info hci_info;
         if (hci_devba(devid, &src_addr) < 0) {
             fprintf(stderr, "Can't get hci%d info: %s (%d)\n", devid, strerror(errno), errno);
             goto pre_fatal;
@@ -402,7 +400,7 @@ int main(int argc, const char **argv)
 
         // we need the hci_handle too
         struct l2cap_conninfo l2cci;
-        int length = sizeof l2cci;
+        socklen_t length = sizeof l2cci;
         int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
         if (result < 0) {
             perror("getsockopt");
@@ -498,7 +496,7 @@ int main(int argc, const char **argv)
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hostname);
         tt_delete_file(fd, 0x00020002);
-        tt_write_file(fd, 0x00020002, false, hostname, strlen(hostname), write_delay);
+        tt_write_file(fd, 0x00020002, false, (uint8_t*)hostname, strlen(hostname), write_delay);
 
 #ifdef DUMP_0x000f20000
         uint32_t fileno = 0x000f20000;
@@ -681,13 +679,13 @@ int main(int argc, const char **argv)
             fprintf(stderr, "Rebooting watch...\n");
             tt_reboot(fd);
         }
-        first = needs_reboot = false;
+        first = false;
+        needs_reboot = false;
         close(fd);
         hci_close_dev(dd);
         continue;
     fail:
         close(fd);
-    preopen_fail:
         hci_close_dev(dd);
         success = false;
         fprintf(stderr, "Communication with watch failed...\n");
