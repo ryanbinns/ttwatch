@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <stdio.h>
+#include <bluetooth/bluetooth.h>
 #include "bbatt.h"
 
 int
@@ -18,7 +19,7 @@ att_read(int fd, uint16_t handle, void *buf)
 {
     int result;
 
-    struct { uint8_t opcode; uint16_t handle; } __attribute__((packed)) pkt = { BT_ATT_OP_READ_REQ, handle };
+    struct { uint8_t opcode; uint16_t handle; } __attribute__((packed)) pkt = { BT_ATT_OP_READ_REQ, htobs(handle) };
     result = send(fd, &pkt, sizeof(pkt), 0);
     if (result<0)
         return result;
@@ -29,7 +30,7 @@ att_read(int fd, uint16_t handle, void *buf)
         return result;
     else if (rpkt.opcode == BT_ATT_OP_ERROR_RSP && result==1+sizeof(struct bt_att_pdu_error_rsp)) {
         struct bt_att_pdu_error_rsp *err = (void *)rpkt.buf;
-        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, err->handle, att_ecode2str(err->ecode));
+        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, btohs(err->handle), att_ecode2str(err->ecode));
         return -2;
     } else if (rpkt.opcode != BT_ATT_OP_READ_RSP) {
         fprintf(stderr, "Expect ATT READ response opcode (0x%02x) but received 0x%02x\n", BT_ATT_OP_READ_RSP, rpkt.opcode);
@@ -46,7 +47,7 @@ att_write(int fd, uint16_t handle, const void *buf, int length)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_CMD;
-    pkt.handle = handle;
+    pkt.handle = htobs(handle);
 
     if (sizeof pkt > BT_ATT_DEFAULT_LE_MTU)
         return -1;
@@ -64,7 +65,7 @@ att_wrreq(int fd, uint16_t handle, const void *buf, int length)
 {
     struct { uint8_t opcode; uint16_t handle; uint8_t buf[length]; } __attribute__((packed)) pkt;
     pkt.opcode = BT_ATT_OP_WRITE_REQ;
-    pkt.handle = handle;
+    pkt.handle = htobs(handle);
 
     if (sizeof pkt > BT_ATT_DEFAULT_LE_MTU)
         return -1;
@@ -80,7 +81,7 @@ att_wrreq(int fd, uint16_t handle, const void *buf, int length)
         return result;
     else if (rpkt.opcode == BT_ATT_OP_ERROR_RSP && result==1+sizeof(struct bt_att_pdu_error_rsp)) {
         struct bt_att_pdu_error_rsp *err = (void *)rpkt.buf;
-        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, err->handle, att_ecode2str(err->ecode));
+        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, btohs(err->handle), att_ecode2str(err->ecode));
         return -2;
     } else if (rpkt.opcode != BT_ATT_OP_WRITE_RSP) {
         fprintf(stderr, "Expected ATT WRITE response opcode (0x%02x) but received 0x%02x\n", BT_ATT_OP_WRITE_RSP, rpkt.opcode);
@@ -100,14 +101,14 @@ att_read_not(int fd, uint16_t *handle, void *buf)
         return result;
     else if (rpkt.opcode == BT_ATT_OP_ERROR_RSP && result==1+sizeof(struct bt_att_pdu_error_rsp)) {
         struct bt_att_pdu_error_rsp *err = (void *)rpkt.buf;
-        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, err->handle, att_ecode2str(err->ecode));
+        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, btohs(err->handle), att_ecode2str(err->ecode));
         return -2;
     } else if (rpkt.opcode != BT_ATT_OP_HANDLE_VAL_NOT) {
         fprintf(stderr, "Expect ATT NOTIFY opcode (0x%02x) but received 0x%02x\n", BT_ATT_OP_HANDLE_VAL_NOT, rpkt.opcode);
         return -2;
     } else {
         int length = result-3;
-        *handle = rpkt.handle;
+        *handle = htobs(rpkt.handle);
         memcpy(buf, rpkt.buf, length);
         return length;
     }
