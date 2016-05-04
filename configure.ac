@@ -33,12 +33,26 @@ AC_CHECK_HEADERS(sys/stat.h, [], [ok=0])
 AC_CHECK_HEADERS(string, [], [ok=0])
 AC_CHECK_HEADERS(vector, [], [ok=0])
 
-AC_CHECK_HEADERS(libusb-1.0/libusb.h, [], [ok=0])
+libusb_header_dir="/usr/include /usr/include/libusb-1.0 /usr/local/include /usr/local/include/libusb-1.0"
+
+found_libusb_h=0
+AC_CHECK_HEADERS(libusb.h, [found_libusb_h=1], [])
+if test "x$found_libusb_h" = x0; then
+    for dir in $libusb_header_dir; do
+        AC_CHECK_HEADERS($dir/libusb.h, [found_libusb_h=1], [])
+        if test "x$found_libusb_h" = x1; then
+            CPPFLAGS="$CPPFLAGS -I$dir"
+            break
+        fi
+    done
+fi
+if test "x$found_libusb_h" = x0; then
+    ok=0
+fi
+
 AC_CHECK_LIB(usb-1.0, libusb_init, [], [ok=0])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#include <libusb-1.0/libusb.h>
-]],
-[[
+#include <libusb.h>
 #ifdef LIBUSB_API_VERSION
 #   if LIBUSB_API_VERSION < 0x01000102
 #       error "LIBUSB Version too old"
@@ -52,6 +66,8 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #       error "Unable to determine LIBUSB version"
 #   endif
 #endif
+]],
+[[
 ]])],
 [], [AC_MSG_ERROR([[The libusb version must be 1.0.16 or higher]])])
 
@@ -59,9 +75,7 @@ AC_CHECK_HEADERS(curl/curl.h, [], [ok=0])
 AC_CHECK_LIB(curl, curl_easy_init, [], [ok=0])
 
 if test "x$with_unsafe" = xyes; then
-    AC_SUBST(unsafe, [-DUNSAFE])
-else
-    AC_SUBST(unsafe, [ ])
+    CPPFLAGS="$CPPFLAGS -DUNSAFE"
 fi
 
 if test "x$ok" = x1; then

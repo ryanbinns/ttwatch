@@ -8,7 +8,7 @@
 #define __LIBTTWATCH_H__
 
 #include <stdint.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 #ifdef __cplusplus
 extern "C" {

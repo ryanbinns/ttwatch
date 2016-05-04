@@ -2,7 +2,7 @@
 
 export CC = @CC@
 export AR = @AR@
-export CFLAGS = @unsafe@ -Wall -Wextra -Wno-unused-parameter
+export CFLAGS = @CPPFLAGS@ -Wall -Wextra -Wno-unused-parameter
 export PREFIX = @prefix@
 
 all:

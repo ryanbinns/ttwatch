@@ -23,8 +23,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <libusb-1.0/libusb.h>
-
 #include <curl/curl.h>
 
 /*************************************************************************************************/

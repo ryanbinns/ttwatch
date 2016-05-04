@@ -620,7 +620,6 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
-unsafe
 EGREP
 GREP
 CXXCPP
@@ -3888,19 +3887,45 @@ fi
 done
 
 
-for ac_header in libusb-1.0/libusb.h
-do :
-  ac_fn_cxx_check_header_mongrel "$LINENO" "libusb-1.0/libusb.h" "ac_cv_header_libusb_1_0_libusb_h" "$ac_includes_default"
-if test "x$ac_cv_header_libusb_1_0_libusb_h" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBUSB_1_0_LIBUSB_H 1
-_ACEOF
+libusb_header_dir="/usr/include /usr/include/libusb-1.0 /usr/local/include /usr/local/include/libusb-1.0"
 
-else
-  ok=0
+found_libusb_h=0
+for ac_header in libusb.h
+do :
+  ac_fn_cxx_check_header_mongrel "$LINENO" "libusb.h" "ac_cv_header_libusb_h" "$ac_includes_default"
+if test "x$ac_cv_header_libusb_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBUSB_H 1
+_ACEOF
+ found_libusb_h=1
 fi
 
 done
+
+if test "x$found_libusb_h" = x0; then
+    for dir in $libusb_header_dir; do
+        for ac_header in $dir/libusb.h
+do :
+  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+ac_fn_cxx_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
+if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+_ACEOF
+ found_libusb_h=1
+fi
+
+done
+
+        if test "x$found_libusb_h" = x1; then
+            CPPFLAGS="$CPPFLAGS -I$dir"
+            break
+        fi
+    done
+fi
+if test "x$found_libusb_h" = x0; then
+    ok=0
+fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for libusb_init in -lusb-1.0" >&5
 $as_echo_n "checking for libusb_init in -lusb-1.0... " >&6; }
@@ -3952,12 +3977,7 @@ fi
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <libusb-1.0/libusb.h>
-
-int
-main ()
-{
-
+#include <libusb.h>
 #ifdef LIBUSB_API_VERSION
 #   if LIBUSB_API_VERSION < 0x01000102
 #       error "LIBUSB Version too old"
@@ -3971,6 +3991,11 @@ main ()
 #       error "Unable to determine LIBUSB version"
 #   endif
 #endif
+
+int
+main ()
+{
+
 
   ;
   return 0;
@@ -4046,11 +4071,10 @@ fi
 
 
 if test "x$with_unsafe" = xyes; then
-    unsafe=-DUNSAFE
-
-else
-    unsafe=
-
+    CPPFLAGS="$CPPFLAGS -DUNSAFE"
+#    AC_SUBST(unsafe, [-DUNSAFE])
+#else
+#    AC_SUBST(unsafe, [ ])
 fi
 
 if test "x$ok" = x1; then
