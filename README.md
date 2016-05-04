@@ -33,6 +33,11 @@ before attempting to build it.
 2. `libusb` 1.0.16 or later (tested against version 1.0.19).
    Available from http://sourceforge.net/projects/libusb/
 
+Prebuilt packages should be available for most systems using the system's
+built in package manager (dpkg, yum, apt, rpm etc...). Make sure that the
+`-dev` version of the packages (eg. `libssl-dev`, `libcurl-dev`, `libusb-1.0-0-dev`)
+are installed so that the headers are available.
+
 Build Instructions
 ==================
 
