@@ -676,6 +676,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 with_unsafe
+with_freebsd
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1298,6 +1299,7 @@ Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-unsafe           enable unsafe functions
+  --with-freebsd          enable FreeBSD support
 
 Some influential environment variables:
   CC          C compiler command
@@ -2066,6 +2068,12 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # Check whether --with-unsafe was given.
 if test "${with_unsafe+set}" = set; then :
   withval=$with_unsafe;
+fi
+
+
+# Check whether --with-freebsd was given.
+if test "${with_freebsd+set}" = set; then :
+  withval=$with_freebsd;
 fi
 
 
@@ -2851,12 +2859,6 @@ esac
 if test "x$ac_cv_prog_cc_c89" != xno; then :
 
 fi
-
-ac_ext=c
-ac_cpp='$CPP $CPPFLAGS'
-ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
-ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
-ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
@@ -3927,13 +3929,21 @@ if test "x$found_libusb_h" = x0; then
     ok=0
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for libusb_init in -lusb-1.0" >&5
-$as_echo_n "checking for libusb_init in -lusb-1.0... " >&6; }
-if ${ac_cv_lib_usb_1_0_libusb_init+:} false; then :
+libusb_library=usb-1.0
+if test "x$with_freebsd" = xyes; then
+    libusb_library=usb
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: FreeBSD mode enabled - skipping libusb version check" >&5
+$as_echo "$as_me: WARNING: FreeBSD mode enabled - skipping libusb version check" >&2;}
+fi
+
+as_ac_Lib=`$as_echo "ac_cv_lib_$libusb_library''_libusb_init" | $as_tr_sh`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for libusb_init in -l$libusb_library" >&5
+$as_echo_n "checking for libusb_init in -l$libusb_library... " >&6; }
+if eval \${$as_ac_Lib+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-lusb-1.0  $LIBS"
+LIBS="-l$libusb_library  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -3953,42 +3963,46 @@ return libusb_init ();
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_usb_1_0_libusb_init=yes
+  eval "$as_ac_Lib=yes"
 else
-  ac_cv_lib_usb_1_0_libusb_init=no
+  eval "$as_ac_Lib=no"
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_usb_1_0_libusb_init" >&5
-$as_echo "$ac_cv_lib_usb_1_0_libusb_init" >&6; }
-if test "x$ac_cv_lib_usb_1_0_libusb_init" = xyes; then :
+eval ac_res=\$$as_ac_Lib
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+if eval test \"x\$"$as_ac_Lib"\" = x"yes"; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBUSB_1_0 1
+#define `$as_echo "HAVE_LIB$libusb_library" | $as_tr_cpp` 1
 _ACEOF
 
-  LIBS="-lusb-1.0 $LIBS"
+  LIBS="-l$libusb_library $LIBS"
 
 else
   ok=0
 fi
 
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+if test "x$with_freebsd" != xyes; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking that the libusb version is 1.0.16 or higher" >&5
+$as_echo_n "checking that the libusb version is 1.0.16 or higher... " >&6; }
+    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
 #include <libusb.h>
 #ifdef LIBUSB_API_VERSION
 #   if LIBUSB_API_VERSION < 0x01000102
-#       error "LIBUSB Version too old"
+#       LIBUSB Version too old
 #   endif
 #else
 #   ifdef LIBUSBX_API_VERSION
 #       if LIBUSBX_API_VERSION < 0x01000102
-#           error "LIBUSB Version too old"
+#           LIBUSB Version too old
 #       endif
 #   else
-#       error "Unable to determine LIBUSB version"
+#       Unable to determine LIBUSB version
 #   endif
 #endif
 
@@ -3996,17 +4010,20 @@ int
 main ()
 {
 
-
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_cxx_try_compile "$LINENO"; then :
-
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
 else
-  as_fn_error $? "The libusb version must be 1.0.16 or higher" "$LINENO" 5
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+     as_fn_error $? "The libusb version must be 1.0.16 or higher" "$LINENO" 5
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
 
 for ac_header in curl/curl.h
 do :
@@ -4071,10 +4088,7 @@ fi
 
 
 if test "x$with_unsafe" = xyes; then
-    CPPFLAGS="$CPPFLAGS -DUNSAFE"
-#    AC_SUBST(unsafe, [-DUNSAFE])
-#else
-#    AC_SUBST(unsafe, [ ])
+    CFLAGS="$CFLAGS -DUNSAFE"
 fi
 
 if test "x$ok" = x1; then

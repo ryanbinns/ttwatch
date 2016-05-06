@@ -2,7 +2,8 @@
 
 export CC = @CC@
 export AR = @AR@
-export CFLAGS = @CPPFLAGS@ -Wall -Wextra -Wno-unused-parameter
+export CFLAGS = @CPPFLAGS@ @CFLAGS@ -Wall -Wextra -Wno-unused-parameter
+export LDFLAGS = @LDFLAGS@
 export PREFIX = @prefix@
 
 all:

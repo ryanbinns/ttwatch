@@ -1,10 +1,10 @@
 AC_INIT(ttwatch, version-0.1)
 
-AC_ARG_WITH(unsafe, [  --with-unsafe           enable unsafe functions])
+AC_ARG_WITH(unsafe, [AS_HELP_STRING([--with-unsafe], [enable unsafe functions])])
+AC_ARG_WITH(freebsd, [AS_HELP_STRING([--with-freebsd], [enable FreeBSD support])])
 
 AC_PROG_CC
-AC_LANG(C)
-AC_LANG(C++)
+AC_LANG([C++])
 
 AN_MAKEVAR([AR], [AC_PROG_AR])
 AN_PROGRAM([ar], [AC_PROG_AR])
@@ -50,32 +50,42 @@ if test "x$found_libusb_h" = x0; then
     ok=0
 fi
 
-AC_CHECK_LIB(usb-1.0, libusb_init, [], [ok=0])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+libusb_library=usb-1.0
+if test "x$with_freebsd" = xyes; then
+    libusb_library=usb
+    AC_MSG_WARN([FreeBSD mode enabled - skipping libusb version check])
+fi
+
+AC_CHECK_LIB($libusb_library, libusb_init, [], [ok=0])
+if test "x$with_freebsd" != xyes; then
+    AC_MSG_CHECKING([that the libusb version is 1.0.16 or higher])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <libusb.h>
 #ifdef LIBUSB_API_VERSION
 #   if LIBUSB_API_VERSION < 0x01000102
-#       error "LIBUSB Version too old"
+#       LIBUSB Version too old
 #   endif
 #else
 #   ifdef LIBUSBX_API_VERSION
 #       if LIBUSBX_API_VERSION < 0x01000102
-#           error "LIBUSB Version too old"
+#           LIBUSB Version too old
 #       endif
 #   else
-#       error "Unable to determine LIBUSB version"
+#       Unable to determine LIBUSB version
 #   endif
 #endif
-]],
-[[
-]])],
-[], [AC_MSG_ERROR([[The libusb version must be 1.0.16 or higher]])])
+    ]],
+    [[]])],
+    [AC_MSG_RESULT([yes])],
+    [AC_MSG_RESULT([no])
+     AC_MSG_ERROR([The libusb version must be 1.0.16 or higher])])
+fi
 
 AC_CHECK_HEADERS(curl/curl.h, [], [ok=0])
 AC_CHECK_LIB(curl, curl_easy_init, [], [ok=0])
 
 if test "x$with_unsafe" = xyes; then
-    CPPFLAGS="$CPPFLAGS -DUNSAFE"
+    CFLAGS="$CFLAGS -DUNSAFE"
 fi
 
 if test "x$ok" = x1; then
