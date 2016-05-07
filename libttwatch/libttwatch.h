@@ -634,6 +634,9 @@ int ttwatch_delete_history_entry(TTWATCH *watch, TTWATCH_ACTIVITY activity, int 
 ******************************************************************************/
 void ttwatch_show_packets(int show);
 
+/* Export the packet printing function for ttpcap */
+void pretty_print_packet(uint8_t *packet, uint8_t size);
+
 /******************************************************************************
 * Retrieves the library version.                                              *
 ******************************************************************************/

@@ -2123,6 +2123,7 @@ int main(int argc, char *argv[])
         { "set-time",       no_argument,       &options->set_time,        1 },
         { "get-activities", no_argument,       &options->get_activities,  1 },
         { "packets",        no_argument,       &options->show_packets,    1 },
+        { "pretty",         no_argument,       &options->pretty_packets,  1 },
         { "devices",        no_argument,       &options->list_devices,    1 },
         { "get-formats",    no_argument,       &options->list_formats,    1 },
         { "get-name",       no_argument,       &options->get_name,        1 },
@@ -2407,6 +2408,8 @@ int main(int argc, char *argv[])
 
     if (options->show_packets)
         ttwatch_show_packets(1);
+    if (options->pretty_packets)
+        ttwatch_show_packets(2);
 
     if (options->list_devices)
     {
