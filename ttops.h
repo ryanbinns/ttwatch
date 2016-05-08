@@ -9,8 +9,7 @@
 #define IS_TESTED_MODEL(model) (strcmp((model),"2008")==0 \
                                 || strcmp((model),"2006")==0) // from @drkingpo's btsnoop_hci.log
 
-// need to get the correct handle here from @drkingpo
-//#define H_PPCP 0x000b
+#undef H_PPCP               // from @drkingpo's gatttool logs, there is no PPCP for the v2 devices
 #define H_PASSCODE 0x0082   // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
 #define H_MAGIC 0x0085      // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
 #define H_CMD_STATUS 0x0072 // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
