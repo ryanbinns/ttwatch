@@ -66,6 +66,24 @@ EXPECT_LENGTH(int fd)
 }
 
 static inline int
+EXPECT_ANY_uint32(int fd, uint16_t handle, uint32_t *val)
+{
+    uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
+    uint16_t h;
+    int length = att_read_not(fd, &h, buf);
+    if (length < 0)
+        return length;
+    else if ((h != handle) || (length != 4)) {
+        fprintf(stderr, "Expected 0x%04x <- (uint32_t), but got:\n  0x%04x <- ", handle, h);
+        hexlify(stderr, buf, length, true);
+        return -1;
+    }
+    if (val)
+        *val = btohl(*((uint32_t*)buf));
+    return 0;
+}
+
+static inline int
 EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
 {
     uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
