@@ -377,7 +377,7 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
     }
 
     // fix endianness
-    for (int ii; ii<n_files; ii++)
+    for (int ii=0; ii<n_files; ii++)
         list[ii] = btohs(list[ii]);
 
     if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0) {
