@@ -294,8 +294,12 @@ tt_read_file(TTDEV *d, uint32_t fileno, int debug, uint8_t **buf)
         }
     }
 
-    if (EXPECT_uint32(d, d->h->cmd_status, 0) < 0)
+    uint32_t status;
+    if (EXPECT_ANY_uint32(d, d->h->cmd_status, &status) < 0)
         goto fail;
+    else if (status!=0)
+        fprintf(stderr, "tt_read_file: status=0x%08x (please send log to dlenski@gmail.com)\n", status);
+
     return optr-*buf;
 
 fail:
@@ -391,8 +395,12 @@ tt_write_file(TTDEV *d, uint32_t fileno, int debug, const uint8_t *buf, uint32_t
         }
     }
 
-    if (EXPECT_uint32(d, d->h->cmd_status, 0) < 0)
+    uint32_t status;
+    if (EXPECT_ANY_uint32(d, d->h->cmd_status, &status) < 0)
         return -1;
+    else if (status!=0)
+        fprintf(stderr, "tt_write_file: status=0x%08x (please send log to dlenski@gmail.com)\n", status);
+
     return iptr-buf;
 
 fail_write:
