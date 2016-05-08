@@ -223,7 +223,7 @@ fail:
     fprintf(stderr, "File read failed at byte position %d of %d\n", (int)(optr-*buf), flen);
     perror("fail");
 prealloc_fail:
-    return -EBADMSG;
+    return -1;
 }
 
 int
@@ -235,7 +235,7 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     uint8_t cmd[] = {0, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
     if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
-       return -EBADMSG;
+       return -1;
 
     uint32_t flen = htobl(length);
     att_wrreq(fd, H_LENGTH, &flen, sizeof flen);
@@ -312,13 +312,13 @@ tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t l
     }
 
     if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
-        return -EBADMSG;
+        return -1;
     return iptr-buf;
 
 fail_write:
     fprintf(stderr, "File write failed at byte position %d of %d\n", (int)(iptr-buf), length);
     perror("fail");
-    return -EBADMSG;
+    return -1;
 }
 
 int
@@ -330,7 +330,7 @@ tt_delete_file(int fd, uint32_t fileno)
     uint8_t cmd[] = {4, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
     if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
-        return -EBADMSG;
+        return -1;
 
     // discard H_TRANSFER packets which I don't understand until we get H_CMD_STATUS<-0
     uint16_t handle;
@@ -341,7 +341,7 @@ tt_delete_file(int fd, uint32_t fileno)
         if (handle==H_CMD_STATUS && rlen==4 && (*(uint32_t*)rbuf==0))
             return 0;
         else if (handle!=H_TRANSFER)
-            return -EBADMSG;
+            return -1;
     }
 }
 
@@ -355,13 +355,13 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
     uint8_t cmd[] = {3, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(fd, H_CMD_STATUS, cmd, sizeof cmd);
     if (EXPECT_uint32(fd, H_CMD_STATUS, 1) < 0)
-        return -EBADMSG;
+        return -1;
 
     // read first packet (normally there's only one)
     uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
     int rlen = EXPECT_BYTES(fd, rbuf);
     if (rlen<2)
-        return -EBADMSG;
+        return -1;
     int n_files = btohs(*(uint16_t*)rbuf);
     uint16_t *list = *outlist = calloc(sizeof(uint16_t), n_files);
     void *optr = mempcpy(list, rbuf+2, rlen-2);
@@ -372,7 +372,7 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
         hexlify(stdout, optr, rlen, true);
         if (rlen<0) {
             free(list);
-            return -EBADMSG;
+            return -1;
         }
     }
 
@@ -382,7 +382,7 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
 
     if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0) {
         free(list);
-        return -EBADMSG;
+        return -1;
     }
 
     return n_files;
