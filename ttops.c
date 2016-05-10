@@ -334,11 +334,11 @@ tt_delete_file(int fd, uint32_t fileno)
 
     // discard H_TRANSFER packets which I don't understand until we get H_CMD_STATUS<-0
     uint16_t handle;
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint32_t out; } r;
     int rlen;
     for (;;) {
-        rlen = att_read_not(fd, &handle, rbuf);
-        if (handle==H_CMD_STATUS && rlen==4 && (*(uint32_t*)rbuf==0))
+        rlen = att_read_not(fd, &handle, r.buf);
+        if (handle==H_CMD_STATUS && rlen==4 && r.out==0)
             return 0;
         else if (handle!=H_TRANSFER)
             return -1;
@@ -358,13 +358,13 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
         return -1;
 
     // read first packet (normally there's only one)
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    int rlen = EXPECT_BYTES(fd, rbuf);
+    union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint16_t vals[0]; } r;
+    int rlen = EXPECT_BYTES(fd, r.buf);
     if (rlen<2)
         return -1;
-    int n_files = btohs(*(uint16_t*)rbuf);
+    int n_files = btohs(r.vals[0]);
     uint16_t *list = *outlist = calloc(sizeof(uint16_t), n_files);
-    void *optr = mempcpy(list, rbuf+2, rlen-2);
+    void *optr = mempcpy(list, r.vals+1, rlen-2);
 
     // read rest of packets (if we have a long file list?)
     for (; optr < (void *)(list+n_files); optr += rlen) {

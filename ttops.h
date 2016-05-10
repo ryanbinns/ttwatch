@@ -51,30 +51,30 @@ EXPECT_BYTES(int fd, uint8_t *buf)
 static inline int
 EXPECT_LENGTH(int fd)
 {
-    uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
+    union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint32_t out; } r;
     uint16_t handle;
-    int length = att_read_not(fd, &handle, buf);
+    int length = att_read_not(fd, &handle, r.buf);
     if (length < 0)
         return length;
     else if ((handle != H_LENGTH) || (length != 4)) {
         fprintf(stderr, "Expected 0x%04x <- (uint32_t)LENGTH, but got:\n  0x%04x <- ", H_LENGTH, handle);
-        hexlify(stderr, buf, length, true);
+        hexlify(stderr, r.buf, length, true);
         return -1;
     }
-    return btohl(*((uint32_t*)buf));
+    return btohl(r.out);
 }
 
 static inline int
 EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
 {
-    uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
+    union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint32_t out; } r;
     uint16_t h;
-    int length = att_read_not(fd, &h, buf);
+    int length = att_read_not(fd, &h, r.buf);
     if (length < 0)
         return length;
-    else if ((h != handle) || (length != 4) || (btohl(*((uint32_t*)buf))!=val)) {
+    else if ((h != handle) || (length != 4) || (btohl(r.out)!=val)) {
         fprintf(stderr, "Expected 0x%04x <- (uint32_t)0x%08x, but got:\n  0x%04x <- ", handle, val, h);
-        hexlify(stderr, buf, length, true);
+        hexlify(stderr, r.buf, length, true);
         return -1;
     }
     return 0;
