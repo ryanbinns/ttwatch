@@ -369,21 +369,20 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
     // read rest of packets (if we have a long file list?)
     for (; optr < (void *)(list+n_files); optr += rlen) {
         rlen=EXPECT_BYTES(fd, optr);
-        hexlify(stdout, optr, rlen, true);
-        if (rlen<0) {
-            free(list);
-            return -1;
-        }
+        if (rlen<0)
+            goto fail;
     }
 
     // fix endianness
     for (int ii=0; ii<n_files; ii++)
         list[ii] = btohs(list[ii]);
 
-    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0) {
-        free(list);
-        return -1;
-    }
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
+        goto fail;
 
     return n_files;
+
+fail:
+    free(list);
+    return -1;
 }
