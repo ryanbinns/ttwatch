@@ -525,7 +525,6 @@ int main(int argc, const char **argv)
                         *watch_timezone = htobl(lt->tm_gmtoff);
                         tt_delete_file(fd, 0x00850000);
                         tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
-                        att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x85, 0x00, 0x00), 4); // update magic?
                         needs_reboot = true;
                     }
                 }
@@ -586,25 +585,28 @@ int main(int argc, const char **argv)
 
             time_t last_qfg_update = 0;
             uint32_t fileno = 0x00020001;
-            if (update_gps > 1) {
-                /* forced update */
-            } else if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 6) {
+            if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 6) {
                 fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
+                last_qfg_update = -1;
             } else {
-                struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
-                                  .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
-                last_qfg_update = timegm(&tmp);
+                if ((fbuf[0x02] | fbuf[0x03] | fbuf[0x04] | fbuf[0x05]) != 0) {
+                    struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
+                                      .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
+                    last_qfg_update = timegm(&tmp);
+                }
 #ifdef DUMP_0x00020001
                 save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
 #endif
                 free(fbuf);
             }
 
-            if (time(NULL) - last_qfg_update < 24*3600) {
-                fprintf(stderr, "  No update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
+            if (update_gps <= 1 && time(NULL) - last_qfg_update < 24*3600) {
+                fprintf(stderr, "  No GPS update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
             } else {
-                if (last_qfg_update)
-                    fprintf(stderr, "  Last update was at %.24s.\n", ctime(&last_qfg_update));
+                if (last_qfg_update != -1 && last_qfg_update != 0)
+                    fprintf(stderr, "  Last GPS update was at %.24s.\n", ctime(&last_qfg_update));
+                else
+                    fprintf(stderr, "  Last GPS update unknown.\n");
 
                 CURLcode res;
                 char curlerr[CURL_ERROR_SIZE];
@@ -644,8 +646,12 @@ int main(int argc, const char **argv)
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
                                 goto fail;
-                            } else
-                                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                            } else if (last_qfg_update == 0 || update_gps >= 3) {
+                                // official TomTom Android app seems to only issue this
+                                // "magic" update command when the GPS is brand new or
+                                // after a factory reset, or with 3x --update-gps
+                                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+                            }
                         }
                     }
                 }
