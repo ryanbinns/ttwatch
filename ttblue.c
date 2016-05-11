@@ -503,6 +503,7 @@ int main(int argc, const char **argv)
 
         if (set_time) {
             uint32_t fileno = 0x00850000;
+            fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", fileno);
             if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
                 fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", fileno);
             } else {
@@ -521,7 +522,7 @@ int main(int argc, const char **argv)
                     struct tm *lt = localtime(&t);
 
                     if (btohl(*watch_timezone) != lt->tm_gmtoff) {
-                        fprintf(stderr, "Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
+                        fprintf(stderr, "  Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htobl(lt->tm_gmtoff);
                         tt_delete_file(fd, 0x00850000);
                         tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
