@@ -136,6 +136,10 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 /**
  * based on bluez/tools/hcitool.c
  *
+ * If dst is set to all zeros (BDADDRY_ANY), then it returns the 
+ * first TomTom device address seen, otherwise it waits for the
+ * exact matching address.
+ *
  */
 
 static void
@@ -149,6 +153,7 @@ hci_tt_scan(int dd, bdaddr_t *dst, uint8_t *dst_type, int verbose)
     int len;
     socklen_t olen = sizeof(of);
     char addr_str[18];
+    le_advertising_info *info;
 
     hci_le_set_scan_enable(dd, 0, 0, 10000); // disable in case already enabled
     if (hci_le_set_scan_parameters(dd, /* passive */ 0x00, htobs(0x10), htobs(0x10), LE_PUBLIC_ADDRESS, 0x00, 10000) < 0) {
@@ -184,27 +189,30 @@ hci_tt_scan(int dd, bdaddr_t *dst, uint8_t *dst_type, int verbose)
 
         evt_le_meta_event *meta = (void *)(buf + HCI_EVENT_HDR_SIZE + 1);
         if (meta->subevent == EVT_LE_ADVERTISING_REPORT) {
-            le_advertising_info *info = (void *)(meta->data + 1);
+            info = (void *)(meta->data + 1);
             ba2str(&info->bdaddr, addr_str);
             if (!strncmp(addr_str, "E4:04:39", 8)) {
                 fprintf(stderr, "Saw a TomTom device (%s)    \r", addr_str);
-                if (!dst || !bacmp(dst, &info->bdaddr)) {
-                    /**
-                     * confusion alert: Bluez defines these constants as
-                     * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
-                     * ... but in the le_advertising_info wire packets:
-                     * 0 means _PUBLIC and non-0 means _RANDOM
-                     * (see bluez/emulator/bthost.c
-                     *
-                     */
-                    *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
-                    bacpy(dst, &info->bdaddr);
-                    goto done;
-                }
+                if (!bacmp(dst, BDADDR_ANY))
+                    goto gotcha;
             } else if (verbose)
                 fprintf(stderr, "Saw a non-TomTom device (%s)\r", addr_str);
+            if (!bacmp(dst, &info->bdaddr))
+                goto gotcha;
         }
     }
+
+gotcha:
+    /**
+     * confusion alert: Bluez defines these constants as
+     * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
+     * ... but in the le_advertising_info wire packets:
+     * 0 means _PUBLIC and non-0 means _RANDOM
+     * (see bluez/emulator/bthost.c
+     *
+     */
+    *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
+    bacpy(dst, &info->bdaddr);
 
 done:
     fputc('\n', stderr);
