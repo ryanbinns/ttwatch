@@ -23,7 +23,7 @@ struct ble_dev_info {
     int len;
 };
 
-void hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl);
+#include "util.h"
 
 struct ble_dev_info *tt_check_device_version(int fd, bool warning);
 int tt_authorize(int fd, uint32_t code, bool new_code);

@@ -11,36 +11,8 @@
 
 #include <bluetooth/bluetooth.h>
 
+#include "util.h"
 #include "ttops.h"
-
-static uint32_t
-crc16(const uint8_t *buf, size_t len, uint32_t start)
-{
-    uint32_t crc = start;		        // should be 0xFFFF first time
-    for (size_t pos = 0; pos < len; pos++) {
-        crc ^= (uint32_t)buf[pos];          // XOR byte into least sig. byte of crc
-
-        for (int i = 8; i != 0; i--) {  // Loop over each bit
-            if ((crc & 0x0001) != 0) {  // If the LSB is set
-                crc >>= 1;              // Shift right and XOR 0xA001
-                crc ^= 0xA001;
-            }
-            else                        // Else LSB is not set
-                crc >>= 1;              // Just shift right
-        }
-    }
-    return crc;
-}
-
-void
-hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl)
-{
-    while (len--) {
-        fprintf(where, "%2.2x", (int)*buf++);
-    }
-    if (newl)
-        fputc('\n', where);
-}
 
 /****************************************************************************/
 
