@@ -187,24 +187,27 @@ hci_tt_scan(int dd, bdaddr_t *dst, uint8_t *dst_type, int verbose)
             le_advertising_info *info = (void *)(meta->data + 1);
             ba2str(&info->bdaddr, addr_str);
             if (!strncmp(addr_str, "E4:04:39", 8)) {
-                /**
-                 * confusion alert: Bluez defines these constants as
-                 * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
-                 * ... but in the le_advertising_info wire packets:
-                 * 0 means _PUBLIC and non-0 means _RANDOM
-                 * (see bluez/emulator/bthost.c
-                 *
-                 */
-                *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
-                bacpy(dst, &info->bdaddr);
-                //fprintf(stderr, "Saw a TomTom device (%s)\n", addr_str);
-                goto done;
+                fprintf(stderr, "Saw a TomTom device (%s)    \r", addr_str);
+                if (!dst || !bacmp(dst, &info->bdaddr)) {
+                    /**
+                     * confusion alert: Bluez defines these constants as
+                     * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
+                     * ... but in the le_advertising_info wire packets:
+                     * 0 means _PUBLIC and non-0 means _RANDOM
+                     * (see bluez/emulator/bthost.c
+                     *
+                     */
+                    *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
+                    bacpy(dst, &info->bdaddr);
+                    goto done;
+                }
             } else if (verbose)
-                fprintf(stderr, "Saw a non-TomTom device (%s)\n", addr_str);
+                fprintf(stderr, "Saw a non-TomTom device (%s)\r", addr_str);
         }
     }
 
 done:
+    fputc('\n', stderr);
     signal(SIGINT, NULL);
     if (setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of)) < 0)
         return -1;
@@ -267,7 +270,7 @@ struct poptOption options[] = {
     { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
     { "update-gps", 0, POPT_ARG_NONE, NULL, 'G', "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
     { "glonass", 0, POPT_ARG_VAL, &use_glonass, 2, "Use GLONASS version of QuickFix update file." },
-    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will scan if unspecified", "MACADDR" },
+    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will use first TomTom device if unspecified", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
@@ -286,7 +289,7 @@ struct poptOption options[] = {
 int main(int argc, const char **argv)
 {
     int devid, dd, fd;
-    bdaddr_t src_addr, dst_addr;
+    bdaddr_t src_addr, dst_addr = {0};
     uint8_t dst_bdaddr_type = BDADDR_LE_RANDOM; // v1 devices always use random address type, though the address is fixed
     int needs_reboot = false, success = false;
     int write_delay;
@@ -375,20 +378,22 @@ int main(int argc, const char **argv)
             goto pre_fatal;
         }
 
-        // scan for TomTom devices, if destination address was unspecified
-        if (dev_address == NULL) {
+        // scan for TomTom devices
+        if (dev_address)
+            fprintf(stderr, "Scanning for TomTom BLE device %s...\n", dev_address);
+        else
             fprintf(stderr, "Scanning for TomTom BLE devices...\n");
-            if (hci_tt_scan(dd, &dst_addr, &dst_bdaddr_type, debug) < 0) {
-                if (errno==EPERM)
-                    fputs(PLEASE_SETCAP_ME, stderr);
-                else
-                    fprintf(stderr, "BLE scan failed: %s (%d)\n", strerror(errno), errno);
-                goto pre_fatal;
-            }
+
+        if (hci_tt_scan(dd, &dst_addr, &dst_bdaddr_type, debug) < 0) {
+            if (errno==EPERM)
+                fputs(PLEASE_SETCAP_ME, stderr);
+            else
+                fprintf(stderr, "BLE scan failed: %s (%d)\n", strerror(errno), errno);
+            goto pre_fatal;
         }
 
         // create L2CAP socket connected to watch
-        fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_bdaddr_type, BT_SECURITY_MEDIUM, first);
+        fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_bdaddr_type, BT_SECURITY_MEDIUM, debug>1);
         if (fd < 0) {
             if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
