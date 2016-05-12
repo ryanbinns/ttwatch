@@ -4,8 +4,6 @@
 #include "bbatt.h"
 
 #define EXPECTED_MAKER "TomTom Fitness"
-#define OLDEST_TESTED_FIRMWARE "1.8.34"
-#define NEWEST_TESTED_FIRMWARE "1.8.46"
 #define IS_TESTED_MODEL(model) (strcmp((model),"1001")==0 || strcmp((model),"1002")==0 || strcmp((model),"1003")==0 || strcmp((model),"1004")==0)
 
 #define H_PPCP 0x000b

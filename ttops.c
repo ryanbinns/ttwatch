@@ -13,6 +13,7 @@
 
 #include "util.h"
 #include "ttops.h"
+#include "version.h"
 
 /****************************************************************************/
 
@@ -41,6 +42,10 @@ struct ble_dev_info info[] = {
     { 0 }
 };
 
+struct version_tuple
+    oldest_tested_firmware = VERSION_TUPLE(1,8,34),
+    newest_tested_firmware = VERSION_TUPLE(1,8,46);
+
 struct ble_dev_info *
 tt_check_device_version(int fd, bool warning)
 {
@@ -56,16 +61,25 @@ tt_check_device_version(int fd, bool warning)
     if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
         fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
         return NULL;
-    } else if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
-        fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, OLDEST_TESTED_FIRMWARE);
+    }
+
+    struct version_tuple fw_ver;
+    if (parse_version(info[5].buf, &fw_ver, ".") < 0) {
+        fprintf(stderr, "Could not parse firmware version string: %s\n", info[5].buf);
         return NULL;
     }
 
-    if (warning && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
-        fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
+    if (compare_versions(&fw_ver, &oldest_tested_firmware) < 0) {
+        fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, str_version(&oldest_tested_firmware,'.'));
+        return NULL;
+    }
 
-    if (warning && !IS_TESTED_MODEL(info[4].buf))
-        fprintf(stderr, MODEL_UNTESTED, info[4].buf);
+    if (warning) {
+        if (compare_versions(&fw_ver, &newest_tested_firmware) > 0)
+            fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
+        if (!IS_TESTED_MODEL(info[4].buf))
+            fprintf(stderr, MODEL_UNTESTED, info[4].buf);
+    }
 
     return info;
 }
