@@ -344,12 +344,12 @@ Here is what the Android app does in normal operation:
    [subsequent reconnection](#subsequent-reconnection) sequences shown
    above.
 3. App reads the device information profile characteristics (handles
-  `0x0012`, `0x0014`, `0x0016`, `0x001a`, `0x001c`, `0x001e` in that
-  order).
+   `0x0012`, `0x0014`, `0x0016`, `0x001a`, `0x001c`, `0x001e` in that
+   order).
 4. App deletes then writes the file `0x00020002` with a short string
-  identifying the host device (the Bluetooth adapter device name),
-  which is then shown at the bottom of the device screen in the
-  __PHONE | SYNC__ menu.
+   identifying the host device (the Bluetooth adapter device name),
+   which is then shown at the bottom of the device screen in the
+   __PHONE | SYNC__ menu.
 5. App reads the XML-ish preferences file `0x000f2000` from the
    device; among other tidbits, this file contains information on the
    MySports online account to which the device is linked.
@@ -381,9 +381,11 @@ Here is what the Android app does in normal operation:
     * Sometimes the device ends the command normally (`25 -> 00 00 00
       00`).
     * On at least two occasions that I have logged, the host sends a
-      command (`25 <-- 05 01 00 01`) that seems to hint at some
-      further processing of the ephemeris data file, then reads the
-      file `0x00020001` (again!) before closing the connection.
+      command (`25 <-- 05 01 00 01`). This only appears to occur when the
+      watch is brand new or has been "factory reset" and probably triggers
+      some internal processing of the ephemeris data file. Afterward this
+      command, the device reads the file `0x00020001` (again!)
+      before closing the connection.
     * Newer versions of the app finish up by deleting and then writing
       various race-related files on the watch (`0x71****`).
 
@@ -436,7 +438,7 @@ Perhaps this can be used to avoid re-updating the QFG file
 unnecessarily on every connection... but I'm not really sure how to
 determine when the QFG file *expires*.
 
-    00: 03 00
+    00: 03 00 (possibly the expiration of the ephemeris file in days?)
 
     Aha! This one seems to be the date when the QFG was
     last UPDATED:
@@ -468,6 +470,9 @@ determine when the QFG file *expires*.
     1a: 05 05 74 00
     1e: + ASCIIZ firmware string (34 bytes w/null)
     40: + ASCIIZ firmware string (8 bytes w/null)
+
+When the watch is brand new or "factory reset" (before any GPS fix), then
+the first 22 bytes (`0x16`) are all zero.
 
 # Acknowledgments
 

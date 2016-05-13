@@ -114,6 +114,16 @@ att_read_not(int fd, uint16_t *handle, void *buf)
     }
 }
 
+const char *
+addr_type_name(int dst_type) {
+    switch (dst_type) {
+    case BDADDR_BREDR: return "BDADDR_BREDR";
+    case BDADDR_LE_PUBLIC: return "BDADDR_LE_PUBLIC";
+    case BDADDR_LE_RANDOM: return "BDADDR_LE_RANDOM";
+    default: return NULL;
+    }
+}
+
 /**
  * This att_ecode2str function is copied from bluez/attrib/att.c
  *

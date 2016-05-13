@@ -70,14 +70,6 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     struct sockaddr_l2 srcaddr, dstaddr;
     struct bt_security btsec;
 
-    const char *dst_type_name;
-    switch (dst_type) {
-    case BDADDR_BREDR: dst_type_name="BDADDR_BREDR"; break;
-    case BDADDR_LE_PUBLIC: dst_type_name="BDADDR_LE_PUBLIC"; break;
-    case BDADDR_LE_RANDOM: dst_type_name="BDADDR_LE_RANDOM"; break;
-    default: return -2;
-    }
-
     if (verbose) {
         char srcaddr_str[18], dstaddr_str[18];
 
@@ -86,7 +78,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
         fprintf(stderr, "Opening L2CAP LE connection on ATT "
                         "channel:\n\t src: %s\n\tdest: %s (%s)\n",
-                srcaddr_str, dstaddr_str, dst_type_name);
+                srcaddr_str, dstaddr_str, addr_type_name(dst_type));
     }
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
@@ -136,6 +128,10 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 /**
  * based on bluez/tools/hcitool.c
  *
+ * If dst is set to all zeros (BDADDRY_ANY), then it returns the 
+ * first TomTom device address seen, otherwise it waits for the
+ * exact matching address.
+ *
  */
 
 static void
@@ -149,6 +145,7 @@ hci_tt_scan(int dd, bdaddr_t *dst, uint8_t *dst_type, int verbose)
     int len;
     socklen_t olen = sizeof(of);
     char addr_str[18];
+    le_advertising_info *info;
 
     hci_le_set_scan_enable(dd, 0, 0, 10000); // disable in case already enabled
     if (hci_le_set_scan_parameters(dd, /* passive */ 0x00, htobs(0x10), htobs(0x10), LE_PUBLIC_ADDRESS, 0x00, 10000) < 0) {
@@ -184,27 +181,33 @@ hci_tt_scan(int dd, bdaddr_t *dst, uint8_t *dst_type, int verbose)
 
         evt_le_meta_event *meta = (void *)(buf + HCI_EVENT_HDR_SIZE + 1);
         if (meta->subevent == EVT_LE_ADVERTISING_REPORT) {
-            le_advertising_info *info = (void *)(meta->data + 1);
+            info = (void *)(meta->data + 1);
             ba2str(&info->bdaddr, addr_str);
             if (!strncmp(addr_str, "E4:04:39", 8)) {
-                /**
-                 * confusion alert: Bluez defines these constants as
-                 * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
-                 * ... but in the le_advertising_info wire packets:
-                 * 0 means _PUBLIC and non-0 means _RANDOM
-                 * (see bluez/emulator/bthost.c
-                 *
-                 */
-                *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
-                bacpy(dst, &info->bdaddr);
-                //fprintf(stderr, "Saw a TomTom device (%s)\n", addr_str);
-                goto done;
+                fprintf(stderr, "Saw a TomTom device (%s)    \r", addr_str);
+                if (!bacmp(dst, BDADDR_ANY))
+                    goto gotcha;
             } else if (verbose)
-                fprintf(stderr, "Saw a non-TomTom device (%s)\n", addr_str);
+                fprintf(stderr, "Saw a non-TomTom device (%s)\r", addr_str);
+            if (!bacmp(dst, &info->bdaddr))
+                goto gotcha;
         }
     }
 
+gotcha:
+    /**
+     * confusion alert: Bluez defines these constants as
+     * BDADDR_LE_RANDOM=0x02 and BDADDR_LE_PUBLIC=0x01,
+     * ... but in the le_advertising_info wire packets:
+     * 0 means _PUBLIC and non-0 means _RANDOM
+     * (see bluez/emulator/bthost.c
+     *
+     */
+    *dst_type = (info->bdaddr_type==0 ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM);
+    bacpy(dst, &info->bdaddr);
+
 done:
+    fputc('\n', stderr);
     signal(SIGINT, NULL);
     if (setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of)) < 0)
         return -1;
@@ -254,7 +257,7 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
 /****************************************************************************/
 
 int debug=1;
-int get_activities=0, set_time=0, update_gps=0, use_glonass=0, version=0, daemonize=0, new_pair=1, default_addr_type=1;
+int get_activities=0, set_time=0, update_gps=0, use_glonass=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
@@ -267,7 +270,7 @@ struct poptOption options[] = {
     { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
     { "update-gps", 0, POPT_ARG_NONE, NULL, 'G', "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
     { "glonass", 0, POPT_ARG_VAL, &use_glonass, 2, "Use GLONASS version of QuickFix update file." },
-    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will scan if unspecified", "MACADDR" },
+    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will use first TomTom device if unspecified", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
@@ -276,9 +279,6 @@ struct poptOption options[] = {
     { "daemon", 0, POPT_ARG_NONE, &daemonize, 0, "Run as a daemon which will try to connect repeatedly" },
     { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 0, "Wait time after successful connection to watch", "SECONDS" },
     { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 10, "Wait time after failed connection to watch", "SECONDS" },
-#ifdef ADDR_TYPE
-    { "addr-type", 0, POPT_ARG_VAL, &default_addr_type, 0, "Change device BLE address type from random to public." },
-#endif
 //    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
     POPT_AUTOHELP
     POPT_TABLEEND
@@ -289,8 +289,8 @@ struct poptOption options[] = {
 int main(int argc, const char **argv)
 {
     int devid, dd, fd;
-    bdaddr_t src_addr, dst_addr;
-    uint8_t dst_bdaddr_type = default_addr_type ? BDADDR_LE_PUBLIC : BDADDR_LE_RANDOM; // default is reversed for v2 devices
+    bdaddr_t src_addr, dst_addr = {0};
+    uint8_t dst_bdaddr_type = BDADDR_LE_PUBLIC; // default is reversed for v2 devices
     int needs_reboot = false, success = false;
     int write_delay;
 
@@ -378,20 +378,22 @@ int main(int argc, const char **argv)
             goto pre_fatal;
         }
 
-        // scan for TomTom devices, if destination address was unspecified
-        if (dev_address == NULL) {
+        // scan for TomTom devices
+        if (dev_address)
+            fprintf(stderr, "Scanning for TomTom BLE device %s...\n", dev_address);
+        else
             fprintf(stderr, "Scanning for TomTom BLE devices...\n");
-            if (hci_tt_scan(dd, &dst_addr, &dst_bdaddr_type, debug) < 0) {
-                if (errno==EPERM)
-                    fputs(PLEASE_SETCAP_ME, stderr);
-                else
-                    fprintf(stderr, "BLE scan failed: %s (%d)\n", strerror(errno), errno);
-                goto pre_fatal;
-            }
+
+        if (hci_tt_scan(dd, &dst_addr, &dst_bdaddr_type, debug) < 0) {
+            if (errno==EPERM)
+                fputs(PLEASE_SETCAP_ME, stderr);
+            else
+                fprintf(stderr, "BLE scan failed: %s (%d)\n", strerror(errno), errno);
+            goto pre_fatal;
         }
 
         // create L2CAP socket connected to watch
-        fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_bdaddr_type, BT_SECURITY_MEDIUM, first);
+        fd = l2cap_le_att_connect(&src_addr, &dst_addr, dst_bdaddr_type, BT_SECURITY_MEDIUM, debug>1);
         if (fd < 0) {
             if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
@@ -511,6 +513,7 @@ int main(int argc, const char **argv)
 
         if (set_time) {
             uint32_t fileno = 0x00850000;
+            fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", fileno);
             if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
                 fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", fileno);
             } else {
@@ -529,11 +532,10 @@ int main(int argc, const char **argv)
                     struct tm *lt = localtime(&t);
 
                     if (btohl(*watch_timezone) != lt->tm_gmtoff) {
-                        fprintf(stderr, "Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
+                        fprintf(stderr, "  Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htobl(lt->tm_gmtoff);
                         tt_delete_file(fd, 0x00850000);
                         tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
-                        att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x85, 0x00, 0x00), 4); // update magic?
                         needs_reboot = true;
                     }
                 }
@@ -595,25 +597,28 @@ int main(int argc, const char **argv)
 
             time_t last_qfg_update = 0;
             uint32_t fileno = 0x00020001;
-            if (update_gps > 1) {
-                /* forced update */
-            } else if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 6) {
+            if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 6) {
                 fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
+                last_qfg_update = -1;
             } else {
-                struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
-                                  .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
-                last_qfg_update = timegm(&tmp);
+                if ((fbuf[0x02] | fbuf[0x03] | fbuf[0x04] | fbuf[0x05]) != 0) {
+                    struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
+                                      .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
+                    last_qfg_update = timegm(&tmp);
+                }
 #ifdef DUMP_0x00020001
                 save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
 #endif
                 free(fbuf);
             }
 
-            if (time(NULL) - last_qfg_update < 24*3600) {
-                fprintf(stderr, "  No update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
+            if (update_gps <= 1 && time(NULL) - last_qfg_update < 24*3600) {
+                fprintf(stderr, "  No GPS update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
             } else {
-                if (last_qfg_update)
-                    fprintf(stderr, "  Last update was at %.24s.\n", ctime(&last_qfg_update));
+                if (last_qfg_update != -1 && last_qfg_update != 0)
+                    fprintf(stderr, "  Last GPS update was at %.24s.\n", ctime(&last_qfg_update));
+                else
+                    fprintf(stderr, "  Last GPS update unknown.\n");
 
                 CURLcode res;
                 char curlerr[CURL_ERROR_SIZE];
@@ -653,8 +658,12 @@ int main(int argc, const char **argv)
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
                                 goto fail;
-                            } else
-                                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4); // update magic?
+                            } else if (last_qfg_update == 0 || update_gps >= 3) {
+                                // official TomTom Android app seems to only issue this
+                                // "magic" update command when the GPS is brand new or
+                                // after a factory reset, or with 3x --update-gps
+                                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+                            }
                         }
                     }
                 }

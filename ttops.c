@@ -11,36 +11,9 @@
 
 #include <bluetooth/bluetooth.h>
 
+#include "util.h"
 #include "ttops.h"
-
-static uint32_t
-crc16(const uint8_t *buf, size_t len, uint32_t start)
-{
-    uint32_t crc = start;		        // should be 0xFFFF first time
-    for (size_t pos = 0; pos < len; pos++) {
-        crc ^= (uint32_t)buf[pos];          // XOR byte into least sig. byte of crc
-
-        for (int i = 8; i != 0; i--) {  // Loop over each bit
-            if ((crc & 0x0001) != 0) {  // If the LSB is set
-                crc >>= 1;              // Shift right and XOR 0xA001
-                crc ^= 0xA001;
-            }
-            else                        // Else LSB is not set
-                crc >>= 1;              // Just shift right
-        }
-    }
-    return crc;
-}
-
-void
-hexlify(FILE *where, const uint8_t *buf, size_t len, bool newl)
-{
-    while (len--) {
-        fprintf(where, "%2.2x", (int)*buf++);
-    }
-    if (newl)
-        fputc('\n', where);
-}
+#include "version.h"
 
 /****************************************************************************/
 
@@ -70,6 +43,10 @@ struct ble_dev_info info[] = {
     { 0 }
 };
 
+struct version_tuple
+    oldest_tested_firmware = VERSION_TUPLE(1,8,34),
+    newest_tested_firmware = VERSION_TUPLE(1,8,46);
+
 struct ble_dev_info *
 tt_check_device_version(int fd, bool warning)
 {
@@ -87,17 +64,25 @@ tt_check_device_version(int fd, bool warning)
     /* if (strcmp(info[0].buf, EXPECTED_MAKER) != 0) {
         fprintf(stderr, "Maker is not %s but '%s', exiting!\n", EXPECTED_MAKER, info[1].buf);
         return NULL;
-    } else */
-    if (strcmp(info[5].buf, OLDEST_TESTED_FIRMWARE) < 0) {
-        fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, OLDEST_TESTED_FIRMWARE);
+    } */
+
+    struct version_tuple fw_ver;
+    if (parse_version(info[5].buf, &fw_ver, ".") < 0) {
+        fprintf(stderr, "Could not parse firmware version string: %s\n", info[5].buf);
         return NULL;
     }
 
-    if (warning && strcmp(info[5].buf, NEWEST_TESTED_FIRMWARE) > 0)
-        fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
+    if (compare_versions(&fw_ver, &oldest_tested_firmware) < 0) {
+        fprintf(stderr, FIRMWARE_TOO_OLD, info[5].buf, str_version(&oldest_tested_firmware,'.'));
+        return NULL;
+    }
 
-    if (warning && !IS_TESTED_MODEL(info[4].buf))
-        fprintf(stderr, MODEL_UNTESTED, info[4].buf);
+    if (warning) {
+        if (compare_versions(&fw_ver, &newest_tested_firmware) > 0)
+            fprintf(stderr, FIRMWARE_UNTESTED, info[5].buf);
+        if (!IS_TESTED_MODEL(info[4].buf))
+            fprintf(stderr, MODEL_UNTESTED, info[4].buf);
+    }
 
     return info;
 }
@@ -348,11 +333,11 @@ tt_delete_file(int fd, uint32_t fileno)
 
     // discard H_TRANSFER packets which I don't understand until we get H_CMD_STATUS<-0
     uint16_t handle;
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
+    union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint32_t out; } r;
     int rlen;
     for (;;) {
-        rlen = att_read_not(fd, &handle, rbuf);
-        if (handle==H_CMD_STATUS && rlen==4 && (*(uint32_t*)rbuf==0))
+        rlen = att_read_not(fd, &handle, r.buf);
+        if (handle==H_CMD_STATUS && rlen==4 && r.out==0)
             return 0;
         else if (handle!=H_TRANSFER)
             return -1;
@@ -372,32 +357,31 @@ tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist)
         return -1;
 
     // read first packet (normally there's only one)
-    uint8_t rbuf[BT_ATT_DEFAULT_LE_MTU];
-    int rlen = EXPECT_BYTES(fd, rbuf);
+    union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint16_t vals[0]; } r;
+    int rlen = EXPECT_BYTES(fd, r.buf);
     if (rlen<2)
         return -1;
-    int n_files = btohs(*(uint16_t*)rbuf);
+    int n_files = btohs(r.vals[0]);
     uint16_t *list = *outlist = calloc(sizeof(uint16_t), n_files);
-    void *optr = mempcpy(list, rbuf+2, rlen-2);
+    void *optr = mempcpy(list, r.vals+1, rlen-2);
 
     // read rest of packets (if we have a long file list?)
     for (; optr < (void *)(list+n_files); optr += rlen) {
         rlen=EXPECT_BYTES(fd, optr);
-        hexlify(stdout, optr, rlen, true);
-        if (rlen<0) {
-            free(list);
-            return -1;
-        }
+        if (rlen<0)
+            goto fail;
     }
 
     // fix endianness
     for (int ii=0; ii<n_files; ii++)
         list[ii] = btohs(list[ii]);
 
-    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0) {
-        free(list);
-        return -1;
-    }
+    if (EXPECT_uint32(fd, H_CMD_STATUS, 0) < 0)
+        goto fail;
 
     return n_files;
+
+fail:
+    free(list);
+    return -1;
 }
