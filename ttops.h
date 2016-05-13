@@ -1,18 +1,10 @@
 #ifndef __TTOPS_H__
 #define __TTOPS_H__
 
+#include "version.h"
 #include "bbatt.h"
 
-#define EXPECTED_MAKER "TomTom Fitness"
-#define IS_TESTED_MODEL(model) (strcmp((model),"1001")==0 || strcmp((model),"1002")==0 || strcmp((model),"1003")==0 || strcmp((model),"1004")==0)
-
-#define H_PPCP 0x000b
-#define H_PASSCODE 0x0032
-#define H_MAGIC 0x0035
-#define H_CMD_STATUS 0x0025
-#define H_LENGTH 0x0028
-#define H_TRANSFER 0x002b
-#define H_CHECK 0x002e
+struct tt_handles { uint16_t ppcp, passcode, magic, cmd_status, length, transfer, check; };
 
 struct ble_dev_info {
     uint16_t handle;
@@ -21,25 +13,37 @@ struct ble_dev_info {
     int len;
 };
 
+typedef struct ttdev {
+    int fd;
+    int protocol_version;
+    struct tt_handles *h;
+    struct ble_dev_info *info; // stuff from UUID=180a (Device Information)
+
+    struct version_tuple oldest_tested_firmware, newest_tested_firmware;
+    const char **tested_models;
+} TTDEV;
+
 #include "util.h"
 
-struct ble_dev_info *tt_check_device_version(int fd, bool warning);
-int tt_authorize(int fd, uint32_t code, bool new_code);
-int tt_read_file(int fd, uint32_t fileno, int debug, uint8_t **buf);
-int tt_write_file(int fd, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length, uint32_t write_delay);
-int tt_delete_file(int fd, uint32_t fileno);
-int tt_list_sub_files(int fd, uint32_t fileno, uint16_t **outlist);
-int tt_reboot(int fd);
+TTDEV *tt_device_init(int protocol_version, int fd);
+bool tt_device_done(TTDEV *d);
+struct ble_dev_info *tt_check_device_version(TTDEV *d, bool warning);
+int tt_authorize(TTDEV *d, uint32_t code, bool new_code);
+int tt_read_file(TTDEV *d, uint32_t fileno, int debug, uint8_t **buf);
+int tt_write_file(TTDEV *d, uint32_t fileno, int debug, const uint8_t *buf, uint32_t length, uint32_t write_delay);
+int tt_delete_file(TTDEV *d, uint32_t fileno);
+int tt_list_sub_files(TTDEV *d, uint32_t fileno, uint16_t **outlist);
+int tt_reboot(TTDEV *d);
 
 static inline int
-EXPECT_BYTES(int fd, uint8_t *buf)
+EXPECT_BYTES(TTDEV *d, uint8_t *buf)
 {
     uint16_t handle;
-    int length = att_read_not(fd, &handle, buf);
+    int length = att_read_not(d->fd, &handle, buf);
     if (length < 0)
         return length;
-    else if (handle != H_TRANSFER) {
-        fprintf(stderr, "Expected 0x%04x <- BYTES, but got:\n   0x%04x <- ", H_TRANSFER, handle);
+    else if (handle != d->h->transfer) {
+        fprintf(stderr, "Expected 0x%04x <- BYTES, but got:\n   0x%04x <- ", d->h->transfer, handle);
         hexlify(stderr, buf, length, true);
         return -1;
     }
@@ -47,15 +51,15 @@ EXPECT_BYTES(int fd, uint8_t *buf)
 }
 
 static inline int
-EXPECT_LENGTH(int fd)
+EXPECT_LENGTH(TTDEV *d)
 {
     union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint32_t out; } r;
     uint16_t handle;
-    int length = att_read_not(fd, &handle, r.buf);
+    int length = att_read_not(d->fd, &handle, r.buf);
     if (length < 0)
         return length;
-    else if ((handle != H_LENGTH) || (length != 4)) {
-        fprintf(stderr, "Expected 0x%04x <- (uint32_t)LENGTH, but got:\n  0x%04x <- ", H_LENGTH, handle);
+    else if ((handle != d->h->length) || (length != 4)) {
+        fprintf(stderr, "Expected 0x%04x <- (uint32_t)LENGTH, but got:\n  0x%04x <- ", d->h->length, handle);
         hexlify(stderr, r.buf, length, true);
         return -1;
     }
@@ -63,11 +67,11 @@ EXPECT_LENGTH(int fd)
 }
 
 static inline int
-EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
+EXPECT_uint32(TTDEV *d, uint16_t handle, uint32_t val)
 {
     union { uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; uint32_t out; } r;
     uint16_t h;
-    int length = att_read_not(fd, &h, r.buf);
+    int length = att_read_not(d->fd, &h, r.buf);
     if (length < 0)
         return length;
     else if ((h != handle) || (length != 4) || (btohl(r.out)!=val)) {
@@ -79,11 +83,11 @@ EXPECT_uint32(int fd, uint16_t handle, uint32_t val)
 }
 
 static inline int
-EXPECT_uint8(int fd, uint16_t handle, uint8_t val)
+EXPECT_uint8(TTDEV *d, uint16_t handle, uint8_t val)
 {
     uint8_t buf[BT_ATT_DEFAULT_LE_MTU];
     uint16_t h;
-    int length = att_read_not(fd, &h, buf);
+    int length = att_read_not(d->fd, &h, buf);
     if (length < 0)
         return length;
     else if ((h != handle) || (length != 1) || (*buf!=val)) {
