@@ -43,8 +43,8 @@ isleep(int seconds, int verbose)
         res = sleep((seconds-elapsed > 30) ? 30 : seconds-elapsed);
 
     signal(SIGALRM, SIG_IGN);
-    if (res && verbose)
-        fprintf(stderr, "%s\n\n", res ? " woken by signal!" : "");
+    if (verbose)
+        fputs(res ? " woken by signal!\n\n" : "\n", stderr);
     return (res>0);
 }
 
