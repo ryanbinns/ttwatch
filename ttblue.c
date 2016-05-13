@@ -70,14 +70,6 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
     struct sockaddr_l2 srcaddr, dstaddr;
     struct bt_security btsec;
 
-    const char *dst_type_name;
-    switch (dst_type) {
-    case BDADDR_BREDR: dst_type_name="BDADDR_BREDR"; break;
-    case BDADDR_LE_PUBLIC: dst_type_name="BDADDR_LE_PUBLIC"; break;
-    case BDADDR_LE_RANDOM: dst_type_name="BDADDR_LE_RANDOM"; break;
-    default: return -2;
-    }
-
     if (verbose) {
         char srcaddr_str[18], dstaddr_str[18];
 
@@ -86,7 +78,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 
         fprintf(stderr, "Opening L2CAP LE connection on ATT "
                         "channel:\n\t src: %s\n\tdest: %s (%s)\n",
-                srcaddr_str, dstaddr_str, dst_type_name);
+                srcaddr_str, dstaddr_str, addr_type_name(dst_type));
     }
 
     sock = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
