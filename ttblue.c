@@ -398,7 +398,7 @@ int main(int argc, const char **argv)
         if (fd < 0) {
             if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
-            goto fail;
+            goto fail_connect;
         }
 
         // initialize device
@@ -695,10 +695,13 @@ int main(int argc, const char **argv)
         }
         first = false;
         needs_reboot = false;
+        tt_device_done(ttd);
         close(fd);
         hci_close_dev(dd);
         continue;
     fail:
+        tt_device_done(ttd);
+    fail_connect:
         close(fd);
         hci_close_dev(dd);
         success = false;
