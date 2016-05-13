@@ -82,7 +82,7 @@ tt_device_init(int protocol_version, int fd) {
         d->h = &v2_handles;
         d->info = v2_info;
         d->oldest_tested_firmware = VERSION_TUPLE(1,1,19);
-        d->newest_tested_firmware = VERSION_TUPLE(1,1,19);
+        d->newest_tested_firmware = VERSION_TUPLE(1,2,0); // @drkingpo confirmed v1.2.0 works now (see issue #5)
         d->tested_models = tested_models_v2;
         break;
     default:
