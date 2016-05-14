@@ -157,9 +157,9 @@ private:
 
     static int enumerateDevicesCallback(TTWATCH *watch, void *data);
 
-    friend File;
-    friend PreferencesFile;
-    friend ManifestFile;
+    friend class File;
+    friend class PreferencesFile;
+    friend class ManifestFile;
 };
 
 }
