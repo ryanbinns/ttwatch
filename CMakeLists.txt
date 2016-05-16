@@ -6,9 +6,9 @@ include_directories(src)
 include_directories(manifest)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
-find_package(curl)
-find_package(openssl)
-find_package(libusb)
+find_package(CURL)
+find_package(OpenSSL)
+find_package(LibUSB)
 
 include_directories(${LIBUSB_1_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${CURL_INCLUDE_DIRS})
 
@@ -20,10 +20,10 @@ add_library(libttbin STATIC ${TTBIN_SRC})
 target_link_libraries(libttbin ${CURL_LIBRARIES})
 
 add_executable(ttbincnv src/ttbincnv.c)
-target_link_libraries(ttbincnv libttbin)
+target_link_libraries(ttbincnv libttbin m)
 
 add_executable(ttbinmod src/ttbinmod.c)
-target_link_libraries(ttbinmod libttbin ${CURL_LIBRARIES})
+target_link_libraries(ttbinmod libttbin m ${CURL_LIBRARIES})
 
 set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c)
 add_executable(ttwatch ${TTWATCH_SRC})
