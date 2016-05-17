@@ -290,9 +290,10 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr = {0};
-    uint8_t dst_bdaddr_type = BDADDR_LE_RANDOM; // v1 devices always use random address type, though the address is fixed
+    uint8_t dst_bdaddr_type;
     int needs_reboot = false, success = false;
     int write_delay;
+    TTDEV *ttd;
 
     // parse args
     char ch;
@@ -397,8 +398,13 @@ int main(int argc, const char **argv)
         if (fd < 0) {
             if (errno!=ENOTCONN || debug>1)
                 fprintf(stderr, "Failed to connect: %s (%d)\n", strerror(errno), errno);
-            goto fail;
+            goto fail_connect;
         }
+
+        // initialize device
+        ttd = tt_device_init(dst_bdaddr_type==BDADDR_LE_RANDOM ? 1 : 2, fd);
+        if (!ttd)
+            goto fatal;
 
         // we need the hci_handle too
         struct l2cap_conninfo l2cci;
@@ -410,49 +416,54 @@ int main(int argc, const char **argv)
         }
 
         time_t now = time(NULL);
-        fprintf(stderr, "Connected at %.24s.\n", ctime(&now));
+        fprintf(stderr, "Connected to v%d device at %.24s.\n", ttd->protocol_version, ctime(&now));
 
-        // request minimum connection interval
-        do {
-            result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
-                                        0x0006 /* min_interval */,
-                                        0x0006 /* max_interval */,
-                                        0 /* latency */,
-                                        200 /* supervision_timeout */,
-                                        2000);
-        } while (errno==ETIMEDOUT);
-        if (result < 0) {
-            if (errno==EPERM && first) {
-                fputs(PLEASE_SETCAP_ME, stderr);
-                write_delay = 0; // we couldn't speed up the connection, so no write_delay
+        if (ttd->h->ppcp > 0) {
+            // request minimum connection interval
+            do {
+                result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),
+                                            0x0006 /* min_interval */,
+                                            0x0006 /* max_interval */,
+                                            0 /* latency */,
+                                            200 /* supervision_timeout */,
+                                            2000);
+            } while (errno==ETIMEDOUT);
+            if (result < 0) {
+                if (errno==EPERM && first) {
+                    fputs(PLEASE_SETCAP_ME, stderr);
+                    write_delay = 0; // we couldn't speed up the connection, so no write_delay
+                } else {
+                    perror("hci_le_conn_update");
+                    goto fail;
+                }
             } else {
-                perror("hci_le_conn_update");
-                goto fail;
-            }
-        } else {
-            // we successfully decreased the connection interval, but the device can't
-            // actually handle packets being written to it this quickly, so we
-            // figure out the maximum safe speed at which we can send packets to the device from
-            // the Preferred Peripheral Connection Parameters
-            struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
-            if (att_read(fd, H_PPCP, &ppcp) < 0) {
-                fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", H_PPCP, strerror(errno), errno);
-                if (first) goto fatal; else goto fail;
-            } else {
-                ppcp.min_interval = btohs(ppcp.min_interval);
-                ppcp.max_interval = btohs(ppcp.max_interval);
-                ppcp.slave_latency = btohs(ppcp.slave_latency);
-                ppcp.timeout_mult = btohs(ppcp.timeout_mult);
-                write_delay = 1250 * ppcp.min_interval; // (microseconds)
-                if (debug > 1) {
-                    fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
-                    fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+                // we successfully decreased the connection interval, but the device can't
+                // actually handle packets being written to it this quickly, so we
+                // figure out the maximum safe speed at which we can send packets to the device from
+                // the Preferred Peripheral Connection Parameters
+                struct { uint16_t min_interval, max_interval, slave_latency, timeout_mult; } __attribute__((packed)) ppcp;
+                if (att_read(ttd->fd, ttd->h->ppcp, &ppcp) < 0) {
+                    fprintf(stderr, "Could not read device PPCP (handle 0x%04x): %s (%d)", ttd->h->ppcp, strerror(errno), errno);
+                    if (first) goto fatal; else goto fail;
+                } else {
+                    ppcp.min_interval = btohs(ppcp.min_interval);
+                    ppcp.max_interval = btohs(ppcp.max_interval);
+                    ppcp.slave_latency = btohs(ppcp.slave_latency);
+                    ppcp.timeout_mult = btohs(ppcp.timeout_mult);
+                    write_delay = 1250 * ppcp.min_interval; // (microseconds)
+                    if (debug > 1) {
+                        fprintf(stderr, "Throttling file write to 1 packet every %d microseconds.\n", write_delay);
+                        fprintf(stderr, "min_interval=%d, max_interval=%d, slave_latency=%d, timeout_mult=%d\n", ppcp.max_interval, ppcp.min_interval, ppcp.slave_latency, ppcp.timeout_mult);
+                    }
                 }
             }
+        } else {
+            // With no attempt to speed up the connection, we shouldn't need any write_delay
+            write_delay = 0;
         }
 
         // check that it's actually a TomTom device with compatible firmware version
-        struct ble_dev_info *info = tt_check_device_version(fd, first);
+        struct ble_dev_info *info = tt_check_device_version(ttd, first);
         if (!info) {
             if (first) goto fatal; else goto fail;
         }
@@ -476,7 +487,7 @@ int main(int argc, const char **argv)
         }
 
         // authorize with the device
-        if (tt_authorize(fd, dev_code, new_pair) < 0) {
+        if (tt_authorize(ttd, dev_code, new_pair) < 0) {
             fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
             if (first) goto fatal; else goto fail;
         }
@@ -492,13 +503,13 @@ int main(int argc, const char **argv)
         FILE *f;
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hostname);
-        tt_delete_file(fd, 0x00020002);
-        tt_write_file(fd, 0x00020002, false, (uint8_t*)hostname, strlen(hostname), write_delay);
+        tt_delete_file(ttd, 0x00020002);
+        tt_write_file(ttd, 0x00020002, false, (uint8_t*)hostname, strlen(hostname), write_delay);
 
 #ifdef DUMP_0x000f20000
         uint32_t fileno = 0x000f20000;
         fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
-        if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+        if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
             fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", fileno);
         } else {
             save_buf_to_file(make_tt_filename(fileno, "xml"), "wxb", fbuf, length, 2, true);
@@ -509,7 +520,7 @@ int main(int argc, const char **argv)
         if (set_time) {
             uint32_t fileno = 0x00850000;
             fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", fileno);
-            if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+            if ((length = tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
                 fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", fileno);
             } else {
                 // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
@@ -529,8 +540,8 @@ int main(int argc, const char **argv)
                     if (btohl(*watch_timezone) != lt->tm_gmtoff) {
                         fprintf(stderr, "  Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htobl(lt->tm_gmtoff);
-                        tt_delete_file(fd, 0x00850000);
-                        tt_write_file(fd, 0x00850000, false, fbuf, length, write_delay);
+                        tt_delete_file(ttd, 0x00850000);
+                        tt_write_file(ttd, 0x00850000, false, fbuf, length, write_delay);
                         needs_reboot = true;
                     }
                 }
@@ -540,7 +551,7 @@ int main(int argc, const char **argv)
 
         if (get_activities) {
             uint16_t *list;
-            int n_files = tt_list_sub_files(fd, 0x00910000, &list);
+            int n_files = tt_list_sub_files(ttd, 0x00910000, &list);
 
             if (n_files < 0) {
                 fprintf(stderr, "Could not list activity files on watch!\n");
@@ -552,7 +563,7 @@ int main(int argc, const char **argv)
 
                 fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
                 term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
-                if ((length = tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+                if ((length = tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
                     fprintf(stderr, "Could not read activity file 0x%08X from watch!\n", fileno);
                     goto fail;
                 } else {
@@ -579,7 +590,7 @@ int main(int argc, const char **argv)
                             }
                         }
                         fprintf(stderr, "    Deleting activity file 0x%08X ...\n", fileno);
-                        tt_delete_file(fd, fileno);
+                        tt_delete_file(ttd, fileno);
                     }
                 }
             }
@@ -591,7 +602,7 @@ int main(int argc, const char **argv)
 
             time_t last_qfg_update = 0;
             uint32_t fileno = 0x00020001;
-            if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 6) {
+            if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 6) {
                 fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
                 last_qfg_update = -1;
             } else {
@@ -646,8 +657,8 @@ int main(int argc, const char **argv)
                             goto fail;
                         } else {
                             fclose (f);
-                            tt_delete_file(fd, 0x00010100);
-                            result = tt_write_file(fd, 0x00010100, debug, fbuf, length, write_delay);
+                            tt_delete_file(ttd, 0x00010100);
+                            result = tt_write_file(ttd, 0x00010100, debug, fbuf, length, write_delay);
                             free(fbuf);
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
@@ -656,7 +667,7 @@ int main(int argc, const char **argv)
                                 // official TomTom Android app seems to only issue this
                                 // "magic" update command when the GPS is brand new or
                                 // after a factory reset, or with 3x --update-gps
-                                att_write(fd, H_CMD_STATUS, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+                                att_write(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
                             }
                         }
                     }
@@ -668,7 +679,7 @@ int main(int argc, const char **argv)
         if (debug > 1) {
             uint32_t fileno = 0x00020005;
             fprintf(stderr, "Reading file 0x%08x from watch...\n", fileno);
-            if ((length=tt_read_file(fd, fileno, debug, &fbuf)) < 0) {
+            if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
                 fprintf(stderr, "Could not read file 0x%08x from watch.\n", fileno);
             } else {
                 save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
@@ -680,14 +691,17 @@ int main(int argc, const char **argv)
         success = true;
         if(needs_reboot) {
             fprintf(stderr, "Rebooting watch...\n");
-            tt_reboot(fd);
+            tt_reboot(ttd);
         }
         first = false;
         needs_reboot = false;
+        tt_device_done(ttd);
         close(fd);
         hci_close_dev(dd);
         continue;
     fail:
+        tt_device_done(ttd);
+    fail_connect:
         close(fd);
         hci_close_dev(dd);
         success = false;
