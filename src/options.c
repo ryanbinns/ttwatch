@@ -5,7 +5,7 @@
 
 #include "options.h"
 #include "log.h"
-#include "../ttbin/ttbin.h"
+#include "ttbin.h"
 
 #include <ctype.h>
 #include <memory.h>

@@ -26,11 +26,13 @@ System Requirements
 This program requires the following libraries to be compiled and installed
 before attempting to build it.
 
-1. `openssl` (tested against version 1.0.1f, other versions may work).
-   Available from http://www.openssl.org, or with your linux distribution
-1. `curl` (tested against version 7.38.0, other versions may work).
+1. `cmake` (required version 2.8 or higher).
+   Available from https://cmake.org/
+2. `openssl` (tested against version 1.0.1f, other versions may work).
+   Available from http://www.openssl.org
+3. `curl` (tested against version 7.38.0, other versions may work).
    Available from http://curl.haxx.se/download.html
-2. `libusb` 1.0.16 or later (tested against version 1.0.19).
+4. `libusb` 1.0.16 or later (tested against version 1.0.19).
    Available from http://sourceforge.net/projects/libusb/
 
 Prebuilt packages should be available for most systems using the system's
@@ -42,7 +44,7 @@ Build Instructions
 ==================
 
 ```
-$ ./configure
+$ cmake .
 $ make
 $ sudo make install
 ```
@@ -155,7 +157,7 @@ Unsafe Functions
 There are various options that can be given to the ttwatch program that read
 and write raw data to/from the watch. Used incorrectly, these could destroy
 the contents of the watch. For this reason, they are disabled by default. To
-enable these options, run configure with the `--with-unsafe` option. Note that
+enable these options, run `cmake` with the `-Dunsafe=on` option. Note that
 I don't guarantee what will happen if you use these options without really
 knowing what you are doing.
 
