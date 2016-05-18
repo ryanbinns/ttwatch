@@ -20,21 +20,23 @@ find_package(LibUSB)
 include_directories(${LIBUSB_1_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${CURL_INCLUDE_DIRS})
 
 set(LIBTTWATCH_SRC src/libttwatch.cpp src/libttwatch_cpp.cpp)
-add_library(ttwatch-common STATIC ${LIBTTWATCH_SRC})
+add_library(libttwatch STATIC ${LIBTTWATCH_SRC})
+set_target_properties(libttwatch PROPERTIES OUTPUT_NAME ttwatch)
 
 set(TTBIN_SRC src/export_csv.c src/export_gpx.c src/export_kml.c src/export_tcx.c src/ttbin.c)
-add_library(ttbin STATIC ${TTBIN_SRC})
-target_link_libraries(ttbin ${CURL_LIBRARIES})
+add_library(libttbin STATIC ${TTBIN_SRC})
+target_link_libraries(libttbin ${CURL_LIBRARIES})
+set_target_properties(libttbin PROPERTIES OUTPUT_NAME ttbin)
 
 add_executable(ttbincnv src/ttbincnv.c)
-target_link_libraries(ttbincnv ttbin m)
+target_link_libraries(ttbincnv libttbin m)
 
 add_executable(ttbinmod src/ttbinmod.c)
-target_link_libraries(ttbinmod ttbin m ${CURL_LIBRARIES})
+target_link_libraries(ttbinmod libttbin m ${CURL_LIBRARIES})
 
 set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c)
 add_executable(ttwatch ${TTWATCH_SRC})
-target_link_libraries(ttwatch ttwatch-common ttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
+target_link_libraries(ttwatch libttwatch libttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
 add_custom_target(manifest
   COMMAND ./make_manifest.pl < manifest.txt > manifest_definitions.h
   COMMAND ./make_manifest.pl < manifest_00010113.txt > manifest_definitions_00010113.h
