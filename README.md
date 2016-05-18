@@ -43,11 +43,22 @@ are installed so that the headers are available.
 Build Instructions
 ==================
 
+The `ttwatch` binaries are built using cmake. Both in-source or out-of-source
+builds are supported. A simple in-source build is done as follows:
 ```
 $ cmake .
 $ make
 $ sudo make install
 ```
+An out-of-source build can be done as follows:
+```
+$ mkdir build
+$ cd build && cmake ..
+$ make
+$ sudo make install
+```
+The advantage of the out-of-source build is that to do a clean, you just do
+`rm -rf build` to remove the build tree so you can start again.
 
 Setup for unprivileged access
 =============================
@@ -130,6 +141,11 @@ All four options can be specified with the `-a` (or `--auto`) option
 The daemon must be started as root (run by `init` or `sudo`), but the `--runas`
 parameter can be specified to provide an alternative user (and optionally
 a group - such as the usb group mentioned above) to run as.
+
+Note: Daemon mode is not supported under FreeBSD as the FreeBSD version of
+      libusb does not support hot-plug detection and causes compilation
+      errors. To resolve this, run `cmake -Ddaemon=off` to force the
+      compilation to remove the daemon mode support.
 
 Multiple Watches
 ================
