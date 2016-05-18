@@ -34,7 +34,7 @@ target_link_libraries(ttbincnv libttbin m)
 add_executable(ttbinmod src/ttbinmod.c)
 target_link_libraries(ttbinmod libttbin m ${CURL_LIBRARIES})
 
-set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c)
+set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c)
 add_executable(ttwatch ${TTWATCH_SRC})
 target_link_libraries(ttwatch libttwatch libttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
 add_custom_target(manifest
