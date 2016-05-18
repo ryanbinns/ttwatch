@@ -2,11 +2,17 @@ cmake_minimum_required (VERSION 2.8)
 project (TTWatch C CXX)
 
 option(unsafe "Enable unsafe operations" off)
+option(daemon "Enable daemon operations" on)
 
 if(unsafe)
   message( STATUS "Enabled unsafe operations")
   add_definitions(-DUNSAFE)
 endif(unsafe)
+
+if(daemon)
+  message( STATUS "Enabled daemon function")
+  add_definitions(-DDAEMON)
+endif(daemon)
 
 include_directories(include)
 include_directories(src)

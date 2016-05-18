@@ -135,6 +135,7 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
             value = 0;
             result = 1;
         }
+#ifdef DAEMON
         else if (!strcasecmp(option, "RunAsUser"))
         {
             result = global;
@@ -144,6 +145,7 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
                 options->run_as_user = value;
             }
         }
+#endif
         else if (!strcasecmp(option, "Device"))
         {
             if (load_type != LoadDaemonOperations)
@@ -214,7 +216,9 @@ OPTIONS *copy_options(const OPTIONS *o)
 
     COPY_STRING(device);
     COPY_STRING(watch_name);
+#ifdef DAEMON
     COPY_STRING(run_as_user);
+#endif
 #ifdef UNSAFE
     COPY_STRING(file);
 #endif
@@ -238,7 +242,9 @@ void free_options(OPTIONS *o)
 
     FREE_STRING(device);
     FREE_STRING(watch_name);
+#ifdef DAEMON
     FREE_STRING(run_as_user);
+#endif
 #ifdef UNSAFE
     FREE_STRING(file);
 #endif

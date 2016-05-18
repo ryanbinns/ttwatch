@@ -1896,6 +1896,7 @@ int list_devices_callback(TTWATCH *watch, void *data)
     return 1;
 }
 
+#ifdef DAEMON
 /*****************************************************************************/
 void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)
 {
@@ -2047,6 +2048,7 @@ void daemonise(const char *user)
         setuid(pwd->pw_uid);
     }
 }
+#endif  /* DAEMON */
 
 /*****************************************************************************/
 void help(char *argv[])
@@ -2069,7 +2071,9 @@ void help(char *argv[])
     write_log(0, "                               watch. Does NOT save the data before deleting it\n");
     write_log(0, "      --create-continuous-race [RACE] Create a continuously monitored race and\n");
     write_log(0, "                               uploads it to the watch (see below)\n");
+#ifdef DAEMON
     write_log(0, "      --daemon               Run the program in daemon mode\n");
+#endif
 #ifdef UNSAFE
     write_log(0, "      --delete               Deletes a single file from the device\n");
 #endif
@@ -2096,7 +2100,9 @@ void help(char *argv[])
 #ifdef UNSAFE
     write_log(0, "  -r, --read=NUMBER          Reads a single file from the device\n");
 #endif
+#ifdef DAEMON
     write_log(0, "      --runas=USER[:GROUP]   Run the daemon as the specified user, and\n");
+#endif
     write_log(0, "                               optionally as the specified group\n");
     write_log(0, "      --set-formats=LIST     Sets the list of file formats that are saved\n");
     write_log(0, "                               when processing activity files\n");
@@ -2198,6 +2204,7 @@ void help(char *argv[])
     write_log(0, "    specifies a race for running 400m in 1 minute, followed by 10km at 4min/km\n");
     write_log(0, "Note that the watch cannot differentiate between multiple segments, so it\n");
     write_log(0, "will not notify you when you have finished a segment.\n");
+#ifdef DAEMON
     write_log(0, "\n");
     write_log(0, "The program can be run as a daemon, which will automatically perform\n");
     write_log(0, "the operations specified on the command line whenever a watch is\n");
@@ -2208,6 +2215,7 @@ void help(char *argv[])
     write_log(0, "root, which is not recommended for security reasons. Note that this\n");
     write_log(0, "unprivileged user must have access to the USB devices, and write access\n");
     write_log(0, "to the activity store location.\n");
+#endif
 }
 
 /*****************************************************************************/
@@ -2252,7 +2260,10 @@ int main(int argc, char *argv[])
         { "devices",        no_argument,       &options->list_devices,    1 },
         { "get-formats",    no_argument,       &options->list_formats,    1 },
         { "get-name",       no_argument,       &options->get_name,        1 },
+#ifdef DAEMON
         { "daemon",         no_argument,       &options->daemon_mode,     1 },
+        { "runas",          required_argument, 0, 3   },
+#endif
         { "list-races",     no_argument,       &options->list_races,      1 },
         { "list-history",   no_argument,       &options->list_history,    1 },
         { "clear-data",     no_argument,       &options->clear_data,      1 },
@@ -2266,7 +2277,6 @@ int main(int argc, char *argv[])
         { "activity-store", required_argument, 0, 's' },
         { "set-name",       required_argument, 0, 1   },
         { "set-formats",    required_argument, 0, 2   },
-        { "runas",          required_argument, 0, 3   },
         { "delete-history", required_argument, 0, 4   },
         { "update-race",    required_argument, 0, 5   },
         { "setting",        required_argument, 0, 6   },
@@ -2300,12 +2310,14 @@ int main(int argc, char *argv[])
             options->set_formats = 1;
             options->formats = parse_format_list(optarg);
             break;
+#ifdef DAEMON
         case 3:     /* set daemon user */
             options->run_as = 1;
             if (options->run_as_user)
                 free(options->run_as_user);
             options->run_as_user = strdup(optarg);
             break;
+#endif
         case 4:     /* delete history entry */
             options->delete_history = 1;
             if (options->history_entry)
@@ -2429,6 +2441,7 @@ int main(int argc, char *argv[])
             sprintf(options->activity_store, "%s/ttwatch", home);
     }
 
+#ifdef DAEMON
     /* if daemon mode is requested ...*/
     if (options->daemon_mode)
     {
@@ -2509,6 +2522,7 @@ int main(int argc, char *argv[])
         free_options(options);
         _exit(0);
     }
+#endif  /* DAEMON */
 
     /* we need to do something, otherwise just show the help */
     if (
