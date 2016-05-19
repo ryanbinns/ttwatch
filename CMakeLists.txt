@@ -14,9 +14,7 @@ if(daemon)
   add_definitions(-DDAEMON)
 endif(daemon)
 
-include_directories(include)
-include_directories(src)
-include_directories(manifest)
+include_directories(include src ${CMAKE_CURRENT_BINARY_DIR})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 find_package(CURL)
@@ -40,14 +38,25 @@ target_link_libraries(ttbincnv libttbin m)
 add_executable(ttbinmod src/ttbinmod.c)
 target_link_libraries(ttbinmod libttbin m ${CURL_LIBRARIES})
 
+set(MANIFEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/manifest")
+
+add_custom_target(manifest
+  DEPENDS manifest_definitions.h manifest_definitions_00010113.h manifest_definitions_0001082e.h)
+add_custom_command(OUTPUT manifest_definitions.h
+  DEPENDS ${MANIFEST_DIR}/manifest.txt ${MANIFEST_DIR}/make_manifest.pl
+  COMMAND ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest.txt > manifest_definitions.h)
+
+add_custom_command(OUTPUT manifest_definitions_00010113.h
+  DEPENDS ${MANIFEST_DIR}/manifest_00010113.txt ${MANIFEST_DIR}/make_manifest.pl
+  COMMAND ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_00010113.txt > manifest_definitions_00010113.h)
+
+add_custom_command(OUTPUT manifest_definitions_0001082e.h
+  DEPENDS ${MANIFEST_DIR}/manifest_0001082e.txt ${MANIFEST_DIR}/make_manifest.pl
+  COMMAND ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001082e.txt > manifest_definitions_0001082e.h)
+
 set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c)
 add_executable(ttwatch ${TTWATCH_SRC})
 target_link_libraries(ttwatch libttwatch libttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
-add_custom_target(manifest
-  COMMAND ./make_manifest.pl < manifest.txt > manifest_definitions.h
-  COMMAND ./make_manifest.pl < manifest_00010113.txt > manifest_definitions_00010113.h
-  COMMAND ./make_manifest.pl < manifest_0001082e.txt > manifest_definitions_0001082e.h
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/manifest)
 add_dependencies(ttwatch manifest)
 
 install(TARGETS ttwatch ttbincnv ttbinmod DESTINATION bin)
