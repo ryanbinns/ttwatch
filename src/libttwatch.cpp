@@ -10,25 +10,13 @@
 #include "string.h"
 #include "unistd.h"
 
-#ifndef __APPLE__
-#include "endian.h"
-#else
-#include <libkern/OSByteOrder.h>
-
-#define htobe16(x) OSSwapHostToBigInt16(x)
-#define htole16(x) OSSwapHostToLittleInt16(x)
-#define be16toh(x) OSSwapBigToHostInt16(x)
-#define le16toh(x) OSSwapLittleToHostInt16(x)
-
-#define htobe32(x) OSSwapHostToBigInt32(x)
-#define htole32(x) OSSwapHostToLittleInt32(x)
-#define be32toh(x) OSSwapBigToHostInt32(x)
-#define le32toh(x) OSSwapLittleToHostInt32(x)
-
-#define htobe64(x) OSSwapHostToBigInt64(x)
-#define htole64(x) OSSwapHostToLittleInt64(x)
-#define be64toh(x) OSSwapBigToHostInt64(x)
-#define le64toh(x) OSSwapLittleToHostInt64(x)
+#ifdef TT_BIG_ENDIAN
+#   define TT_BIGENDIAN(x)   (x)
+#else   /* TT_LITTLE_ENDIAN */
+#   define TT_BIGENDIAN(x)   ( ((((x) >> 24) & 0xff) <<  0) | \
+                               ((((x) >> 16) & 0xff) <<  8) | \
+                               ((((x) >>  8) & 0xff) << 16) | \
+                               ((((x) >>  0) & 0xff) << 24) )
 #endif
 
 #include <string>
@@ -479,12 +467,12 @@ int ttwatch_open_file(TTWATCH *watch, uint32_t id, int read, TTWATCH_FILE **file
     if (watch->current_file)
         return TTWATCH_FileOpen;
 
-    TXFileOperationPacket request = { htobe32(id) };
+    TXFileOperationPacket request = { TT_BIGENDIAN(id) };
     RXFileOperationPacket response = { 0, 0, { 0, 0 }, 0 };
     RETURN_ERROR(send_packet(watch, read ? MSG_OPEN_FILE_READ : MSG_OPEN_FILE_WRITE,
             sizeof(request), (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
 
-    if ((request.id != response.id) || (be32toh(response.error) != 0))
+    if ((request.id != response.id) || (TT_BIGENDIAN(response.error) != 0))
         return TTWATCH_InvalidResponse;
 
     *file = (TTWATCH_FILE*)malloc(sizeof(TTWATCH_FILE));
@@ -503,7 +491,7 @@ int ttwatch_close_file(TTWATCH_FILE *file)
     if (!file->watch->current_file)
         return TTWATCH_FileNotOpen;
 
-    TXFileOperationPacket request = { htobe32(file->file_id) };
+    TXFileOperationPacket request = { TT_BIGENDIAN(file->file_id) };
     RXFileOperationPacket response = { 0, 0, { 0, 0 }, 0 };
     RETURN_ERROR(send_packet(file->watch, MSG_CLOSE_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
@@ -520,7 +508,7 @@ int ttwatch_delete_file(TTWATCH *watch, uint32_t id)
     if (watch->current_file)
         return TTWATCH_FileOpen;
 
-    TXFileOperationPacket request = { htobe32(id) };
+    TXFileOperationPacket request = { TT_BIGENDIAN(id) };
     RXFileOperationPacket response = { 0, 0, { 0, 0 }, 0 };
     return send_packet(watch, MSG_DELETE_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response);
@@ -534,12 +522,12 @@ int ttwatch_get_file_size(TTWATCH_FILE *file, uint32_t *size)
     if (!file->watch->current_file)
         return TTWATCH_FileNotOpen;
 
-    TXFileOperationPacket request = { htobe32(file->file_id) };
+    TXFileOperationPacket request = { TT_BIGENDIAN(file->file_id) };
     RXGetFileSizePacket response = { 0, 0, 0, 0, 0 };
     RETURN_ERROR(send_packet(file->watch, MSG_GET_FILE_SIZE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
 
-    *size = be32toh(response.file_size);
+    *size = TT_BIGENDIAN(response.file_size);
     return TTWATCH_NoError;
 }
 
@@ -551,7 +539,7 @@ int ttwatch_read_file_data(TTWATCH_FILE *file, void *data, uint32_t length)
     if (!file->watch->current_file)
         return TTWATCH_FileNotOpen;
 
-    TXReadFileDataPacket request = { htobe32(file->file_id), htobe32(length) };
+    TXReadFileDataPacket request = { TT_BIGENDIAN(file->file_id), TT_BIGENDIAN(length) };
     RXReadFileDataPacket response = { 0, 0, { 0 } };
     RETURN_ERROR(send_packet(file->watch, MSG_READ_FILE_DATA_REQUEST, sizeof(request),
         (uint8_t*)&request, length + 8, (uint8_t*)&response));
@@ -571,7 +559,7 @@ int ttwatch_write_file_data(TTWATCH_FILE *file, const void *data, uint32_t lengt
     if (!file->watch->current_file)
         return TTWATCH_FileNotOpen;
 
-    TXWriteFileDataPacket request = { htobe32(file->file_id), { 0 } };
+    TXWriteFileDataPacket request = { TT_BIGENDIAN(file->file_id), { 0 } };
     RXWriteFileDataPacket response = { 0, 0, { 0 } };
     memcpy(request.data, data, length);
     RETURN_ERROR(send_packet(file->watch, MSG_WRITE_FILE_DATA, length + 4,
@@ -593,10 +581,10 @@ int ttwatch_find_first_file(TTWATCH *watch, uint32_t *file_id, uint32_t *length)
     RETURN_ERROR(send_packet(watch, MSG_FIND_FIRST_FILE, sizeof(request),
         (uint8_t*)&request, sizeof(response), (uint8_t*)&response));
 
-    if (file_id) *file_id = be32toh(response.id);
-    if (length) *length   = be32toh(response.file_size);
+    if (file_id) *file_id = TT_BIGENDIAN(response.id);
+    if (length) *length   = TT_BIGENDIAN(response.file_size);
 
-    return be32toh(response.end_of_list) ? TTWATCH_NoMoreFiles : TTWATCH_NoError;
+    return TT_BIGENDIAN(response.end_of_list) ? TTWATCH_NoMoreFiles : TTWATCH_NoError;
 }
 
 //------------------------------------------------------------------------------
@@ -611,10 +599,10 @@ int ttwatch_find_next_file(TTWATCH *watch, uint32_t *file_id, uint32_t *length)
     RETURN_ERROR(send_packet(watch, MSG_FIND_NEXT_FILE, 0, 0,
         sizeof(response), (uint8_t*)&response));
 
-    if (file_id) *file_id = be32toh(response.id);
-    if (length) *length   = be32toh(response.file_size);
+    if (file_id) *file_id = TT_BIGENDIAN(response.id);
+    if (length) *length   = TT_BIGENDIAN(response.file_size);
 
-    return be32toh(response.end_of_list) ? TTWATCH_NoMoreFiles : TTWATCH_NoError;
+    return TT_BIGENDIAN(response.end_of_list) ? TTWATCH_NoMoreFiles : TTWATCH_NoError;
 }
 
 //------------------------------------------------------------------------------
@@ -760,7 +748,7 @@ int ttwatch_get_watch_time(TTWATCH *watch, time_t *time)
     RXGetCurrentTimePacket response = { 0, { 0 } };
     RETURN_ERROR(send_packet(watch, MSG_GET_CURRENT_TIME, 0, 0, sizeof(response), (uint8_t*)&response));
 
-    *time = be32toh(response.utc_time);
+    *time = TT_BIGENDIAN(response.utc_time);
     return TTWATCH_NoError;
 }
 
@@ -794,7 +782,7 @@ int ttwatch_get_product_id(TTWATCH *watch, uint32_t *product_id)
     RXGetProductIDPacket response = {0};
     RETURN_ERROR(send_packet(watch, MSG_GET_PRODUCT_ID, 0, 0, sizeof(response), (uint8_t*)&response));
 
-    *product_id = be32toh(response.product_id);
+    *product_id = TT_BIGENDIAN(response.product_id);
     return TTWATCH_NoError;
 }
 
@@ -830,7 +818,7 @@ int ttwatch_get_ble_version(TTWATCH *watch, uint32_t *ble_version)
     RETURN_ERROR(send_packet(watch, MSG_GET_BLE_VERSION, 0, 0, sizeof(response), (uint8_t*)&response));
 
     if (ble_version)
-        *ble_version = be32toh(response.ble_version);
+        *ble_version = TT_BIGENDIAN(response.ble_version);
     return TTWATCH_NoError;
 }
 
@@ -917,7 +905,7 @@ int ttwatch_format(TTWATCH *watch)
     RXFormatWatchPacket response;
     RETURN_ERROR(send_packet(watch, MSG_FORMAT_WATCH, 0, 0, sizeof(response), (uint8_t*)&response));
 
-    if (be32toh(response.error) != 0)
+    if (TT_BIGENDIAN(response.error) != 0)
         return TTWATCH_InvalidResponse;
 
     return TTWATCH_NoError;

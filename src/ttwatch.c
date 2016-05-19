@@ -2420,7 +2420,7 @@ int main(int argc, char *argv[])
 #else
     if (optind < argc)
     {
-        write_log(0, "Invalid parameter specified: %s", argv[optind]);
+        write_log(0, "Invalid parameter specified: %s\n", argv[optind]);
         free_options(options);
         return 1;
     }

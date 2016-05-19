@@ -14,6 +14,14 @@ if(daemon)
   add_definitions(-DDAEMON)
 endif(daemon)
 
+include(TestBigEndian)
+test_big_endian(is_big_endian)
+if(is_big_endian)
+  add_definitions(-DTT_BIG_ENDIAN)
+else()
+  add_definitions(-DTT_LITTLE_ENDIAN)
+endif(is_big_endian)
+
 include_directories(include src ${CMAKE_CURRENT_BINARY_DIR})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
