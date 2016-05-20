@@ -5,14 +5,19 @@ option(unsafe "Enable unsafe operations" off)
 option(daemon "Enable daemon operations" on)
 
 if(unsafe)
-  message( STATUS "Enabled unsafe operations")
+  message(STATUS "Enabled unsafe operations")
   add_definitions(-DUNSAFE)
 endif(unsafe)
 
 if(daemon)
-  message( STATUS "Enabled daemon function")
+  message(STATUS "Enabled daemon function")
   add_definitions(-DDAEMON)
 endif(daemon)
+
+include(FindPerl)
+if(!${PERL_FOUND})
+  message(ERROR "Perl not found")
+endif()
 
 include(TestBigEndian)
 test_big_endian(is_big_endian)
@@ -52,15 +57,15 @@ add_custom_target(manifest
   DEPENDS manifest_definitions.h manifest_definitions_00010113.h manifest_definitions_0001082e.h)
 add_custom_command(OUTPUT manifest_definitions.h
   DEPENDS ${MANIFEST_DIR}/manifest.txt ${MANIFEST_DIR}/make_manifest.pl
-  COMMAND ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest.txt > manifest_definitions.h)
+  COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest.txt > manifest_definitions.h)
 
 add_custom_command(OUTPUT manifest_definitions_00010113.h
   DEPENDS ${MANIFEST_DIR}/manifest_00010113.txt ${MANIFEST_DIR}/make_manifest.pl
-  COMMAND ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_00010113.txt > manifest_definitions_00010113.h)
+  COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_00010113.txt > manifest_definitions_00010113.h)
 
 add_custom_command(OUTPUT manifest_definitions_0001082e.h
   DEPENDS ${MANIFEST_DIR}/manifest_0001082e.txt ${MANIFEST_DIR}/make_manifest.pl
-  COMMAND ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001082e.txt > manifest_definitions_0001082e.h)
+  COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001082e.txt > manifest_definitions_0001082e.h)
 
 set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c)
 add_executable(ttwatch ${TTWATCH_SRC})
