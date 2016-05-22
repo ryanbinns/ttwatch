@@ -117,6 +117,30 @@ runs make (as printed by the `logname` command) to the usb group. Simply run:
 
 ```
 $ sudo make install_udev
+
+User access under FreeBSD:
+
+
+add two lines to the file
+etc/devfs.rules
+
+[usb_devices=10]
+add path 'usb/*' mode 0660 group usb
+
+Add a line to :
+/etc/rc.conf:
+
+# Set the default devfs ruleset.
+devfs_system_ruleset="usb_devices"
+
+create group usb:
+
+# pw groupadd usb
+
+add user to group usb
+
+# pw groupmod usb -m username
+
 ```
 
 Daemon Mode
