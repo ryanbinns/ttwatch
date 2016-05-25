@@ -408,8 +408,8 @@ int main(int argc, const char **argv)
 
         // we need the hci_handle too
         struct l2cap_conninfo l2cci;
-        socklen_t length = sizeof l2cci;
-        int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &length);
+        socklen_t sl = sizeof l2cci;
+        int result = getsockopt(fd, SOL_L2CAP, L2CAP_CONNINFO, &l2cci, &sl);
         if (result < 0) {
             perror("getsockopt");
             goto fail;
@@ -501,6 +501,7 @@ int main(int argc, const char **argv)
         // transfer files
         uint8_t *fbuf;
         FILE *f;
+        int length;
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hostname);
         tt_delete_file(ttd, 0x00020002);

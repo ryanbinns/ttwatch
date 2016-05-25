@@ -1,4 +1,4 @@
-override CFLAGS += --std=c99 -Wall
+override CFLAGS += --std=c99 -O2 -Wall -Wtype-limits
 LDFLAGS += -lcurl -lbluetooth -lpopt
 
 SRC = ttblue.c \
