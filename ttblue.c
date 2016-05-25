@@ -641,6 +641,8 @@ int main(int argc, const char **argv)
                     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
                     curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
                     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerr);
+                    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10); // connection phase
+                    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60);        // transfer phase
                     res = curl_easy_perform(curl);
                     curl_easy_cleanup(curl);
                     if (res != 0) {

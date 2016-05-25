@@ -24,7 +24,7 @@ do
         ttbincnv -t < $F | gzip -c -9 |
         curl -s -X POST https://www.strava.com/api/v3/uploads \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -F file=@- -F data_type=tcx.gz |
+            -F file=@- -F data_type=tcx.gz -m 60 |
         grep -oP '"id":\d+' | cut -c6-
     )
 done
