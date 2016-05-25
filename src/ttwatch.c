@@ -262,8 +262,10 @@ char *replace(char *str, const char *old, const char *new)
     char *ptr = strstr(str, old);
     while (ptr)
     {
-        size_t offset = ptr - str;
-        char *new_str = (char*)malloc((int)strlen(str) + correct + 1);
+        const size_t offset = ptr - str;
+        const size_t new_str_len = (int)strlen(str) + correct + 1;
+        char *new_str = (char*)malloc(new_str_len);
+        memset(new_str, 0, new_str_len);
 
         strncpy(new_str, str, offset);
         strcat(new_str, new);
