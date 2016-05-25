@@ -418,7 +418,7 @@ int main(int argc, const char **argv)
         time_t now = time(NULL);
         fprintf(stderr, "Connected to v%d device at %.24s.\n", ttd->protocol_version, ctime(&now));
 
-        if (ttd->h->ppcp > 0) {
+        if (ttd->h->ppcp != 0) {
             // request minimum connection interval
             do {
                 result = hci_le_conn_update(dd, htobs(l2cci.hci_handle),

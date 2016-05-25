@@ -18,7 +18,7 @@
 /****************************************************************************/
 
 struct tt_handles v1_handles = { .ppcp=0x0b, .passcode=0x32, .magic=0x35, .cmd_status=0x25, .length=0x28, .transfer=0x2b, .check=0x2e };
-struct tt_handles v2_handles = { .ppcp=-1,   .passcode=0x82, .magic=0x85, .cmd_status=0x72, .length=0x75, .transfer=0x78, .check=0x7b };
+struct tt_handles v2_handles = { .ppcp=0,    .passcode=0x82, .magic=0x85, .cmd_status=0x72, .length=0x75, .transfer=0x78, .check=0x7b };
 
 struct ble_dev_info v1_info[] = {
     { 0x001e, "maker" },
