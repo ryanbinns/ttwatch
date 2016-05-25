@@ -1976,7 +1976,9 @@ void daemonise(const char *user)
     }
 
     /* find the group in the user name */
-    group = strchr(user, ':');
+    group = 0;
+    if (user)
+        group = strchr(user, ':');
     if (group)
         *(group++) = 0;
 
@@ -2041,7 +2043,7 @@ void daemonise(const char *user)
         chown("/var/log/ttwatch", pwd->pw_uid, pwd->pw_gid);
 
     /* drop privileges to that of the specified user */
-    if ((getuid() == 0) && user)
+    if (user)
     {
         if (group)
             setgid(grp->gr_gid);
