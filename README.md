@@ -123,7 +123,7 @@ If your system uses `devfs` instead of `udev` (such as FreeBSD), configure as fo
 
 ```
 [usb_devices=10]
-add path 'usb'*' mode 0660 group usb
+add path 'usb/*' mode 0660 group usb
 ```
 
 Next, add the following lines to `/etc/rc.conf`:
