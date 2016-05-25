@@ -135,8 +135,8 @@ devfs_system_ruleset="usb_devices"
 Lastly, create the `usb` group and add the required user to it:
 
 ```
-$ pw groupadd usb
-$ pw groupmod usb -m <your_username>
+# pw groupadd usb
+# pw groupmod usb -m <your_username>
 ```
 
 Daemon Mode
