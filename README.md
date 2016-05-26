@@ -137,8 +137,8 @@ Lastly, create the `usb` group and add the required user to it (these commands
 must be run as `root`):
 
 ```
-$ pw groupadd usb
-$ pw groupmod usb -m <your_username>
+# pw groupadd usb
+# pw groupmod usb -m <your_username>
 ```
 
 Daemon Mode
