@@ -6,17 +6,19 @@ Linux TomTom GPS Watch Utilities
 Provides programs for communicating with TomTom GPS watches and processing
 the data they collect.
 
-1. `ttwatch` - USB communications program for performing various operations
-               with the watch, including downloading activity data, updating
-               GPS data, and updating firmware.
-2. `ttbincnv` - Post-processor allowing conversion of the ttbin file formats
+1. `ttwatch`  - USB communications program for performing various operations
+                with the watch, including downloading activity data, updating
+                GPS data, and updating firmware.
+2. `ttwatchd` - Daemon program that automatically performs specified functions
+                when a watch is connected to the PC.
+3. `ttbincnv` - Post-processor allowing conversion of the ttbin file formats
                 to either (currently) csv, gpx, kml or tcx  files, using broadly
                 similar formats to the official TomTom file formats.
-3. `ttbinmod` - Post-processor allowing modifications to be made to the ttbin
+4. `ttbinmod` - Post-processor allowing modifications to be made to the ttbin
                 file. Currently, adding/modifying lap markers and truncating the
                 file at the end of the workout (last lap, goal completion etc)
                 are supported.
-4. `ttbin2mysports.sh` - script that enabled uploading to a MapMyFitness account
+5. `ttbin2mysports.sh` - script that enabled uploading to a MapMyFitness account
                          that is linked to a MySports account. Automatically
                          converts the ttbin file to a TCX file before uploading.
 
@@ -142,10 +144,10 @@ Lastly, create the `usb` group and add the required user to it:
 Daemon Mode
 ===========
 
-The ttwatch program supports running as a daemon, which will wait for a watch
-to be connected, then automatically perform whichever operations are specified
-on the command line. The following four operations are supported, and at least
-one of them must be specified to start the daemon:
+The ttwatchd program runs as a daemon, which will wait for a watch to be
+connected, then automatically perform whichever operations are specified on the
+command line. The following four operations are supported, and at least one of
+them must be specified to start the daemon:
 
 1. `--get-activities`: Download the activity files and store them, including
    converting them to other file formats as specified in the watch preferences
@@ -162,10 +164,10 @@ The daemon must be started as root (run by `init` or `sudo`), but the `--runas`
 parameter can be specified to provide an alternative user (and optionally
 a group - such as the usb group mentioned above) to run as.
 
-Note: Daemon mode is not supported under FreeBSD as the FreeBSD version of
+Note: The daemon is not supported under FreeBSD as the FreeBSD version of
       libusb does not support hot-plug detection and causes compilation
       errors. To resolve this, run `cmake -Ddaemon=off` to force the
-      compilation to remove the daemon mode support.
+      compilation to remove the daemon support.
 
 Multiple Watches
 ================
@@ -200,7 +202,7 @@ knowing what you are doing.
 Config Files
 ============
 
-The `ttwatch` program supports loading some settings from config files. Three
+The ttwatch programs supports loading some settings from config files. Three
 config files can be used: global, per-user, and per-watch. They are located
 in the following locations:
 
@@ -247,7 +249,7 @@ Applicable options (*not* case sensitive) and their values are as follows:
             list can be either space- or comma-separated, or a combination
             of the two. This is a string value.
 
-The following options only take effect when running as a daemon:
+The following options only take effect when running the `ttwatchd` daemon:
 
 1. UpdateFirmware: tells the daemon to check and update the firmware of any
                    watch that is connected. This is a boolean value.

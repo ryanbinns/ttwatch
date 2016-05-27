@@ -34,11 +34,9 @@ typedef struct
     int list_formats;
     int set_formats;
     uint32_t formats;
-#ifdef DAEMON
     int daemon_mode;
     int run_as;
     char *run_as_user;
-#endif
     char *activity_store;
     int list_races;
     int update_race;
