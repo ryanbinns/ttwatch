@@ -121,7 +121,8 @@ runs make (as printed by the `logname` command) to the usb group. Simply run:
 $ sudo make install_udev
 ```
 
-If your system uses `devfs` instead of `udev` (such as FreeBSD), configure as follows. Firstly, add the following lines to `/etc/devfs.rules`:
+If your system uses `devfs` instead of `udev` (such as FreeBSD), configure as follows.
+Firstly, add the following lines to `/etc/devfs.rules`:
 
 ```
 [usb_devices=10]
@@ -134,7 +135,8 @@ Next, add the following lines to `/etc/rc.conf`:
 devfs_system_ruleset="usb_devices"
 ```
 
-Lastly, create the `usb` group and add the required user to it:
+Lastly, create the `usb` group and add the required user to it (these commands
+must be run as `root`):
 
 ```
 # pw groupadd usb
