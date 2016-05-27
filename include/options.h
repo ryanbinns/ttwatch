@@ -3,6 +3,9 @@
 ** Interface of basic config file loading                                     **
 \******************************************************************************/
 
+#ifndef __OPTIONS_H__
+#define __OPTIONS_H__
+
 #include <stdint.h>
 
 typedef struct
@@ -69,3 +72,4 @@ OPTIONS *alloc_options();
 OPTIONS *copy_options(const OPTIONS *o);
 void free_options(OPTIONS *o);
 
+#endif  /* __OPTIONS_H__ */

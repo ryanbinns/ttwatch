@@ -67,10 +67,14 @@ add_custom_command(OUTPUT manifest_definitions_0001082e.h
   DEPENDS ${MANIFEST_DIR}/manifest_0001082e.txt ${MANIFEST_DIR}/make_manifest.pl
   COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001082e.txt > manifest_definitions_0001082e.h)
 
-set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c)
+set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c src/download.c src/firmware.c src/misc.c src/get_activities.c src/update_gps.c src/set_time.c)
 add_executable(ttwatch ${TTWATCH_SRC})
 target_link_libraries(ttwatch libttwatch libttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
 add_dependencies(ttwatch manifest)
+
+set(TTWATCHD_SRC src/ttwatchd.c src/log.c src/options.c src/json.c src/download.c src/firmware.c src/misc.c src/get_activities.c src/update_gps.c src/set_time.c)
+add_executable(ttwatchd ${TTWATCHD_SRC})
+target_link_libraries(ttwatchd libttwatch libttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
 
 install(TARGETS ttwatch ttbincnv ttbinmod DESTINATION bin)
 install(FILES ttbin2mysports DESTINATION bin)
