@@ -673,17 +673,18 @@ int main(int argc, const char **argv)
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
                                 goto fail;
-                            } else if (last_gqf_update == 0 || update_gps >= 3) {
+                            } else {
                                 // official TomTom Android app seems to only issue this
                                 // "magic" update command when the GPS is brand new or
                                 // after a factory reset, or with 3x --update-gps
                                 att_write(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+
+                                time_t last_gqf_update = read_gqf_status(ttd, debug-1);
+                                if (last_gqf_update != -1 && last_gqf_update != 0)
+                                    fprintf(stderr, "  Last GPS update is now %.24s.\n", ctime(&last_gqf_update));
+                                else
+                                    fprintf(stderr, "  Could not re-read GPS update time.\n");
                             }
-                            time_t last_gqf_update = read_gqf_status(ttd, debug-1);
-                            if (last_gqf_update != -1 && last_gqf_update != 0)
-                                fprintf(stderr, "  Last GPS update is now %.24s.\n", ctime(&last_gqf_update));
-                            else
-                                fprintf(stderr, "  Could not re-read GPS update time.\n");
                         }
                     }
                 }
