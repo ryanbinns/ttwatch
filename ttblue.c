@@ -220,7 +220,7 @@ done:
 }
 
 time_t
-read_qfg_status(TTDEV *ttd, int debug)
+read_gqf_status(TTDEV *ttd, int debug)
 {
     time_t last_update = 0;
     uint32_t fileno = 0x00020001;
@@ -624,12 +624,12 @@ int main(int argc, const char **argv)
             fputs("Updating QuickFixGPS...\n", stderr);
             term_title("ttblue: Updating QuickFixGPS");
 
-            time_t last_qfg_update = read_qfg_status(ttd, debug);
-            if (update_gps <= 1 && time(NULL) - last_qfg_update < 24*3600) {
-                fprintf(stderr, "  No GPS update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
+            time_t last_gqf_update = read_gqf_status(ttd, debug-1);
+            if (update_gps <= 1 && time(NULL) - last_gqf_update < 24*3600) {
+                fprintf(stderr, "  No GPS update needed, last was less than %ld hours ago\n", (time(NULL) - last_gqf_update)/3600);
             } else {
-                if (last_qfg_update != -1 && last_qfg_update != 0)
-                    fprintf(stderr, "  Last GPS update was at %.24s.\n", ctime(&last_qfg_update));
+                if (last_gqf_update != -1 && last_gqf_update != 0)
+                    fprintf(stderr, "  Last GPS update was at %.24s.\n", ctime(&last_gqf_update));
                 else
                     fprintf(stderr, "  Last GPS update unknown.\n");
 
@@ -673,15 +673,15 @@ int main(int argc, const char **argv)
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
                                 goto fail;
-                            } else if (last_qfg_update == 0 || update_gps >= 3) {
+                            } else if (last_gqf_update == 0 || update_gps >= 3) {
                                 // official TomTom Android app seems to only issue this
                                 // "magic" update command when the GPS is brand new or
                                 // after a factory reset, or with 3x --update-gps
                                 att_write(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
                             }
-                            time_t last_qfg_update = read_qfg_status(ttd, debug);
-                            if (last_qfg_update != -1 && last_qfg_update != 0)
-                                fprintf(stderr, "  Last GPS update is now %.24s.\n", ctime(&last_qfg_update));
+                            time_t last_gqf_update = read_gqf_status(ttd, debug-1);
+                            if (last_gqf_update != -1 && last_gqf_update != 0)
+                                fprintf(stderr, "  Last GPS update is now %.24s.\n", ctime(&last_gqf_update));
                             else
                                 fprintf(stderr, "  Could not re-read GPS update time.\n");
                         }

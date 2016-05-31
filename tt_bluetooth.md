@@ -430,17 +430,17 @@ BLE protocol and firmware:
 ## File 0x00020001
 
 Partially decoded structure of this file: it appears to encode the UTC
-date of the last update to the QuickFixGPS file. Sending the GLONASS
+date of the last update to the GPSQuickFix file. Sending the GLONASS
 version of the update rather than the GPS version does not appear to
 affect anything other than the timestamp.
 
-Perhaps this can be used to avoid re-updating the QFG file
+Perhaps this can be used to avoid re-updating the GQF file
 unnecessarily on every connection... but I'm not really sure how to
-determine when the QFG file *expires*.
+determine when the GQF file *expires*.
 
     00: 03 00 (possibly the expiration of the ephemeris file in days?)
 
-    Aha! This one seems to be the date when the QFG was
+    Aha! This one seems to be the date when the GQF was
     last UPDATED:
       02: 07 df = 2015 (int16_be)
       04: 08 = month 8
