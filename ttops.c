@@ -290,7 +290,7 @@ tt_read_file(TTDEV *d, uint32_t fileno, int debug, uint8_t **buf)
             time_t current = time(NULL);
             int rate = current-startat ? (optr-*buf)/(current-startat) : 9999;
             if (optr<end)
-                fprintf(stderr, "%d: read %d/%d bytes so far (%d/sec)\r", counter, (int)(optr-*buf), (int)(end-*buf), rate);
+                fprintf(stderr, "%d: read %d/%d bytes so far (%d/sec)%c", counter, (int)(optr-*buf), (int)(end-*buf), rate, debug<=2 ? '\r' : '\n');
             else
                 fprintf(stderr, "%d: read %d bytes from watch (%d/sec)      \n", counter, flen, rate);
             fflush(stdout);
@@ -391,7 +391,7 @@ tt_write_file(TTDEV *d, uint32_t fileno, int debug, const uint8_t *buf, uint32_t
             time_t current = time(NULL);
             int rate = current-startat ? (iptr-buf)/(current-startat) : 9999;
             if (iptr<end)
-                fprintf(stderr, "%d: wrote %d/%d bytes so far (%d/sec)\r", counter, (int)(iptr-buf), (int)(end-buf), rate);
+                fprintf(stderr, "%d: wrote %d/%d bytes so far (%d/sec)%c", counter, (int)(iptr-buf), (int)(end-buf), rate, debug<=2 ? '\r' : '\n');
             else
                 fprintf(stderr, "%d: wrote %d bytes to watch (%d/sec)       \n", counter, length, rate);
             fflush(stdout);
