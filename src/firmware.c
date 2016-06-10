@@ -97,7 +97,7 @@ static int update_firmware_file(TTWATCH *watch, FIRMWARE_FILE *files, int file_c
 }
 
 /*****************************************************************************/
-void do_update_firmware(TTWATCH *watch, int force)
+int do_update_firmware(TTWATCH *watch, int force)
 {
     uint32_t product_id;
     char url[128];
@@ -113,6 +113,7 @@ void do_update_firmware(TTWATCH *watch, int force)
     char *serial = 0;
     char *fw_config_url = 0;
     char *fw_base_url = 0;
+    int ret = 0;
 
     product_id = watch->product_id;
     current_version = watch->firmware_version;
@@ -124,7 +125,7 @@ void do_update_firmware(TTWATCH *watch, int force)
     if (!fw_config_url)
     {
         write_log(1, "Unable to determine firmware verion information\n");
-        return;
+        return 0;
     }
     fw_config_url = replace(fw_config_url, "{PRODUCT_ID}", "%08X");
 
@@ -274,15 +275,8 @@ void do_update_firmware(TTWATCH *watch, int force)
         /* resetting the watch causes the watch to disconnect and
            reconnect. This can take almost 90 seconds to complete */
         ttwatch_reset_watch(watch);
-        write_log(0, "Waiting for watch to restart");
-        for (i = 0; i < 45; ++i)
-        {
-            sleep(2);
-            write_log(0, ".");
-        }
-        write_log(0, "\n");
-
         write_log(0, "Firmware updated\n");
+        ret = 1;
     }
 
 cleanup:
@@ -301,4 +295,5 @@ cleanup:
         }
         free(firmware_files);
     }
+    return ret;
 }

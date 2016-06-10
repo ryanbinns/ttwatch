@@ -11,6 +11,7 @@
 #include <inttypes.h>
 
 /*************************************************************************************************/
-void do_update_firmware(TTWATCH *watch, int force);
+/* return 1 if the firmware was updated, 0 if not */
+int do_update_firmware(TTWATCH *watch, int force);
 
 #endif  /* __FIRMWARE_H__ */

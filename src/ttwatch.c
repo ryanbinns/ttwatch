@@ -1373,6 +1373,7 @@ int main(int argc, char *argv[])
 {
     int opt;
     int option_index = 0;
+    int ret = 0;
 
     TTWATCH *watch = 0;
 
@@ -1711,7 +1712,20 @@ int main(int argc, char *argv[])
         do_update_gps(watch);
 
     if (options->update_firmware)
-        do_update_firmware(watch, 0);
+    {
+        if (do_update_firmware(watch, 0))
+        {
+            int i;
+            write_log(0, "Waiting for watch to restart");
+            for (i = 0; i < 45; ++i)
+            {
+                sleep(2);
+                write_log(0, ".");
+            }
+            write_log(0, "\n");
+            ret = 2;
+        }
+    }
 
     if (options->get_name)
         do_get_watch_name(watch);
@@ -1766,6 +1780,6 @@ int main(int argc, char *argv[])
     libusb_exit(NULL);
 
     free_options(options);
-    return 0;
+    return ret;
 }
 
