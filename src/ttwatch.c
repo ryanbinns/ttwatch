@@ -11,6 +11,7 @@
 #include "firmware.h"
 #include "update_gps.h"
 #include "set_time.h"
+#include "get_activities.h"
 
 #include "libttwatch.h"
 

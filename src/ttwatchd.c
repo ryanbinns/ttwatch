@@ -9,6 +9,8 @@
 #include "log.h"
 #include "options.h"
 #include "update_gps.h"
+#include "misc.h"
+#include "set_time.h"
 
 #include <getopt.h>
 #include <stdlib.h>
@@ -18,6 +20,8 @@
 #include <grp.h>
 #include <pwd.h>
 #include <unistd.h>
+#include "sys/stat.h"
+#include "sys/types.h"
 
 /*****************************************************************************/
 void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)

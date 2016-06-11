@@ -6,6 +6,7 @@
 #include "download.h"
 #include "misc.h"
 #include "update_gps.h"
+#include "log.h"
 
 #include <stdlib.h>
 

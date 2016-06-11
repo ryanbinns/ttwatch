@@ -11,6 +11,7 @@
 
 #include <memory.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 /*****************************************************************************/
 char *replace(char *str, const char *old, const char *newstr)
