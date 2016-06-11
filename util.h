@@ -1,6 +1,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
+
 __attribute__ ((format (printf, 1, 2)))
 void term_title(const char *fmt, ...);
 

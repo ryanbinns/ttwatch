@@ -53,7 +53,6 @@ const char *PAIRING_CODE_PROMPT =
     "\n**************************************************\n"
     "Enter 6-digit pairing code shown on device: ";
 
-#define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
 #define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
 #define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
 
@@ -128,7 +127,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 /**
  * based on bluez/tools/hcitool.c
  *
- * If dst is set to all zeros (BDADDRY_ANY), then it returns the 
+ * If dst is set to all zeros (BDADDRY_ANY), then it returns the
  * first TomTom device address seen, otherwise it waits for the
  * exact matching address.
  *
