@@ -676,7 +676,7 @@ int main(int argc, const char **argv)
                                 // official TomTom Android app seems to only issue this
                                 // "magic" update command when the GPS is brand new or
                                 // after a factory reset, or with 3x --update-gps
-                                att_write(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+                                att_wrreq(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
 
                                 time_t last_gqf_update = read_gqf_status(ttd, debug-1);
                                 if (last_gqf_update != -1 && last_gqf_update != 0)
