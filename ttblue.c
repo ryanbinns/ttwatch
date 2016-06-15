@@ -128,7 +128,7 @@ static int l2cap_le_att_connect(bdaddr_t *src, bdaddr_t *dst, uint8_t dst_type,
 /**
  * based on bluez/tools/hcitool.c
  *
- * If dst is set to all zeros (BDADDRY_ANY), then it returns the 
+ * If dst is set to all zeros (BDADDRY_ANY), then it returns the
  * first TomTom device address seen, otherwise it waits for the
  * exact matching address.
  *
@@ -472,9 +472,6 @@ int main(int argc, const char **argv)
         if (version && first) {
             for (struct ble_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
-            int8_t rssi=0;
-            if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
-                fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
         }
 
         // prompt for pairing code
