@@ -494,9 +494,6 @@ int main(int argc, const char **argv)
         if (version && first) {
             for (struct ble_dev_info *p = info; p->handle; p++)
                 fprintf(stderr, "  %-10.10s: %s\n", p->name, p->buf);
-            int8_t rssi=0;
-            if (hci_read_rssi(dd, htobs(l2cci.hci_handle), &rssi, 2000) >= 0)
-                fprintf(stderr, "  %-10.10s: %d dB\n", "rssi", rssi);
         }
 
         // prompt for pairing code
