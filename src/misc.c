@@ -50,6 +50,10 @@ char *get_config_string(TTWATCH *watch, const char *name)
     json_value *value = 0;
     unsigned i;
 
+    /* make sure we've actually got a preferences file */
+    if (!watch->preferences_file)
+        return NULL;
+
     /* find the value of ConfigURL from the preferences file */
     start = strstr(watch->preferences_file, "<ConfigURL>");
     if (!start)

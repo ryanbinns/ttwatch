@@ -1,5 +1,8 @@
 cmake_minimum_required (VERSION 2.8)
 project (TTWatch C CXX)
+if(NOT CMAKE_BUILD_TYPE)
+  set (CMAKE_BUILD_TYPE Debug)
+endif(NOT CMAKE_BUILD_TYPE)
 
 option(unsafe "Enable unsafe operations" off)
 option(daemon "Enable daemon operations" on)
