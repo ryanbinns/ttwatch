@@ -92,7 +92,7 @@ After creating the udev rule, you need to reload the rules to make udev aware
 of them, by running:
 
 ```
-$ udevadm control --reload-rules
+$ sudo udevadm control --reload-rules
 ```
 
 The above udev line basically gives access to USB devices to members of the
