@@ -143,6 +143,21 @@ must be run as `root`):
 # pw groupmod usb -m <your_username>
 ```
 
+Initial Setup
+=============
+
+Before being able to use most of the commands the program provides, the watch
+needs to be set up, similar to the initial setup routine that the Windows client
+does. This is done by running
+
+```
+ttwatch --initial-setup
+```
+
+Doing this will create a default XML preferences file on the watch, as well as
+create default races for the different activities. Most of the functions rely on
+the XML preferences file existing, so this must be done first.
+
 Daemon Mode
 ===========
 
