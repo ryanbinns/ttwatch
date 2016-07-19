@@ -179,7 +179,14 @@ All four options can be specified with the `-a` (or `--auto`) option
 
 The daemon must be started as root (run by `init` or `sudo`), but the `--runas`
 parameter can be specified to provide an alternative user (and optionally
-a group - such as the usb group mentioned above) to run as.
+a group - such as the usb group mentioned above) to run as. Note that if the
+default group for the user does not have access to the USB devices, then group
+*must* be specified on the command line, For example, if user `fred` has a default
+group of `fred` (which is usual for most linux systems), but the group with access
+to the USB devices is called `usb` as above, then the parameter will need to
+be `--runas fred:usb`, otherwise there will be permissions errors trying to
+communicate with the watch. Note that in this case `fred` will also need to
+be a member of the `usb` group, otherwise there will be permissions errors also.
 
 Note: The daemon is not supported under FreeBSD as the FreeBSD version of
       libusb does not support hot-plug detection and causes compilation
@@ -205,6 +212,22 @@ the daemon will only process that particular watch. This can be used to store
 the activities from multiple watches in different users' home areas by
 starting multiple instances of the daemon running as different users,
 specifying different watches.
+
+Activity vs History Data
+========================
+
+Many people have wondered why they are not getting activity files downloaded
+to the computer even though they can see history entries using the
+`--list-history` option. Put simply, the two are almost unrelated. The activity
+data is logged every second and contains all the information collected during
+the activity. The history data is a summary of the activity data that is
+generated when the activity is completed. The history data is small, and is
+retained on the watch permanently (unless manually deleted) to support the race
+function and to view past activity details on the watch itself. The activity data
+is large, and is deleted from the watch as soon as it is successfully downloaded
+to free up space on the watch for new activities. This means that each activity
+can only be downloaded once. If it is subsequently deleted from the computer,
+*it cannot be recovered* (unless it is backed up separately).
 
 Unsafe Functions
 ================
