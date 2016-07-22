@@ -30,7 +30,7 @@ do
 done
 
 if [ -n "$ACTIVITY" ]; then
-    echo -n "http://strava.com/activities/$ACTIVITY"
+    echo "http://strava.com/activities/$ACTIVITY"
 else
     exit 1
 fi
