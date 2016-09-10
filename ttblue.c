@@ -55,6 +55,10 @@ const char *PAIRING_CODE_PROMPT =
 
 #define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
 #define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
+// Found an alternate source for the ephemeris file: https://github.com/felixge/node-ar-drone/issues/74#issuecomment-25722745
+// This one is nice because the number of days is selectable (3, 7, etc.) although TomTom seems only to
+// accept 3-day version
+#define GQF_GPS_ALT_URL "http://download.parrot.com/ephemerides/packedDifference.f2p3enc.ee?timestamp=%ld"
 
 /**
  * taken from bluez/tools/btgatt-client.c
@@ -279,10 +283,10 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
 /****************************************************************************/
 
 int debug=1;
-int get_activities=0, set_time=0, update_gps=0, use_glonass=0, version=0, daemonize=0, new_pair=1;
+int get_activities=0, set_time=0, update_gps=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10;
 uint32_t dev_code;
-char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL;
+char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL, *gqf_url=GQF_GPS_URL;
 
 struct poptOption options[] = {
     { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps --set-time --version" },
@@ -291,7 +295,8 @@ struct poptOption options[] = {
     { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
     { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
     { "update-gps", 0, POPT_ARG_NONE, NULL, 'G', "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
-    { "glonass", 0, POPT_ARG_VAL, &use_glonass, 2, "Use GLONASS version of QuickFix update file." },
+    { "glonass", 0, POPT_ARG_NONE, NULL, 'g', "Use TomTom's GLONASS version of QuickFix update file." },
+    { "qf-url", 0, POPT_ARG_STRING, &gqf_url, 0, "Alternate URL for QuickFix update (ephemeris) file." },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will use first TomTom device if unspecified", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
     { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
@@ -327,6 +332,7 @@ int main(int argc, const char **argv)
         case 'D': debug++; break;
         case 'a': get_activities = update_gps = set_time = version = true; break;
         case 'G': update_gps++; break;
+        case 'g': gqf_url = GQF_GLONASS_URL; break;
         }
     }
     if (ch<-1) {
@@ -637,7 +643,7 @@ int main(int argc, const char **argv)
                     goto fail;
                 } else {
                     char url[128];
-                    sprintf(url, use_glonass ? GQF_GLONASS_URL : GQF_GPS_URL, (long)time(NULL));
+                    sprintf(url, gqf_url, (long)time(NULL));
                     fprintf(stderr, "  Downloading %s\n", url);
 
                     f = tmpfile();
