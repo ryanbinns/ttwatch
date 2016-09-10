@@ -53,7 +53,6 @@ const char *PAIRING_CODE_PROMPT =
     "\n**************************************************\n"
     "Enter 6-digit pairing code shown on device: ";
 
-#define BARRAY(...) (const uint8_t[]){ __VA_ARGS__ }
 #define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
 #define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
 
@@ -217,6 +216,29 @@ done:
         return -1;
 
     return 0;
+}
+
+time_t
+read_gqf_status(TTDEV *ttd, int debug)
+{
+    time_t last_update = 0;
+    uint32_t fileno = 0x00020001;
+    uint8_t *fbuf;
+    int length;
+    if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
+        fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
+        last_update = -1;
+    } else {
+#ifdef DUMP_0x00020001
+        save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
+#endif
+        if (length > 6 && (fbuf[0x02] | fbuf[0x03] | fbuf[0x04] | fbuf[0x05]) != 0) {
+            struct tm tmp = { .tm_mday = fbuf[0x05], .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
+            last_update = timegm(&tmp);
+        }
+        free(fbuf);
+    }
+    return last_update;
 }
 
 const char *
@@ -598,28 +620,12 @@ int main(int argc, const char **argv)
             fputs("Updating QuickFixGPS...\n", stderr);
             term_title("ttblue: Updating QuickFixGPS");
 
-            time_t last_qfg_update = 0;
-            uint32_t fileno = 0x00020001;
-            if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 6) {
-                fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
-                last_qfg_update = -1;
+            time_t last_gqf_update = read_gqf_status(ttd, debug-1);
+            if (update_gps <= 1 && time(NULL) - last_gqf_update < 24*3600) {
+                fprintf(stderr, "  No GPS update needed, last was less than %ld hours ago\n", (time(NULL) - last_gqf_update)/3600);
             } else {
-                if ((fbuf[0x02] | fbuf[0x03] | fbuf[0x04] | fbuf[0x05]) != 0) {
-                    struct tm tmp = { .tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = fbuf[0x05],
-                                      .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
-                    last_qfg_update = timegm(&tmp);
-                }
-#ifdef DUMP_0x00020001
-                save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
-#endif
-                free(fbuf);
-            }
-
-            if (update_gps <= 1 && time(NULL) - last_qfg_update < 24*3600) {
-                fprintf(stderr, "  No GPS update needed, last was less than %ld hours ago\n", (time(NULL) - last_qfg_update)/3600);
-            } else {
-                if (last_qfg_update != -1 && last_qfg_update != 0)
-                    fprintf(stderr, "  Last GPS update was at %.24s.\n", ctime(&last_qfg_update));
+                if (last_gqf_update != -1 && last_gqf_update != 0)
+                    fprintf(stderr, "  Last GPS update was at %.24s.\n", ctime(&last_gqf_update));
                 else
                     fprintf(stderr, "  Last GPS update unknown.\n");
 
@@ -663,11 +669,17 @@ int main(int argc, const char **argv)
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
                                 goto fail;
-                            } else if (last_qfg_update == 0 || update_gps >= 3) {
+                            } else {
                                 // official TomTom Android app seems to only issue this
                                 // "magic" update command when the GPS is brand new or
                                 // after a factory reset, or with 3x --update-gps
-                                att_write(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+                                att_wrreq(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+
+                                time_t last_gqf_update = read_gqf_status(ttd, debug-1);
+                                if (last_gqf_update != -1 && last_gqf_update != 0)
+                                    fprintf(stderr, "  Last GPS update is now %.24s.\n", ctime(&last_gqf_update));
+                                else
+                                    fprintf(stderr, "  Could not re-read GPS update time.\n");
                             }
                         }
                     }
