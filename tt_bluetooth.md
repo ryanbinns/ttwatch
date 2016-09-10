@@ -370,11 +370,7 @@ Here is what the Android app does in normal operation:
    32&nbsp;KiB long and is a GPSQuickFix update file (GPS ephemeris
    data). This always comes from
    `gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee` for my
-   device, although the
-   [JSON config file referred to in the XML preferences file](https://mysports.tomtom.com/service/config/config.json)
-   shows that a separate version exists for use with
-   [GLONASS](https://en.wikipedia.org/wiki/GLONASS) satellites instead
-   of GPS.
+   device.*
 10. At this point…
     * Sometimes the device abruptly "hangs up" at this point and
       closes the connection.
@@ -388,6 +384,16 @@ Here is what the Android app does in normal operation:
       before closing the connection.
     * Newer versions of the app finish up by deleting and then writing
       various race-related files on the watch (`0x71****`).
+
+\* The
+   [JSON config file referred to in the XML preferences file](https://mysports.tomtom.com/service/config/config.json)
+   shows that a separate version of the ephemeris update exists for use with
+   [GLONASS](https://en.wikipedia.org/wiki/GLONASS) satellites instead
+   of GPS.
+   There is [another source for the GPS ephemeris file](https://github.com/felixge/node-ar-drone/issues/74#issuecomment-25722745)
+   at `http://download.parrot.com/ephemerides/packedDifference.f2p3enc.ee`.
+   This one offers a variable number of days of ephemeris data (e.g., 3, 7.) although TomTom devices seem only to
+   accept the 3-day version.
 
 # Mysteries
 
