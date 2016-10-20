@@ -342,7 +342,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
         unsigned index = 0;
 
         /* find the length of this tag */
-        while ((index < file_header->length_count) && (file_header->lengths[index].tag < p.record->tag))
+        while ((index < file_header->length_count) && (file_header->lengths[index].tag != p.record->tag))
             ++index;
         if ((index < file_header->length_count) && (file_header->lengths[index].tag == p.record->tag))
             length = file_header->lengths[index].length;
