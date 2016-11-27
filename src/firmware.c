@@ -108,7 +108,6 @@ int do_update_firmware(TTWATCH *watch, int force)
     uint32_t latest_ble_version;
     FIRMWARE_FILE *firmware_files = 0;
     int file_count = 0;
-    int i;
     char *ptr, *fw_url;
     char *serial = 0;
     char *fw_config_url = 0;
