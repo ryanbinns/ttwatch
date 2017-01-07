@@ -4,6 +4,7 @@
 \*****************************************************************************/
 
 #include "ttbin.h"
+#include "cycling_cadence.h"
 
 #include <math.h>
 
@@ -43,6 +44,7 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
     fputs("</name>\r\n        <trkseg>\r\n", file);
 
     heart_rate = 0;
+    CyclingCadenceData cc_data = cc_initialize();
     for (record = ttbin->first; record; record = record->next)
     {
         switch (record->tag)
@@ -59,18 +61,27 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             fputs(        "                <time>", file);
             fputs(timestr, file);
             fputs("</time>\r\n", file);
+            fputs("                <extensions>\r\n"
+                  "                    <gpxtpx:TrackPointExtension>\r\n", file);
             if (heart_rate > 0)
-            {
-                fputs("                <extensions>\r\n"
-                      "                    <gpxtpx:TrackPointExtension>\r\n", file);
                 fprintf(file, "                        <gpxtpx:hr>%d</gpxtpx:hr>\r\n", heart_rate);
-                fputs("                    </gpxtpx:TrackPointExtension>\r\n"
-                      "                </extensions>\r\n", file);
+            if (cc_data.cadence_available)
+            {
+                fprintf(file, "                        <gpxtpx:cad>%d</gpxtpx:cad>\r\n", cc_data.cycling_cadence);
+                cc_gps_packet_tick(&cc_data);
             }
-            fputs(        "            </trkpt>\r\n", file);
+            fputs("                    </gpxtpx:TrackPointExtension>\r\n"
+                  "                </extensions>\r\n", file);
+            fputs("            </trkpt>\r\n", file);
             break;
         case TAG_HEART_RATE:
             heart_rate = record->heart_rate.heart_rate;
+            break;
+        case TAG_WHEEL_SIZE:
+            cc_set_wheel_size(&cc_data, &record->wheel_size);
+            break;
+        case TAG_CYCLING_CADENCE:
+            cc_sensor_packet(&cc_data, &record->cycling_cadence);
             break;
         }
     }
