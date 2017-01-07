@@ -4,6 +4,7 @@
 \*****************************************************************************/
 
 #include "ttbin.h"
+#include "cycling_cadence.h"
 
 #include <math.h>
 
@@ -16,8 +17,9 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
     unsigned heart_rate;
     double distance_factor = 1;
     unsigned time;
+    CyclingCadenceData cc_data = cc_initialize();
 
-    fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles,localtime\r\n", file);
+    fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles,localtime,elapsedTime,cyclingCadence,wheelSpeed\r\n", file);
 
     switch (ttbin->activity)
     {
@@ -48,13 +50,21 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                     fprintf(file, "%d", heart_rate);
                 fprintf(file, ",%d,%s", record->gps.cycles, timestr);
                 if (time >= 3600)
-                    fprintf(file, ",%d:%02d:%02d\r\n", time / 3600, (time % 3600) / 60, time % 60);
+                    fprintf(file, ",%d:%02d:%02d", time / 3600, (time % 3600) / 60, time % 60);
                 else
-                    fprintf(file, ",%d:%02d\r\n", time / 60, time % 60);
+                    fprintf(file, ",%d:%02d", time / 60, time % 60);
+                fprintf(file, ",%d,%f\r\n", cc_data.cycling_cadence, cc_data.wheel_speed);
+                cc_gps_packet_tick(&cc_data);
                 heart_rate = 0;
                 break;
             case TAG_HEART_RATE:
                 heart_rate = record->heart_rate.heart_rate;
+                break;
+            case TAG_WHEEL_SIZE:
+                cc_set_wheel_size(&cc_data, &record->wheel_size);
+                break;
+            case TAG_CYCLING_CADENCE:
+                cc_sensor_packet(&cc_data, &record->cycling_cadence);
                 break;
             case TAG_LAP:
                 ++current_lap;
@@ -92,9 +102,9 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                     fprintf(file, "%d", heart_rate);
                 fprintf(file, ",%d,%s", record->treadmill.steps - steps_prev, timestr);
                 if (time >= 3600)
-                    fprintf(file, ",%d:%02d:%02d\r\n", time / 3600, (time % 3600) / 60, time % 60);
+                    fprintf(file, ",%d:%02d:%02d,,\r\n", time / 3600, (time % 3600) / 60, time % 60);
                 else
-                    fprintf(file, ",%d:%02d\r\n", time / 60, time % 60);
+                    fprintf(file, ",%d:%02d,,\r\n", time / 60, time % 60);
                 steps_prev = record->treadmill.steps;
                 heart_rate = 0;
                 break;
@@ -125,9 +135,9 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                 time, record->swim.completed_laps + 1, record->swim.total_distance,
                 record->swim.total_calories, record->swim.strokes * 60, timestr);
             if (time >= 3600)
-                fprintf(file, ",%d:%02d:%02d\r\n", time / 3600, (time % 3600) / 60, time % 60);
+                fprintf(file, ",%d:%02d:%02d,,\r\n", time / 3600, (time % 3600) / 60, time % 60);
             else
-                fprintf(file, ",%d:%02d\r\n", time / 60, time % 60);
+                fprintf(file, ",%d:%02d,,\r\n", time / 60, time % 60);
         }
         break;
     }
