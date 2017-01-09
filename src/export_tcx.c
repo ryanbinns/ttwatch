@@ -4,6 +4,7 @@
 \*****************************************************************************/
 
 #include "ttbin.h"
+#include "cycling_cadence.h"
 
 #include <math.h>
 
@@ -71,6 +72,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     uint32_t total_step_count = 0;
     unsigned heart_rate;
     enum LapState lap_state;
+    CyclingCadenceData cc_data = cc_initialize();
     int insert_pause;
     unsigned lap_start_time = 0;
     float lap_start_distance = 0.0f;
@@ -214,6 +216,12 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 fputs(        "                        </HeartRateBpm>\r\n", file);
             }
 
+            if (cc_data.cadence_available)
+            {
+                fprintf(file, "                        <Cadence>%d</Cadence>\r\n", cc_data.cycling_cadence);
+                cc_gps_packet_tick(&cc_data);
+            }
+
             fputs(        "                        <Extensions>\r\n"
                           "                            <TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">\r\n", file);
             if (record->tag == TAG_GPS)
@@ -251,6 +259,12 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             ++heart_rate_count;
 
             heart_rate = record->heart_rate.heart_rate;
+            break;
+        case TAG_WHEEL_SIZE:
+            cc_set_wheel_size(&cc_data, &record->wheel_size);
+            break;
+        case TAG_CYCLING_CADENCE:
+            cc_sensor_packet(&cc_data, &record->cycling_cadence);
             break;
         case TAG_INTERVAL_SETUP:
             break;

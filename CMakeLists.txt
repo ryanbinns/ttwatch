@@ -42,7 +42,7 @@ set(LIBTTWATCH_SRC src/libttwatch.cpp src/libttwatch_cpp.cpp)
 add_library(libttwatch STATIC ${LIBTTWATCH_SRC})
 set_target_properties(libttwatch PROPERTIES OUTPUT_NAME ttwatch)
 
-set(TTBIN_SRC src/export_csv.c src/export_gpx.c src/export_kml.c src/export_tcx.c src/ttbin.c)
+set(TTBIN_SRC src/export_csv.c src/export_gpx.c src/export_kml.c src/export_tcx.c src/ttbin.c src/cycling_cadence.c)
 add_library(libttbin STATIC ${TTBIN_SRC})
 target_link_libraries(libttbin ${CURL_LIBRARIES})
 set_target_properties(libttbin PROPERTIES OUTPUT_NAME ttbin)
@@ -72,7 +72,7 @@ add_custom_command(OUTPUT manifest_definitions_0001082e.h
 add_custom_command(OUTPUT manifest_definitions_0001031b.h
   DEPENDS ${MANIFEST_DIR}/manifest_0001031b.txt ${MANIFEST_DIR}/make_manifest.pl
   COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001031b.txt > manifest_definitions_0001031b.h)
-  
+
 set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c src/download.c src/firmware.c src/misc.c src/get_activities.c src/update_gps.c src/set_time.c)
 add_executable(ttwatch ${TTWATCH_SRC})
 target_link_libraries(ttwatch libttwatch libttbin ${LIBUSB_1_LIBRARIES} ${OPENSSL_LIBRARIES})
