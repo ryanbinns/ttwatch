@@ -325,8 +325,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
     if (*data++ != TAG_FILE_HEADER)
         return 0;
 
-    file = malloc(sizeof(TTBIN_FILE));
-    memset(file, 0, sizeof(TTBIN_FILE));
+    file = calloc(1, sizeof(TTBIN_FILE));
 
     file_header = (FILE_HEADER*)data;
     data += sizeof(FILE_HEADER) + (file_header->length_count - 1) * sizeof(RECORD_LENGTH);
@@ -558,8 +557,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
 
     /* create and write the file header */
     size = sizeof(FILE_HEADER) + 29 * sizeof(RECORD_LENGTH);
-    header = (FILE_HEADER*)malloc(size);
-    memset(header, 0, size);
+    header = (FILE_HEADER*)calloc(1, size);
     header->file_version = ttbin->file_version;
     memcpy(header->firmware_version, ttbin->firmware_version, sizeof(header->firmware_version));
     header->product_id = ttbin->product_id;
@@ -1044,7 +1042,7 @@ void free_ttbin(TTBIN_FILE *ttbin)
 
     if (!ttbin)
         return;
-        
+
     for (record = ttbin->first; record; record = record->next)
     {
         if (record->prev)
