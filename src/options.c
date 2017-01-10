@@ -199,16 +199,14 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
 /*****************************************************************************/
 OPTIONS *alloc_options()
 {
-    OPTIONS *o = malloc(sizeof(OPTIONS));
-    memset(o, 0, sizeof(OPTIONS));
+    OPTIONS *o = calloc(1, sizeof(OPTIONS));
     return o;
 }
 
 /*****************************************************************************/
 OPTIONS *copy_options(const OPTIONS *o)
 {
-    OPTIONS *op = malloc(sizeof(OPTIONS));
-    memcpy(op, o, sizeof(OPTIONS));
+    OPTIONS *op = alloc_options();
 
 #define COPY_STRING(n) if (o->n) op->n = strdup(o->n)
 

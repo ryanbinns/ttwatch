@@ -364,8 +364,7 @@ int ttwatch_open_device(libusb_device *device, const char *serial_or_name, TTWAT
         return TTWATCH_UnableToOpenDevice;
     }
 
-    *watch = (TTWATCH*)malloc(sizeof(TTWATCH));
-    memset(*watch, 0, sizeof(TTWATCH));
+    *watch = (TTWATCH*)calloc(1, sizeof(TTWATCH));
     (*watch)->device = handle;
     (*watch)->usb_product_id = desc.idProduct;
 
