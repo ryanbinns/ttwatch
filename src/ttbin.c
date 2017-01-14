@@ -870,6 +870,7 @@ const char *create_filename(TTBIN_FILE *ttbin, const char *ext)
     case ACTIVITY_TREADMILL: type = "Treadmill"; break;
     case ACTIVITY_FREESTYLE: type = "Freestyle"; break;
     case ACTIVITY_GYM:       type = "Gym"; break;
+    case ACTIVITY_INDOOR:    type = "Indoor"; break;
     }
     sprintf(filename, "%s_%02d-%02d-%02d.%s", type, time->tm_hour, time->tm_min, time->tm_sec, ext);
 

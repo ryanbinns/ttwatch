@@ -39,6 +39,7 @@
 #define ACTIVITY_TREADMILL  (7)
 #define ACTIVITY_FREESTYLE  (8)
 #define ACTIVITY_GYM        (9)
+#define ACTIVITY_INDOOR     (11)
 
 typedef struct
 {
