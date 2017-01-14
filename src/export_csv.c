@@ -140,6 +140,14 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                 fprintf(file, ",%d:%02d,,\r\n", time / 60, time % 60);
         }
         break;
+
+    case ACTIVITY_INDOOR:
+        for (record = ttbin->first; record; record = record->next)
+        {
+            fprintf(file, "record %x length %d %x\r\n", record->tag, record->length, (unsigned int)record->data[1]);
+        }
+        break;
     }
+
 }
 

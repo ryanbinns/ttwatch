@@ -357,6 +357,7 @@ typedef struct
     int gps_ok;
     int treadmill_ok;
     int pool_swim_ok;
+    int indoor_ok;
     void (*producer)(TTBIN_FILE* ttbin, FILE *file);
 } OFFLINE_FORMAT;
 
