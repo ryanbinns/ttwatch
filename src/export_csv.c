@@ -156,6 +156,9 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
             case TAG_WHEEL_SIZE:
                 cc_set_wheel_size(&cc_data, &record->wheel_size);
                 break;
+            case TAG_LAP:
+                ++current_lap;
+                break;
             case TAG_INDOOR_CYCLING:
                 timestamp = record->indoor_cycling.timestamp;
                 strftime(timestr, sizeof(timestr), "%FT%X", localtime(&timestamp));
