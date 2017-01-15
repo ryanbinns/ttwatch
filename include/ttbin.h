@@ -30,6 +30,7 @@
 #define TAG_RACE_RESULT         (0x3d)
 #define TAG_ALTITUDE_UPDATE     (0x3e)
 #define TAG_HEART_RATE_RECOVERY (0x3f)
+#define TAG_INDOOR_CYCLING      (0x40)
 #define TAG_GYM                 (0x41)
 
 #define ACTIVITY_RUNNING    (0)
@@ -220,6 +221,14 @@ typedef struct
 
 typedef struct
 {
+    uint32_t timestamp;
+    float    distance_meters;
+    uint16_t calories;
+    uint16_t cycling_cadence;
+} INDOOR_CYCLING_RECORD;
+
+typedef struct
+{
     time_t   timestamp;     /* utc time */
     uint16_t length;
     uint8_t  *data;
@@ -253,6 +262,7 @@ typedef struct _TTBIN_RECORD
         POOL_SIZE_RECORD           pool_size;
         WHEEL_SIZE_RECORD          wheel_size;
         CYCLING_CADENCE_RECORD     cycling_cadence;
+        INDOOR_CYCLING_RECORD      indoor_cycling;
     };
 } TTBIN_RECORD;
 
