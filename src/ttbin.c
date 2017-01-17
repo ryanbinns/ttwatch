@@ -19,12 +19,12 @@
 /*****************************************************************************/
 
 const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT] = {
-    { OFFLINE_FORMAT_CSV, "csv", 1, 1, 1, export_csv },
-    { OFFLINE_FORMAT_FIT, "fit", 1, 0, 0, 0          },
-    { OFFLINE_FORMAT_GPX, "gpx", 1, 0, 0, export_gpx },
-    { OFFLINE_FORMAT_KML, "kml", 1, 0, 0, export_kml },
-    { OFFLINE_FORMAT_PWX, "pwx", 1, 0, 0, 0          },
-    { OFFLINE_FORMAT_TCX, "tcx", 1, 1, 0, export_tcx },
+    { OFFLINE_FORMAT_CSV, "csv", 1, 1, 1, 1, export_csv },
+    { OFFLINE_FORMAT_FIT, "fit", 1, 0, 0, 0, 0          },
+    { OFFLINE_FORMAT_GPX, "gpx", 1, 0, 0, 0, export_gpx },
+    { OFFLINE_FORMAT_KML, "kml", 1, 0, 0, 0, export_kml },
+    { OFFLINE_FORMAT_PWX, "pwx", 1, 0, 0, 0, 0          },
+    { OFFLINE_FORMAT_TCX, "tcx", 1, 1, 0, 0, export_tcx },
 };
 
 /*****************************************************************************/
@@ -870,6 +870,7 @@ const char *create_filename(TTBIN_FILE *ttbin, const char *ext)
     case ACTIVITY_TREADMILL: type = "Treadmill"; break;
     case ACTIVITY_FREESTYLE: type = "Freestyle"; break;
     case ACTIVITY_GYM:       type = "Gym"; break;
+    case ACTIVITY_INDOOR:    type = "Indoor"; break;
     }
     sprintf(filename, "%s_%02d-%02d-%02d.%s", type, time->tm_hour, time->tm_min, time->tm_sec, ext);
 

@@ -17,6 +17,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
     unsigned heart_rate;
     double distance_factor = 1;
     unsigned time;
+    time_t timestamp;
     CyclingCadenceData cc_data = cc_initialize();
 
     fputs("time,activityType,lapNumber,distance,speed,calories,lat,long,elevation,heartRate,cycles,localtime,elapsedTime,cyclingCadence,wheelSpeed\r\n", file);
@@ -140,6 +141,47 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                 fprintf(file, ",%d:%02d,,\r\n", time / 60, time % 60);
         }
         break;
+
+    case ACTIVITY_INDOOR:
+        for (record = ttbin->first; record; record = record->next)
+        {
+          switch (record->tag)
+            {
+            case TAG_HEART_RATE:
+                heart_rate = record->heart_rate.heart_rate;
+                break;
+            case TAG_CYCLING_CADENCE:
+                cc_sensor_packet(&cc_data, &record->cycling_cadence);
+                break;
+            case TAG_WHEEL_SIZE:
+                cc_set_wheel_size(&cc_data, &record->wheel_size);
+                break;
+            case TAG_LAP:
+                ++current_lap;
+                break;
+            case TAG_INDOOR_CYCLING:
+                timestamp = record->indoor_cycling.timestamp;
+                strftime(timestr, sizeof(timestr), "%FT%X", localtime(&timestamp));
+                time = (unsigned)(record->indoor_cycling.timestamp - ttbin->timestamp_local);
+                fprintf(file, "%u,11,%u,%.2f,%.2f,%u,,,,%u,%u,%s",
+                    time,
+                    current_lap,
+                    record->indoor_cycling.distance_meters,
+                    cc_data.wheel_speed,
+                    record->indoor_cycling.calories,
+                    heart_rate,
+                    record->indoor_cycling.cycling_cadence,
+                    timestr
+                );
+                if (time >= 3600)
+                    fprintf(file, ",%d:%02d:%02d,,\r\n", time / 3600, (time % 3600) / 60, time % 60);
+                else
+                    fprintf(file, ",%d:%02d,,\r\n", time / 60, time % 60);
+                break;
+            }
+        }
+        break;
     }
+
 }
 
