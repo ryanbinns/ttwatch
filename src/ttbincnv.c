@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
             if ((OFFLINE_FORMATS[i].gps_ok && ttbin->gps_records.count)
                 || (OFFLINE_FORMATS[i].treadmill_ok && (ttbin->activity == ACTIVITY_TREADMILL))
                 || (OFFLINE_FORMATS[i].pool_swim_ok && (ttbin->activity == ACTIVITY_SWIMMING))
-                || (OFFLINE_FORMATS[i].indoor_ok && (ttbin->activity == ACTIVITY_INDOOR))
+                || (OFFLINE_FORMATS[i].indoor_ok && (ttbin->activity == ACTIVITY_INDOOR || ttbin->activity == ACTIVITY_GYM))
                 )
             {
                 FILE *output_file = stdout;
