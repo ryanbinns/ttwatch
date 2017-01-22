@@ -143,6 +143,7 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
         break;
 
     case ACTIVITY_INDOOR:
+    case ACTIVITY_GYM:
         for (record = ttbin->first; record; record = record->next)
         {
           switch (record->tag)
@@ -171,6 +172,23 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
                     record->indoor_cycling.calories,
                     heart_rate,
                     record->indoor_cycling.cycling_cadence,
+                    timestr
+                );
+                if (time >= 3600)
+                    fprintf(file, ",%d:%02d:%02d,,\r\n", time / 3600, (time % 3600) / 60, time % 60);
+                else
+                    fprintf(file, ",%d:%02d,,\r\n", time / 60, time % 60);
+                break;
+            case TAG_GYM:
+                timestamp = record->gym.timestamp;
+                strftime(timestr, sizeof(timestr), "%FT%X", localtime(&timestamp));
+                time = (unsigned)(record->indoor_cycling.timestamp - ttbin->timestamp_local);
+                fprintf(file, "%u,9,%u,,,%u,,,,%u,%u,%s",
+                    time,
+                    current_lap,
+                    record->gym.total_calories,
+                    heart_rate,
+                    record->gym.total_cycles,
                     timestr
                 );
                 if (time >= 3600)
