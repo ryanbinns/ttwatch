@@ -98,6 +98,10 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             }
         }
     }
+    else if (ttbin->activity == ACTIVITY_INDOOR)
+    {
+
+    }
     else if (!ttbin->gps_records.count)
         return;
 
@@ -117,6 +121,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     case ACTIVITY_SWIMMING:  fputs("Pool Swim", file); break;
     case ACTIVITY_TREADMILL: fputs("Running", file);   break; /* per Garmin spec, not "Treadmill" */
     case ACTIVITY_FREESTYLE: fputs("Freestyle", file); break;
+    case ACTIVITY_INDOOR:    fputs("Biking", file);    break;
     default:                 fputs("Unknown", file);   break;
     }
     fputs("\">\r\n"
@@ -146,6 +151,7 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             break;
 
         case TAG_TREADMILL:
+        case TAG_INDOOR_CYCLING:
         case TAG_GPS:
             if (record->tag == TAG_TREADMILL)
             {
@@ -159,6 +165,13 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
                 total_step_count += steps;
                 timestamp = record->treadmill.timestamp;
                 distance = record->treadmill.distance * distance_factor;
+            }
+            else if (record->tag == TAG_INDOOR_CYCLING)
+            {
+                if (record->indoor_cycling.timestamp == 0)
+                    break;
+                distance = record->indoor_cycling.distance_meters;
+                timestamp = record->indoor_cycling.timestamp;
             }
             else /* TAG_GPS only */
             {
