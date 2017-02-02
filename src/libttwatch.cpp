@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/time.h>
+
 //------------------------------------------------------------------------------
 // macros
 
@@ -192,6 +194,9 @@ void print_packet(uint8_t *packet, uint8_t size)
     int i;
     if (s_show_packets)
     {
+        struct timespec tmspec;
+        clock_gettime(CLOCK_MONOTONIC, &tmspec);
+        printf("%lu.%03lu: ", tmspec.tv_sec, tmspec.tv_nsec / 1000000);
         for (i = 0; i < size; ++i)
             printf("%02X ", packet[i]);
         printf("\n");
