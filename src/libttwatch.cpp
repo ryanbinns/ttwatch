@@ -248,7 +248,7 @@ int send_packet(TTWATCH *watch, uint8_t msg, uint8_t tx_length,
 	    packet_size = 64;
 
     // read the reply
-    unsigned timeout = 10000;   // 10 seconds for most message types
+    unsigned timeout = 20000;   // 20 seconds for most message types
     if (msg == MSG_FORMAT_WATCH)
         timeout = 120000;       // formatting takes about 60 seconds, so make the timeout 120 seconds
     result = libusb_interrupt_transfer(watch->device, read_usb_endpoint, packet, packet_size, &count, timeout);
