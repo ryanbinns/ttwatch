@@ -78,6 +78,8 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
     unsigned lap_start_time = 0;
     float lap_start_distance = 0.0f;
     unsigned lap_start_calories = 0;
+    char *model_buf[20];
+    const char *model = model_buf;
     float cadence_avg = 0.0f;
     double distance_factor = 1;
     uint32_t steps, steps_prev = 0;
@@ -422,11 +424,23 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
         write_lap_finish(file, &lap);
     }
 
-    fputs(        "            <Creator xsi:type=\"Device_t\">\r\n"
-                  "                <Name>TomTom GPS Sport Watch</Name>\r\n"
-                  "                <UnitId>0</UnitId>\r\n"
-                  "                <ProductID>0</ProductID>\r\n"
-                  "                <Version>\r\n", file);
+    switch(ttbin->product_id)
+    {
+    case 0x03e9: model="Runner"; break;
+    case 0x03ea: model="Multi-Sport"; break;
+    case 0x03eb: model="Runner Cardio"; break;
+    case 0x03ec: model="Multi-Sport Cardio"; break;
+    case 0x07d8: model="Runner 2 Cardio"; break; // https://github.com/ryanbinns/ttwatch/issues/92
+    // Firmware for 0x07d[1-7] exists at http://download-test.tomtom.com/sweet/fitness/Firmware/Dx070000/FirmwareVersionConfigV2.xml
+    case 0x07de: model="Runner 3"; break; // https://github.com/ryanbinns/ttwatch/issues/100
+    default:     snprintf(model_buf, sizeof(model_buf), 'Unknown (0x%04x)'); break;
+    }
+
+    fputs(        "            <Creator xsi:type=\"Device_t\">\r\n", file);
+    fprintf(file, "                <Name>TomTom %s GPS Sport Watch</Name>\r\n", model);
+    fputs(        "                <UnitId>0</UnitId>\r\n", file);
+    fprintf(file, "                <ProductID>%d</ProductID>\r\n", ttbin->product_id);
+    fputs(        "                <Version>\r\n", file);
     fprintf(file, "                    <VersionMajor>%d</VersionMajor>\r\n", ttbin->firmware_version[0]);
     fprintf(file, "                    <VersionMinor>%d</VersionMinor>\r\n", ttbin->firmware_version[1]);
     fprintf(file, "                    <BuildMajor>%d</BuildMajor>\r\n", ttbin->firmware_version[2]);
