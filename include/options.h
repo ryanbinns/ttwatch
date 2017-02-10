@@ -54,6 +54,7 @@ typedef struct
     char *post_processor;
     int factory_reset;
     int initial_setup;
+    int force;
 } OPTIONS;
 
 /*****************************************************************************/

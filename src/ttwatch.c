@@ -802,7 +802,8 @@ void do_display_settings(TTWATCH *watch)
     if (!definitions)
     {
         write_log(1, "Firmware version not supported\n");
-        return;
+        definitions = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].definitions;
+        defn_count  = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].count;
     }
 
     for (i = 0; i < defn_count; ++i)
@@ -849,7 +850,7 @@ void do_display_settings(TTWATCH *watch)
 }
 
 /*****************************************************************************/
-void do_set_setting(TTWATCH *watch, const char *setting, const char *value)
+void do_set_setting(TTWATCH *watch, const char *setting, const char *value, int force)
 {
     uint32_t i;
     int j;
@@ -874,7 +875,10 @@ void do_set_setting(TTWATCH *watch, const char *setting, const char *value)
     if (!definitions)
     {
         write_log(1, "Firmware version not supported\n");
-        return;
+        if (!force)
+            return;
+        definitions = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].definitions;
+        defn_count  = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].count;
     }
 
     /* check to see if the setting exists */
@@ -974,7 +978,8 @@ void do_get_setting(TTWATCH *watch, const char *setting)
     if (!definitions)
     {
         write_log(1, "Firmware version not supported\n");
-        return;
+        definitions = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].definitions;
+        defn_count  = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].count;
     }
 
     /* check to see if the setting exists */
@@ -1049,7 +1054,8 @@ void do_list_settings(TTWATCH *watch)
     if (!definitions)
     {
         write_log(1, "Firmware version not supported\n");
-        return;
+        definitions = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].definitions;
+        defn_count  = MANIFEST_DEFINITIONS[MANIFEST_DEFINITION_COUNT - 1].count;
     }
 
     for (i = 0; i < defn_count; ++i)
@@ -1253,6 +1259,8 @@ void help(char *argv[])
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
     write_log(0, "      --factory-reset        Performs a factory reset on the watch. This option\n");
     write_log(0, "                               must be specified twice for safety.\n");
+    write_log(0, "      --force                Forces the --setting command to write a setting to the\n");
+    write_log(0, "                               watch, even if the firmware version doesn't match\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
     write_log(0, "                               currently stored on the watch\n");
     write_log(0, "      --get-formats          Displays the list of file formats that are\n");
@@ -1423,6 +1431,7 @@ int main(int argc, char *argv[])
         { "all-settings",   no_argument,       &options->display_settings,1 },
         { "settings",       no_argument,       &options->list_settings,   1 },
         { "initial-setup",  no_argument,       &options->initial_setup,   1 },
+        { "force",          no_argument,       &options->force,           1 },
         { "auto",           no_argument,       0, 'a' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
@@ -1772,7 +1781,7 @@ int main(int argc, char *argv[])
         if (str)
         {
             *str = 0;
-            do_set_setting(watch, options->setting_spec, ++str);
+            do_set_setting(watch, options->setting_spec, ++str, options->force);
         }
         else
             do_get_setting(watch, options->setting_spec);
