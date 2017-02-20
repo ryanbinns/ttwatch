@@ -267,12 +267,6 @@ static void do_set_formats_callback(const char *id, int auto_open, void *data)
 void do_set_formats(TTWATCH *watch, uint32_t formats)
 {
     unsigned i;
-    /* make sure we've got some formats... */
-    if (!formats)
-    {
-        write_log(1, "No valid file formats found\n");
-        return;
-    }
 
     if (ttwatch_enumerate_offline_formats(watch, do_set_formats_callback, watch) != TTWATCH_NoError)
     {
