@@ -207,6 +207,7 @@ OPTIONS *alloc_options()
 OPTIONS *copy_options(const OPTIONS *o)
 {
     OPTIONS *op = alloc_options();
+    memcpy(op, o, sizeof(OPTIONS));
 
 #define COPY_STRING(n) if (o->n) op->n = strdup(o->n)
 
