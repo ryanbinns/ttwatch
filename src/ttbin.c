@@ -864,13 +864,17 @@ const char *create_filename(TTBIN_FILE *ttbin, const char *ext)
 
     switch (ttbin->activity)
     {
-    case ACTIVITY_RUNNING:   type = "Running"; break;
-    case ACTIVITY_CYCLING:   type = "Cycling"; break;
-    case ACTIVITY_SWIMMING:  type = "Pool_swim"; break;
-    case ACTIVITY_TREADMILL: type = "Treadmill"; break;
-    case ACTIVITY_FREESTYLE: type = "Freestyle"; break;
-    case ACTIVITY_GYM:       type = "Gym"; break;
-    case ACTIVITY_INDOOR:    type = "Indoor"; break;
+    case ACTIVITY_RUNNING:      type = "Running"; break;
+    case ACTIVITY_CYCLING:      type = "Cycling"; break;
+    case ACTIVITY_SWIMMING:     type = "Pool_swim"; break;
+    case ACTIVITY_TREADMILL:    type = "Treadmill"; break;
+    case ACTIVITY_FREESTYLE:    type = "Freestyle"; break;
+    case ACTIVITY_GYM:          type = "Gym"; break;
+    case ACTIVITY_INDOOR:       type = "Indoor"; break;
+    case ACTIVITY_HIKING:       type = "Hiking"; break;
+    case ACTIVITY_TRAILRUNNING: type = "Trailrunning"; break;
+    case ACTIVITY_SKIING:       type = "Skiing"; break;
+    case ACTIVITY_SNOWBOARDING: type = "Snowboarding"; break;
     }
     sprintf(filename, "%s_%02d-%02d-%02d.%s", type, time->tm_hour, time->tm_min, time->tm_sec, ext);
 
@@ -1128,6 +1132,10 @@ static void update_summary_information(TTBIN_FILE *ttbin)
     case ACTIVITY_RUNNING:
     case ACTIVITY_CYCLING:
     case ACTIVITY_FREESTYLE:
+    case ACTIVITY_HIKING:
+    case ACTIVITY_TRAILRUNNING:
+    case ACTIVITY_SKIING:
+    case ACTIVITY_SNOWBOARDING:
         i = ttbin->gps_records.count;
         while (i > 0)
         {
