@@ -277,16 +277,16 @@ static void remove_array(RECORD_ARRAY *array, TTBIN_RECORD *record)
 }
 
 
-TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
+TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
 {
     const uint8_t *const end = data + size;
     TTBIN_FILE *file;
     unsigned length;
 
-    FILE_HEADER               *file_header = 0;
+    const FILE_HEADER *file_header = 0;
     union
     {
-        uint8_t *data;
+        const uint8_t *data;
         struct
         {
             uint8_t tag;
@@ -313,7 +313,7 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
                 FILE_HEART_RATE_RECOVERY_RECORD heart_rate_recovery;
                 FILE_CYCLING_CADENCE_RECORD     cycling_cadence;
             };
-        } *record;
+        } const *record;
     } p;
 
     TTBIN_RECORD *record;
@@ -360,12 +360,10 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             file->total_calories = p.record->summary.calories;
             break;
         case TAG_STATUS:
-            p.record->status.timestamp -= file->utc_offset;
-
             record = append_record(file, p.record->tag, length);
             record->status.status = p.record->status.status;
             record->status.activity = p.record->status.activity;
-            record->status.timestamp = p.record->status.timestamp;
+            record->status.timestamp = p.record->status.timestamp - file->utc_offset;
             append_array(&file->status_records, record);
             break;
         case TAG_GPS:
@@ -387,10 +385,8 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             append_array(&file->gps_records, record);
             break;
         case TAG_HEART_RATE:
-            p.record->heart_rate.timestamp -= file->utc_offset;
-
             record = append_record(file, p.record->tag, length);
-            record->heart_rate.timestamp  = p.record->heart_rate.timestamp;
+            record->heart_rate.timestamp  = p.record->heart_rate.timestamp - file->utc_offset;
             record->heart_rate.heart_rate = p.record->heart_rate.heart_rate;
             append_array(&file->heart_rate_records, record);
             break;
@@ -410,20 +406,16 @@ TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size)
             append_array(&file->cycling_cadence_records, record);
             break;
         case TAG_TREADMILL:
-            p.record->treadmill.timestamp -= file->utc_offset;
-
             record = append_record(file, p.record->tag, length);
-            record->treadmill.timestamp = p.record->treadmill.timestamp;
+            record->treadmill.timestamp = p.record->treadmill.timestamp - file->utc_offset;
             record->treadmill.distance  = p.record->treadmill.distance;
             record->treadmill.calories  = p.record->treadmill.calories;
             record->treadmill.steps     = p.record->treadmill.steps;
             append_array(&file->treadmill_records, record);
             break;
         case TAG_SWIM:
-            p.record->swim.timestamp -= file->utc_offset;
-
             record = append_record(file, p.record->tag, length);
-            record->swim.timestamp      = p.record->swim.timestamp;
+            record->swim.timestamp      = p.record->swim.timestamp - file->utc_offset;
             record->swim.total_distance = p.record->swim.total_distance;
             record->swim.strokes        = p.record->swim.strokes;
             record->swim.completed_laps = p.record->swim.completed_laps;
