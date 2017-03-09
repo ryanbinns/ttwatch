@@ -319,7 +319,7 @@ typedef struct
 
 TTBIN_FILE *read_ttbin_file(FILE *file);
 
-TTBIN_FILE *parse_ttbin_data(uint8_t *data, uint32_t size);
+TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size);
 
 int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file);
 
