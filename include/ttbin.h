@@ -33,14 +33,18 @@
 #define TAG_INDOOR_CYCLING      (0x40)
 #define TAG_GYM                 (0x41)
 
-#define ACTIVITY_RUNNING    (0)
-#define ACTIVITY_CYCLING    (1)
-#define ACTIVITY_SWIMMING   (2)
-#define ACTIVITY_STOPWATCH  (6) /* doesn't actually log any data */
-#define ACTIVITY_TREADMILL  (7)
-#define ACTIVITY_FREESTYLE  (8)
-#define ACTIVITY_GYM        (9)
-#define ACTIVITY_INDOOR     (11)
+#define ACTIVITY_RUNNING    	(0)
+#define ACTIVITY_CYCLING    	(1)
+#define ACTIVITY_SWIMMING   	(2)
+#define ACTIVITY_STOPWATCH  	(6) /* doesn't actually log any data */
+#define ACTIVITY_TREADMILL  	(7)
+#define ACTIVITY_FREESTYLE  	(8)
+#define ACTIVITY_GYM        	(9)
+#define ACTIVITY_HIKING     	(10)
+#define ACTIVITY_INDOOR     	(11)
+#define ACTIVITY_TRAILRUNNING 	(14)
+#define ACTIVITY_SKIING         (15)
+#define ACTIVITY_SNOWBOARDING   (16) 
 
 typedef struct
 {

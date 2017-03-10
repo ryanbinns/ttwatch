@@ -707,6 +707,11 @@ static void do_list_history_callback(TTWATCH_ACTIVITY activity, int index, const
         case TTWATCH_Treadmill: write_log(0, "Treadmill:\n"); break;
         case TTWATCH_Freestyle: write_log(0, "Freestyle:\n"); break;
         case TTWATCH_Gym:       write_log(0, "Gym:\n"); break;
+        case TTWATCH_Hiking:    write_log(0, "Hiking:\n"); break;        
+        case TTWATCH_IndoorCycling:  write_log(0, "IndoorCycling:\n"); break;        
+        case TTWATCH_TrailRunning:   write_log(0, "Trailrunning:\n"); break;        
+        case TTWATCH_Skiing:         write_log(0, "Skiing:\n"); break;        
+        case TTWATCH_Snowboarding:   write_log(0, "Snowboarding:\n"); break;
         }
         d->activity = activity;
     }

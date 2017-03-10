@@ -81,13 +81,18 @@ typedef enum
 
 /*****************************************************************************/
 typedef enum
-{
-    TTWATCH_Running,
-    TTWATCH_Cycling,
-    TTWATCH_Swimming,
-    TTWATCH_Treadmill = 7,
-    TTWATCH_Freestyle,
-    TTWATCH_Gym
+{    
+    TTWATCH_Running = 0,    
+    TTWATCH_Cycling = 1,    
+    TTWATCH_Swimming = 2,    
+    TTWATCH_Treadmill = 7,    
+    TTWATCH_Freestyle = 8,    
+    TTWATCH_Gym = 9,    
+    TTWATCH_Hiking = 10,           // Adventurer
+    TTWATCH_IndoorCycling = 11,    // Adventurer
+    TTWATCH_TrailRunning =14,      // Adventurer    
+    TTWATCH_Skiing = 15,           // Adventurer
+    TTWATCH_Snowboarding =16       // Adventurer
 } TTWATCH_ACTIVITY;
 
 /*****************************************************************************/
