@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define LIBTTWATCH_VERSION  (0x000105)  /* version 0.1.5 */
+#define LIBTTWATCH_VERSION  (0x000106)  /* version 0.1.6 */
 
 #define TOMTOM_VENDOR_ID                (0x1390)
 #define TOMTOM_MULTISPORT_PRODUCT_ID    (0x7474)
@@ -90,9 +90,9 @@ typedef enum
     TTWATCH_Gym = 9,    
     TTWATCH_Hiking = 10,           // Adventurer
     TTWATCH_IndoorCycling = 11,    // Adventurer
-    TTWATCH_TrailRunning =14,      // Adventurer    
+    TTWATCH_TrailRunning = 14,     // Adventurer
     TTWATCH_Skiing = 15,           // Adventurer
-    TTWATCH_Snowboarding =16       // Adventurer
+    TTWATCH_Snowboarding = 16      // Adventurer
 } TTWATCH_ACTIVITY;
 
 /*****************************************************************************/
