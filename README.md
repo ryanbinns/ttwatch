@@ -310,3 +310,8 @@ It *may* be possible to reset a watch with damaged firmware or file structure
 using the Recovery Mode, which requires TomTom's official MySports Connect
 software (Windows or Mac only): [information from TomTom support]
 (http://us.support.tomtom.com/app/answers/detail/a_id/17394).
+
+List of apps using ttwatch
+====
+
+[TT Watch Synchronizer - UI for ttwatch to manage your watch and tracks and optionaly upload to strava](https://github.com/Dica-Developer/ttws)
