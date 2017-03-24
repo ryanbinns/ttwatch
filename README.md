@@ -311,7 +311,12 @@ using the Recovery Mode, which requires TomTom's official MySports Connect
 software (Windows or Mac only): [information from TomTom support]
 (http://us.support.tomtom.com/app/answers/detail/a_id/17394).
 
-List of apps using ttwatch
+Third-party Applications
 ====
 
+Note that I have not tested these, and do not endorse or provide support for
+them, nor guarantee their functionality or safety. This list is for
+information only.
+
 [TT Watch Synchronizer - UI for ttwatch to manage your watch and tracks and optionaly upload to strava](https://github.com/Dica-Developer/ttws)
+
