@@ -91,11 +91,11 @@ else()
 endif(daemon)
 install(FILES ttbin2mysports DESTINATION bin)
 
-if(${CMAKE_SYSTEM_NAME} EQUAL "Linux")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_custom_target(install_udev
     COMMAND cp 99-tomtom.rules /etc/udev/rules.d
     COMMAND udevadm control --reload-rules
-    COMMAND addgroup usb
+    COMMAND addgroup --system usb
     COMMAND usermod -a -Gusb `logname`
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
