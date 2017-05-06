@@ -20,7 +20,7 @@ ACCESS_TOKEN="this should be a 40-character hex string"
 
 for F in "$@"
 do
-    ACTIVITY=$(
+    UPLOAD=$(
         ttbincnv -t < $F | gzip -c -9 |
         curl -s -X POST https://www.strava.com/api/v3/uploads \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -29,8 +29,30 @@ do
     )
 done
 
+while [ -z "$ACTIVITY" ]
+do
+    OUTPUT=$(
+        curl -s -X GET "https://www.strava.com/api/v3/uploads/$UPLOAD" \
+             -H "Authorization: Bearer $ACCESS_TOKEN"
+    )
+    ACTIVITY=$(
+        echo "$OUTPUT" | grep -oP '"activity_id":\d+' | cut -c15-
+    )
+    ERROR=$(
+        echo "$OUTPUT" | grep -oP '"error":".+"' | cut -c10-
+    )
+    if [ -n "$ERROR" ]; then
+    	break
+    fi
+    sleep 1
+done
+
 if [ -n "$ACTIVITY" ]; then
     echo "http://strava.com/activities/$ACTIVITY"
-else
+elif [ -n "$ERROR" ]; then
+    echo "ERROR: $ERROR" 1>&2
+    exit 1
+elif [ -n "$UPLOAD" ]; then
+    echo "UPLOAD FAILED" 1>&2
     exit 1
 fi
