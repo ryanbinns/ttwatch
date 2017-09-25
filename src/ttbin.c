@@ -345,27 +345,23 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
     file->file_version = file_version->file_version;
     data += sizeof(FILE_VERSION_HEADER);
 
-    switch (file->file_version)
+    if (file->file_version <= 9)
     {
-    case 9: {
         const FIRMWARE_VERSION_HEADER_09 *firmware_version = 0;
 
         firmware_version = (FIRMWARE_VERSION_HEADER_09*)data;
         data += sizeof(FIRMWARE_VERSION_HEADER_09);
         memcpy(file->firmware_version, firmware_version->firmware_version, sizeof(firmware_version->firmware_version));
-        break;
     }
-
-    case 10: {
+	else if (file->file_version == 10) {
         const FIRMWARE_VERSION_HEADER_10 *firmware_version = 0;
 
         firmware_version = (FIRMWARE_VERSION_HEADER_10*)data;
         data += sizeof(FIRMWARE_VERSION_HEADER_10);
         memcpy(file->firmware_version, firmware_version->firmware_version, sizeof(firmware_version->firmware_version));
-        break;
     }
-
-    default:
+	else
+	{
         return 0;
     }
 
