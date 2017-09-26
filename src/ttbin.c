@@ -353,15 +353,15 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
         data += sizeof(FIRMWARE_VERSION_HEADER_09);
         memcpy(file->firmware_version, firmware_version->firmware_version, sizeof(firmware_version->firmware_version));
     }
-	else if (file->file_version == 10) {
+    else if (file->file_version == 10) {
         const FIRMWARE_VERSION_HEADER_10 *firmware_version = 0;
 
         firmware_version = (FIRMWARE_VERSION_HEADER_10*)data;
         data += sizeof(FIRMWARE_VERSION_HEADER_10);
         memcpy(file->firmware_version, firmware_version->firmware_version, sizeof(firmware_version->firmware_version));
     }
-	else
-	{
+    else
+    {
         return 0;
     }
 
@@ -548,7 +548,8 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
             append_array(&file->gym_records, record);
             break;
         default:
-            if (length == 0xffff) {
+            if (length == 0xffff)
+            {
                 length = p.data[2] * 256 + p.data[1] + 3; // 3 to skip over tag plus length
             }
             record = append_record(file, p.record->tag, length);
