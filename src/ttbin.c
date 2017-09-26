@@ -38,7 +38,20 @@ typedef struct __attribute__((packed))
 typedef struct __attribute__((packed))
 {
     uint16_t file_version;
+} FILE_VERSION_HEADER;
+
+typedef struct __attribute__((packed))
+{
     uint8_t  firmware_version[3];
+} FIRMWARE_VERSION_HEADER_09;
+
+typedef struct __attribute__((packed))
+{
+    uint8_t  firmware_version[6];
+} FIRMWARE_VERSION_HEADER_10;
+
+typedef struct __attribute__((packed))
+{
     uint16_t product_id;
     uint32_t start_time;    /* local time */
     uint8_t  software_version[16];
@@ -283,6 +296,7 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
     TTBIN_FILE *file;
     unsigned length;
 
+    const FILE_VERSION_HEADER *file_version = 0;
     const FILE_HEADER *file_header = 0;
     union
     {
@@ -327,10 +341,33 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
 
     file = calloc(1, sizeof(TTBIN_FILE));
 
+    file_version = (FILE_VERSION_HEADER*)data;
+    file->file_version = file_version->file_version;
+    data += sizeof(FILE_VERSION_HEADER);
+
+    if (file->file_version <= 9)
+    {
+        const FIRMWARE_VERSION_HEADER_09 *firmware_version = 0;
+
+        firmware_version = (FIRMWARE_VERSION_HEADER_09*)data;
+        data += sizeof(FIRMWARE_VERSION_HEADER_09);
+        memcpy(file->firmware_version, firmware_version->firmware_version, sizeof(firmware_version->firmware_version));
+    }
+    else if (file->file_version == 10) {
+        const FIRMWARE_VERSION_HEADER_10 *firmware_version = 0;
+
+        firmware_version = (FIRMWARE_VERSION_HEADER_10*)data;
+        data += sizeof(FIRMWARE_VERSION_HEADER_10);
+        memcpy(file->firmware_version, firmware_version->firmware_version, sizeof(firmware_version->firmware_version));
+    }
+    else
+    {
+        return 0;
+    }
+
     file_header = (FILE_HEADER*)data;
     data += sizeof(FILE_HEADER) + (file_header->length_count - 1) * sizeof(RECORD_LENGTH);
-    file->file_version    = file_header->file_version;
-    memcpy(file->firmware_version, file_header->firmware_version, sizeof(file->firmware_version));
+
     file->product_id      = file_header->product_id;
     file->timestamp_local = file_header->start_time;
     file->timestamp_utc   = file_header->start_time - file_header->local_time_offset;
@@ -511,6 +548,10 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
             append_array(&file->gym_records, record);
             break;
         default:
+            if (length == 0xffff)
+            {
+                length = p.data[2] * 256 + p.data[1] + 3; // 3 to skip over tag plus length
+            }
             record = append_record(file, p.record->tag, length);
             memcpy(record->data, p.data + 1, length - 1);
             break;
@@ -543,15 +584,19 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
 {
     TTBIN_RECORD *record;
     uint8_t tag = TAG_FILE_HEADER;
+    uint8_t current_version = 10;
     unsigned size;
     FILE_HEADER *header;
     FILE_SUMMARY_RECORD summary;
 
     /* create and write the file header */
+    fwrite(&tag, 1, 1, file);
+    /* first file version, following by firmware version */
+    fwrite(&current_version, 1, 1, file);
+    fwrite(ttbin->firmware_version, sizeof(uint8_t) * 6, 1, file);
+    /* the rest of the common header */
     size = sizeof(FILE_HEADER) + 29 * sizeof(RECORD_LENGTH);
     header = (FILE_HEADER*)calloc(1, size);
-    header->file_version = ttbin->file_version;
-    memcpy(header->firmware_version, ttbin->firmware_version, sizeof(header->firmware_version));
     header->product_id = ttbin->product_id;
     header->start_time = ttbin->timestamp_local;
     header->watch_time = ttbin->timestamp_local;
@@ -560,7 +605,6 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     insert_length_record(header, TAG_SUMMARY, sizeof(FILE_SUMMARY_RECORD) + 1);
     for (record = ttbin->first; record; record = record->next)
         insert_length_record(header, record->tag, record->length);
-    fwrite(&tag, 1, 1, file);
     fwrite(header, 1, sizeof(FILE_HEADER) + (header->length_count - 1) * sizeof(RECORD_LENGTH), file);
 
     for (record = ttbin->first; record; record = record->next)

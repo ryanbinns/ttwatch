@@ -279,7 +279,7 @@ typedef struct
 typedef struct
 {
     uint8_t  file_version;
-    uint8_t  firmware_version[3];
+    uint8_t  firmware_version[6];
     uint16_t product_id;
     time_t   timestamp_local;
     time_t   timestamp_utc;
