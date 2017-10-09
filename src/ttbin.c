@@ -127,6 +127,13 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
+    uint32_t timestamp;
+    uint16_t points1;
+    uint16_t points2;
+} FILE_FITNESS_POINT_RECORD;
+
+typedef struct __attribute__((packed))
+{
     uint32_t total_time;        /* seconds since activity start */
     float    total_distance;    /* metres */
     uint16_t total_calories;
@@ -313,6 +320,7 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
                 FILE_TREADMILL_RECORD           treadmill;
                 FILE_SWIM_RECORD                swim;
                 FILE_GYM_RECORD                 gym;
+                FILE_FITNESS_POINT_RECORD       fitness_point;
                 FILE_LAP_RECORD                 lap;
                 FILE_RACE_SETUP_RECORD          race_setup;
                 FILE_RACE_RESULT_RECORD         race_result;
@@ -546,6 +554,13 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
             record->gym.total_calories  = p.record->gym.total_calories;
             record->gym.total_cycles    = p.record->gym.total_cycles;
             append_array(&file->gym_records, record);
+            break;
+        case TAG_FITNESS_POINT:
+            record = append_record(file, p.record->tag, length);
+            record->fitness_point.timestamp = p.record->fitness_point.timestamp;
+            record->fitness_point.points1   = p.record->fitness_point.points1;
+            record->fitness_point.points2   = p.record->fitness_point.points2;
+            append_array(&file->fitness_point_records, record);
             break;
         default:
             if (length == 0xffff)
@@ -797,6 +812,14 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
             };
             fwrite(&r, 1, sizeof(FILE_GYM_RECORD), file);
         }
+        case TAG_FITNESS_POINT: {
+            FILE_FITNESS_POINT_RECORD r = {
+                record->gym.timestamp,
+                record->fitness_point.points1,
+                record->fitness_point.points2,
+            };
+            fwrite(&r, 1, sizeof(FILE_FITNESS_POINT_RECORD), file);
+        }
         default: {
             fwrite(record->data, 1, record->length - 1, file);
             break;
@@ -876,6 +899,7 @@ void delete_record(TTBIN_FILE *ttbin, TTBIN_RECORD *record)
     case TAG_INTERVAL_FINISH: remove_array(&ttbin->interval_finish_records, record); break;
     case TAG_ALTITUDE_UPDATE: remove_array(&ttbin->altitude_records, record); break;
     case TAG_GYM: remove_array(&ttbin->gym_records, record); break;
+    case TAG_FITNESS_POINT: remove_array(&ttbin->fitness_point_records, record); break;
     case TAG_CYCLING_CADENCE: remove_array(&ttbin->cycling_cadence_records, record); break;
     }
 
