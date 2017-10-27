@@ -262,8 +262,8 @@ void export_tcx(TTBIN_FILE *ttbin, FILE *file)
             else if (ttbin->activity == ACTIVITY_TREADMILL)
             {
                 /* use an exponential moving average to smooth cadence data */
-                if ((int)record->treadmill.steps <= 4) // max 4 * 60 = 240 spm
-                    cadence_avg = (0.05 * 30 * (int)record->treadmill.steps) + (1.0 - 0.05) * cadence_avg;
+                if ((int)steps <= 4) // max 4 * 60 = 240 spm
+                    cadence_avg = (0.05 * 30 * (int)steps) + (1.0 - 0.05) * cadence_avg;
                 fprintf(file, "                                <RunCadence>%d</RunCadence>\r\n", (int)cadence_avg);
             }
             fputs(        "                            </TPX>\r\n"
