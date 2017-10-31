@@ -581,6 +581,12 @@ TTBIN_FILE *parse_ttbin_data(const uint8_t *data, uint32_t size)
 void insert_length_record(FILE_HEADER *header, uint8_t tag, uint16_t length)
 {
     unsigned i = 0;
+
+    /* Tag 0x4b is a dynamic length tag, so handle with special case */
+    if (tag == TAG_UNKNOWN_4B_VAR_LEN) {
+        length = 0xffff;
+    }
+
     /* look for the position to put the new tag (numerical order) */
     while ((tag > header->lengths[i].tag) && (header->lengths[i].tag != 0))
         ++i;
@@ -599,16 +605,31 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
 {
     TTBIN_RECORD *record;
     uint8_t tag = TAG_FILE_HEADER;
-    uint8_t current_version = 10;
+    uint16_t current_version;
     unsigned size;
+    size_t file_header_length; /* differs depending on file version */
     FILE_HEADER *header;
     FILE_SUMMARY_RECORD summary;
 
+    file_header_length = sizeof(FILE_HEADER) + sizeof(FILE_VERSION_HEADER) - sizeof(RECORD_LENGTH);
+
     /* create and write the file header */
     fwrite(&tag, 1, 1, file);
-    /* first file version, following by firmware version */
-    fwrite(&current_version, 1, 1, file);
-    fwrite(ttbin->firmware_version, sizeof(uint8_t) * 6, 1, file);
+    /* first file version */
+    current_version = ttbin->file_version;
+    fwrite(&current_version, sizeof(uint16_t), 1, file);
+    /* firmware version */
+    if (current_version <= 9) {
+        FIRMWARE_VERSION_HEADER_09 firmware_header;
+        memcpy(&firmware_header.firmware_version, ttbin->firmware_version, sizeof(firmware_header.firmware_version));
+        fwrite(&firmware_header, sizeof(firmware_header), 1, file);
+        file_header_length += sizeof(FIRMWARE_VERSION_HEADER_09);
+    } else {
+        FIRMWARE_VERSION_HEADER_10 firmware_header;
+        memcpy(&firmware_header.firmware_version, ttbin->firmware_version, sizeof(firmware_header.firmware_version));
+        fwrite(&firmware_header, sizeof(firmware_header), 1, file);
+        file_header_length += sizeof(FIRMWARE_VERSION_HEADER_10);
+    }
     /* the rest of the common header */
     size = sizeof(FILE_HEADER) + 29 * sizeof(RECORD_LENGTH);
     header = (FILE_HEADER*)calloc(1, size);
@@ -616,7 +637,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
     header->start_time = ttbin->timestamp_local;
     header->watch_time = ttbin->timestamp_local;
     header->local_time_offset = ttbin->utc_offset;
-    insert_length_record(header, TAG_FILE_HEADER, sizeof(FILE_HEADER) - sizeof(RECORD_LENGTH));
+    insert_length_record(header, TAG_FILE_HEADER, file_header_length);
     insert_length_record(header, TAG_SUMMARY, sizeof(FILE_SUMMARY_RECORD) + 1);
     for (record = ttbin->first; record; record = record->next)
         insert_length_record(header, record->tag, record->length);
@@ -811,6 +832,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
                 record->gym.total_cycles
             };
             fwrite(&r, 1, sizeof(FILE_GYM_RECORD), file);
+            break;
         }
         case TAG_FITNESS_POINT: {
             FILE_FITNESS_POINT_RECORD r = {
@@ -819,6 +841,7 @@ int write_ttbin_file(const TTBIN_FILE *ttbin, FILE *file)
                 record->fitness_point.points2,
             };
             fwrite(&r, 1, sizeof(FILE_FITNESS_POINT_RECORD), file);
+            break;
         }
         default: {
             fwrite(record->data, 1, record->length - 1, file);

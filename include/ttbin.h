@@ -33,6 +33,7 @@
 #define TAG_INDOOR_CYCLING      (0x40)
 #define TAG_GYM                 (0x41)
 #define TAG_FITNESS_POINT       (0x4a)
+#define TAG_UNKNOWN_4B_VAR_LEN  (0x4b)
 
 #define ACTIVITY_RUNNING    	(0)
 #define ACTIVITY_CYCLING    	(1)
