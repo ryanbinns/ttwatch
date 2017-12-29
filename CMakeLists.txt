@@ -56,7 +56,7 @@ target_link_libraries(ttbinmod libttbin m ${CURL_LIBRARIES})
 set(MANIFEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/manifest")
 
 add_custom_target(manifest
-  DEPENDS manifest_definitions.h manifest_definitions_00010113.h manifest_definitions_0001082e.h manifest_definitions_0001031b.h)
+  DEPENDS manifest_definitions.h manifest_definitions_00010113.h manifest_definitions_0001082e.h manifest_definitions_0001031b.h manifest_definitions_0001073e.h)
 add_custom_command(OUTPUT manifest_definitions.h
   DEPENDS ${MANIFEST_DIR}/manifest.txt ${MANIFEST_DIR}/make_manifest.pl
   COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest.txt > manifest_definitions.h)
@@ -72,6 +72,10 @@ add_custom_command(OUTPUT manifest_definitions_0001082e.h
 add_custom_command(OUTPUT manifest_definitions_0001031b.h
   DEPENDS ${MANIFEST_DIR}/manifest_0001031b.txt ${MANIFEST_DIR}/make_manifest.pl
   COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001031b.txt > manifest_definitions_0001031b.h)
+
+add_custom_command(OUTPUT manifest_definitions_0001073e.h
+  DEPENDS ${MANIFEST_DIR}/manifest_0001073e.txt ${MANIFEST_DIR}/make_manifest.pl
+  COMMAND ${PERL_EXECUTABLE} ${MANIFEST_DIR}/make_manifest.pl < ${MANIFEST_DIR}/manifest_0001073e.txt > manifest_definitions_0001073e.h)
 
 set(TTWATCH_SRC src/ttwatch.c src/log.c src/options.c src/json.c src/download.c src/firmware.c src/misc.c src/get_activities.c src/update_gps.c src/set_time.c)
 add_executable(ttwatch ${TTWATCH_SRC})
