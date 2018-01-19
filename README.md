@@ -1,3 +1,5 @@
+[![Build Status](https://api.travis-ci.org/dlenski/ttblue.png)](https://travis-ci.org/dlenski/ttblue)
+
 Table of Contents
 =================
 
