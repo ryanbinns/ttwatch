@@ -24,7 +24,7 @@ const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT] = {
     { OFFLINE_FORMAT_GPX, "gpx", 1, 0, 0, 0, export_gpx },
     { OFFLINE_FORMAT_KML, "kml", 1, 0, 0, 0, export_kml },
     { OFFLINE_FORMAT_PWX, "pwx", 1, 0, 0, 0, 0          },
-    { OFFLINE_FORMAT_TCX, "tcx", 1, 1, 0, 1, export_tcx },
+    { OFFLINE_FORMAT_TCX, "tcx", 1, 1, 1, 1, export_tcx },
 };
 
 /*****************************************************************************/
