@@ -303,6 +303,21 @@ The following options only take effect when running the `ttwatchd` daemon:
 Boolean values can have a value of ('y', 'yes', 'true', 'n', 'no' or 'false').
 These values are *not* case-sensitive.
 
+An example global config file to set the activity store location, default daemon
+user and group, and normal activities when a watch is connected could be:
+```
+ActivityStore = /mnt/data/watch
+RunAsUser = jsmith:usb
+GetActivities = true
+UpdateFirmware = true
+UpdateGPS = true
+SetTime = true
+```
+A per-user config file could be added to specify a list of file formats to make:
+```
+Formats = csv,gpx,tcx
+```
+
 Recovery
 ========
 
