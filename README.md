@@ -318,13 +318,18 @@ A per-user config file could be added to specify a list of file formats to make:
 Formats = csv,gpx,tcx
 ```
 
-Recovery
-========
+Recovery / Older Firmware
+=========================
 
 It *may* be possible to reset a watch with damaged firmware or file structure
 using the Recovery Mode, which requires TomTom's official MySports Connect
 software (Windows or Mac only): [information from TomTom support]
 (http://us.support.tomtom.com/app/answers/detail/a_id/17394).
+
+Watches with extremely old firmware (prior to 1.8.x) may not work with the
+`ttwatch` software. In this case, the solution is to use the official MySports
+Connect software to perform a firmware update. After this, the `ttwatch`
+software will work.
 
 Third-party Applications
 ====
