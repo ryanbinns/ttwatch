@@ -183,6 +183,8 @@ between different versions of the official TomTom MySports apps.
 
     01 13 00 00 01 12 00 00 [ TomTom Mysports Android app, older version ]
     01 13 00 00 01 1f 00 00 [ TomTom Mysports Android app, version 2.0.12-58b77f0 ]
+    01 19 00 00 01 13 00 00 [ TomTom Mysports Android app, some version a few months older than 10.0.2 ]
+    01 19 00 00 01 17 00 00 [ TomTom Mysports Android app, version 10.0.2-535 ]
 
 ### Initial pairing
 
