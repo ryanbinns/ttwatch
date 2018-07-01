@@ -54,12 +54,12 @@ struct ble_dev_info v2_info[] = {
     { 0x0044, "model_name" },
     { 0x004a, "model_num" },
     { 0x004c, "firmware" },
-    { 0 }
+    { 0x0042, "system_id" } // Seems to be set to 0.
 };
 
 #define EXPECTED_MAKER "TomTom Fitness"
 const char *tested_models_v1[] = {"1001","1002","1003","1004",NULL};
-const char *tested_models_v2[] = {"2006","2008",NULL};
+const char *tested_models_v2[] = {"2005","2006","2008",NULL};
 
 const char *FIRMWARE_TOO_OLD =
     "Firmware v%s is too old; at least v%s is required\n"
@@ -68,8 +68,8 @@ const char *FIRMWARE_TOO_OLD =
     "* Use USB cable and ttwatch to update your firmware:\n"
     "\thttp://github.com/ryanbinns/ttwatch\n";
 
-const char *FIRMWARE_NOTES_v1 = "https://support.tomtom.com/app/release_notes/type/watches";
-const char *FIRMWARE_NOTES_v2 = "https://support.tomtom.com/app/release_notes/type/watch2015";
+const char *FIRMWARE_NOTES_v1 = "https://us.support.tomtom.com/app/release_notes/type/watches";
+const char *FIRMWARE_NOTES_v2 = "https://us.support.tomtom.com/app/release_notes/type/watch2015";
 
 const char *FIRMWARE_UNTESTED =
     "WARNING: Firmware v%s has not been tested with ttblue\n"
@@ -101,7 +101,9 @@ tt_device_init(int protocol_version, int fd) {
         d->h = &v2_handles;
         d->info = v2_info;
         d->oldest_tested_firmware = VERSION_TUPLE(1,1,19);
-        d->newest_tested_firmware = VERSION_TUPLE(1,2,0); // @drkingpo confirmed v1.2.0 works now (see issue #5)
+        d->newest_tested_firmware = VERSION_TUPLE(1,7,64);
+	// @drkingpo confirmed v1.2.0 works now (see issue #5)
+	// @Grimler91 tested 1.7.62 and 1.7.64.
         d->tested_models = tested_models_v2;
 	d->files = &v2_files;
         break;
@@ -209,32 +211,32 @@ tt_authorize(TTDEV *d, uint32_t code, bool new_code)
         }
         return EXPECT_uint8(d, d->h->passcode, 1);
     case 2:
-        // Android software, from @drkingpo's log
-        magic_bytes = BARRAY( 0x01, 0x15, 0, 0, 0x01, 0x1f, 0, 0 );
+        // Android software, from @drkingpo's log, updated by @Grimler91 for 1.7.64
+        magic_bytes = BARRAY( 0x01, 0x19, 0, 0, 0x01, 0x17, 0, 0 );
         if (new_code) {
-            att_write(d->fd, 0x0083, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
-            att_wrreq(d->fd, 0x0073, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d, and CHANGED FROM WRITE TO WRREQ
-            att_write(d->fd, 0x007c, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
-            att_write(d->fd, 0x0076, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
-            att_write(d->fd, 0x0079, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
-            att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
-            att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+            att_wrreq(d->fd, 0x0083, &auth_one, sizeof auth_one); // (v1 + 0x50)
+            att_wrreq(d->fd, 0x0073, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, 0x007c, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, 0x0076, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, 0x0079, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes); // (v1 + 0x50)
+            att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); //  (v1 + 0x50)
         } else {
             // based on btsnoop_hci.log from @drkingpo
-            att_write(d->fd, 0x0083, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
-            att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
-            att_wrreq(d->fd, 0x0073, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d, and CHANGED FROM WRITE TO WRREQ
-            att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+            att_wrreq(d->fd, 0x0083, &auth_one, sizeof auth_one); // (v1 + 0x50)
+            att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes); // (v1 + 0x50)
+            att_wrreq(d->fd, 0x0073, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); // (v1 + 0x50)
 
             int res = EXPECT_uint8(d, d->h->passcode, 1);
             if (res < 0)
                 return res;
 
-            att_write(d->fd, 0x007c, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
-            att_write(d->fd, 0x0076, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
-            att_write(d->fd, 0x0079, &auth_one, sizeof auth_one); // from @drkingpo's btsnoop_hci.log (v1 + 0x4d)
-            att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
-            att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); // from @drkingpo's btsnoop_hci.log (v1 + 0x50)
+            att_wrreq(d->fd, 0x007c, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, 0x0076, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, 0x0079, &auth_one, sizeof auth_one); // (v1 + 0x4d)
+            att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes); // (v1 + 0x50)
+            att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); //  (v1 + 0x50)
         }
         return EXPECT_uint8(d, d->h->passcode, 1);
     }
@@ -347,7 +349,7 @@ tt_write_file(TTDEV *d, uint32_t fileno, int debug, const uint8_t *buf, uint32_t
        return -1;
 
     uint32_t flen = htobl(length);
-    att_wrreq(d->fd, d->h->length, &flen, sizeof flen);
+    att_write(d->fd, d->h->length, &flen, sizeof flen);
 
     const uint8_t *iptr = buf;
     const uint8_t *end = iptr+length;
