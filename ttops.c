@@ -29,7 +29,7 @@ struct tt_files v1_files = {
 };
 
 struct tt_files v2_files = {
-    .hostname       = 0x00020002,
+    .hostname       = 0x00020003,
     .manifest       = 0x000f20000,
     .activity_start = 0x00910000,
     .gps_status     = 0x00020001,
