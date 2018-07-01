@@ -20,6 +20,22 @@
 struct tt_handles v1_handles = { .ppcp=0x0b, .passcode=0x32, .magic=0x35, .cmd_status=0x25, .length=0x28, .transfer=0x2b, .check=0x2e };
 struct tt_handles v2_handles = { .ppcp=0,    .passcode=0x82, .magic=0x85, .cmd_status=0x72, .length=0x75, .transfer=0x78, .check=0x7b };
 
+struct tt_files v1_files = {
+    .hostname       = 0x00020002,
+    .manifest       = 0x000f20000,
+    .activity_start = 0x00910000,
+    .gps_status     = 0x00020001,
+    .quickgps       = 0x00010100
+};
+
+struct tt_files v2_files = {
+    .hostname       = 0x00020002,
+    .manifest       = 0x000f20000,
+    .activity_start = 0x00910000,
+    .gps_status     = 0x00020001,
+    .quickgps       = 0x00010100
+};
+
 struct ble_dev_info v1_info[] = {
     { 0x001e, "maker" },
     { 0x0016, "serial" },
@@ -79,6 +95,7 @@ tt_device_init(int protocol_version, int fd) {
         d->oldest_tested_firmware = VERSION_TUPLE(1,8,34);
         d->newest_tested_firmware = VERSION_TUPLE(1,8,46);
         d->tested_models = tested_models_v1;
+	d->files = &v1_files;
         break;
     case 2:
         d->h = &v2_handles;
@@ -86,6 +103,7 @@ tt_device_init(int protocol_version, int fd) {
         d->oldest_tested_firmware = VERSION_TUPLE(1,1,19);
         d->newest_tested_firmware = VERSION_TUPLE(1,2,0); // @drkingpo confirmed v1.2.0 works now (see issue #5)
         d->tested_models = tested_models_v2;
+	d->files = &v2_files;
         break;
     default:
         return NULL;

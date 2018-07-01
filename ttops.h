@@ -6,6 +6,8 @@
 
 struct tt_handles { uint16_t ppcp, passcode, magic, cmd_status, length, transfer, check; };
 
+struct tt_files { uint32_t hostname, manifest, activity_start, gps_status, quickgps; };
+
 struct ble_dev_info {
     uint16_t handle;
     const char *name;
@@ -21,6 +23,7 @@ typedef struct ttdev {
 
     struct version_tuple oldest_tested_firmware, newest_tested_firmware;
     const char **tested_models;
+    struct tt_files *files;
 } TTDEV;
 
 #include "util.h"
