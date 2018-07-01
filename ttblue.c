@@ -53,12 +53,12 @@ const char *PAIRING_CODE_PROMPT =
     "\n**************************************************\n"
     "Enter 6-digit pairing code shown on device: ";
 
-#define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
-#define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
+#define GQF_GPS_URL "https://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
+#define GQF_GLONASS_URL "https://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
 // Found an alternate source for the ephemeris file: https://github.com/felixge/node-ar-drone/issues/74#issuecomment-25722745
 // This one is nice because the number of days is selectable (3, 7, etc.) although TomTom seems only to
 // accept 3-day version
-#define GQF_GPS_ALT_URL "http://download.parrot.com/ephemerides/packedDifference.f2p3enc.ee?timestamp=%ld"
+#define GQF_GPS_ALT_URL "https://download.parrot.com/ephemerides/packedDifference.f2p3enc.ee?timestamp=%ld"
 
 /**
  * taken from bluez/tools/btgatt-client.c
