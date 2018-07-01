@@ -129,21 +129,21 @@ Service: UUID=b993bf91-81e1-11e4-b4a9-0800200c9a66, handles=0x30 to 0xffff
 
 ```
 Service: UUID=b993bf90-81e1-11e4-b4a9-0800200c9a66, handles=0x23 to 0x2f
-  Char: UUID=170d0d31-4213-11e3-aa6e-0800200c9a66, handle=0x25
+  Char: UUID=170d0d31-4213-11e3-aa6e-0800200c9a66, handle=0x25/0x72
     properties => NOTIFY,READ,WRITE NO RESPONSE,WRITE
-  Char: UUID=170d0d32-4213-11e3-aa6e-0800200c9a66, handle=0x28
+  Char: UUID=170d0d32-4213-11e3-aa6e-0800200c9a66, handle=0x28/0x75
     properties => NOTIFY,READ,WRITE NO RESPONSE
-  Char: UUID=170d0d33-4213-11e3-aa6e-0800200c9a66, handle=0x2b
+  Char: UUID=170d0d33-4213-11e3-aa6e-0800200c9a66, handle=0x2B/0x78
     properties => NOTIFY,READ,WRITE NO RESPONSE
-  Char: UUID=170d0d34-4213-11e3-aa6e-0800200c9a66, handle=0x2e
+  Char: UUID=170d0d34-4213-11e3-aa6e-0800200c9a66, handle=0x2E/0x7B
     properties => NOTIFY,READ,WRITE NO RESPONSE
 ```
 
-* `CH_CMD_STATUS` (handle `0x25`: used to send commands to the
+* `CH_CMD_STATUS` (handle `0x25/0x72`: used to send commands to the
   device and for the device to signal successful start/finish.
-* `CH_LENGTH ` (handle `0x28`): used to indicate the size in bytes of files transferred to/from the device.
-* `CH_TRANSFER` (handle `0x2B`): used to transfer bulk data (file contents) to/from the device.
-* `CH_CHECK` (handle `0x2E`): used to acknowledge successful receipt of data by the watch or host, depending on direction of data transfer.
+* `CH_LENGTH ` (handle `0x28/0x75`): used to indicate the size in bytes of files transferred to/from the device.
+* `CH_TRANSFER` (handle `0x2B/0x78`): used to transfer bulk data (file contents) to/from the device.
+* `CH_CHECK` (handle `0x2E/0x7B`): used to acknowledge successful receipt of data by the watch or host, depending on direction of data transfer.
 
 #### Standard GATT services
 
@@ -313,7 +313,7 @@ becomes `91 01 00`).
 #### Read from file
 
 * This is the same as the write sequence with the direction of
-  reads/writes to handles `0x28`, `0x2b`, and `0x2e` reversed.
+  reads/writes to handles `0x28/0x75`, `0x2B/0x78`, and `0x2E/0x7B` reversed.
 * The host should compute the CRC16 of bytes as they are received and
   send a sequentially increasing `ack_counter` (0, 1, 2) at the end of
   each batch of 256 packets, or partial fraction thereof at the end.
