@@ -53,12 +53,12 @@ const char *PAIRING_CODE_PROMPT =
     "\n**************************************************\n"
     "Enter 6-digit pairing code shown on device: ";
 
-#define GQF_GPS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
-#define GQF_GLONASS_URL "http://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
+#define GQF_GPS_URL "https://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%ld"
+#define GQF_GLONASS_URL "https://gpsquickfix.services.tomtom.com/fitness/sifglo.f2p3enc.ee?timestamp=%ld"
 // Found an alternate source for the ephemeris file: https://github.com/felixge/node-ar-drone/issues/74#issuecomment-25722745
 // This one is nice because the number of days is selectable (3, 7, etc.) although TomTom seems only to
 // accept 3-day version
-#define GQF_GPS_ALT_URL "http://download.parrot.com/ephemerides/packedDifference.f2p3enc.ee?timestamp=%ld"
+#define GQF_GPS_ALT_URL "https://download.parrot.com/ephemerides/packedDifference.f2p3enc.ee?timestamp=%ld"
 
 /**
  * taken from bluez/tools/btgatt-client.c
@@ -226,15 +226,14 @@ time_t
 read_gqf_status(TTDEV *ttd, int debug)
 {
     time_t last_update = 0;
-    uint32_t fileno = 0x00020001;
     uint8_t *fbuf;
     int length;
-    if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
-        fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", fileno);
+    if ((length=tt_read_file(ttd, ttd->files->gps_status, debug, &fbuf)) < 0) {
+        fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", ttd->files->gps_status);
         last_update = -1;
     } else {
 #ifdef DUMP_0x00020001
-        save_buf_to_file(make_tt_filename(fileno, "bin"), "wxb", fbuf, length, 2, true);
+        save_buf_to_file(make_tt_filename(ttd->files->gps_status, "bin"), "wxb", fbuf, length, 2, true);
 #endif
         if (length > 6 && (fbuf[0x02] | fbuf[0x03] | fbuf[0x04] | fbuf[0x05]) != 0) {
             struct tm tmp = { .tm_mday = fbuf[0x05], .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
@@ -317,7 +316,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr = {0};
-    uint8_t dst_bdaddr_type;
+    uint8_t dst_bdaddr_type = 0; /* suppress gcc 4.8.x warning; not actual a valid value */
     int needs_reboot = false, success = false;
     int write_delay;
     TTDEV *ttd;
@@ -529,25 +528,23 @@ int main(int argc, const char **argv)
         int length;
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hostname);
-        tt_delete_file(ttd, 0x00020002);
-        tt_write_file(ttd, 0x00020002, false, (uint8_t*)hostname, strlen(hostname), write_delay);
+        tt_delete_file(ttd, ttd->files->hostname);
+        tt_write_file(ttd, ttd->files->hostname, false, (uint8_t*)hostname, strlen(hostname), write_delay);
 
 #ifdef DUMP_0x000f20000
-        uint32_t fileno = 0x000f20000;
         fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
-        if ((length=tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
+        if ((length=tt_read_file(ttd, ttd->files->manifest, debug, &fbuf)) < 0) {
             fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", fileno);
         } else {
-            save_buf_to_file(make_tt_filename(fileno, "xml"), "wxb", fbuf, length, 2, true);
+            save_buf_to_file(make_tt_filename(ttd->files->manifest, "xml"), "wxb", fbuf, length, 2, true);
             free(fbuf);
         }
 #endif
 
         if (set_time) {
-            uint32_t fileno = 0x00850000;
-            fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", fileno);
-            if ((length = tt_read_file(ttd, fileno, debug, &fbuf)) < 0) {
-                fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", fileno);
+            fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", ttd->files->manifest);
+            if ((length = tt_read_file(ttd, ttd->files->manifest, debug, &fbuf)) < 0) {
+                fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", ttd->files->manifest);
             } else {
                 // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
                 int32_t *watch_timezone = NULL;
@@ -566,8 +563,8 @@ int main(int argc, const char **argv)
                     if (btohl(*watch_timezone) != lt->tm_gmtoff) {
                         fprintf(stderr, "  Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htobl(lt->tm_gmtoff);
-                        tt_delete_file(ttd, 0x00850000);
-                        tt_write_file(ttd, 0x00850000, false, fbuf, length, write_delay);
+                        tt_delete_file(ttd, ttd->files->manifest);
+                        tt_write_file(ttd, ttd->files->manifest, false, fbuf, length, write_delay);
                         needs_reboot = true;
                     }
                 }
@@ -577,7 +574,7 @@ int main(int argc, const char **argv)
 
         if (get_activities) {
             uint16_t *list;
-            int n_files = tt_list_sub_files(ttd, 0x00910000, &list);
+            int n_files = tt_list_sub_files(ttd, ttd->files->activity_start, &list);
 
             if (n_files < 0) {
                 fprintf(stderr, "Could not list activity files on watch!\n");
@@ -585,7 +582,7 @@ int main(int argc, const char **argv)
             }
             fprintf(stderr, "Found %d activity files on watch.\n", n_files);
             for (int ii=0; ii<n_files; ii++) {
-                uint32_t fileno = 0x00910000 + list[ii];
+                uint32_t fileno = ttd->files->activity_start + list[ii];
 
                 fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
                 term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
@@ -669,8 +666,8 @@ int main(int argc, const char **argv)
                             goto fail;
                         } else {
                             fclose (f);
-                            tt_delete_file(ttd, 0x00010100);
-                            result = tt_write_file(ttd, 0x00010100, debug, fbuf, length, write_delay);
+                            tt_delete_file(ttd, ttd->files->quickgps);
+                            result = tt_write_file(ttd, ttd->files->quickgps, debug, fbuf, length, write_delay);
                             free(fbuf);
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);

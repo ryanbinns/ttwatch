@@ -249,7 +249,7 @@ try:
             print tt_delete_file(p, fileno)
 
     if 1:
-        gqf = requests.get('http://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%d' % time.time()).content
+        gqf = requests.get('https://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p3enc.ee?timestamp=%d' % time.time()).content
         print "Sending QuickGPSFix update (%d bytes)..." % len(gqf)
         tt_delete_file(p, 0x00020002)
         tt_write_file(p, 0x00020002, 'GPSQuickFix…')
