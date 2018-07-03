@@ -316,7 +316,7 @@ int main(int argc, const char **argv)
 {
     int devid, dd, fd;
     bdaddr_t src_addr, dst_addr = {0};
-    uint8_t dst_bdaddr_type = {0};
+    uint8_t dst_bdaddr_type = 0; /* suppress gcc 4.8.x warning; not actual a valid value */
     int needs_reboot = false, success = false;
     int write_delay;
     TTDEV *ttd;
