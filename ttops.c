@@ -54,7 +54,8 @@ struct ble_dev_info v2_info[] = {
     { 0x0044, "model_name" },
     { 0x004a, "model_num" },
     { 0x004c, "firmware" },
-    { 0x0042, "system_id" } // Seems to be set to 0.
+    { 0x0042, "system_id" }, // Seems to be set to 0.
+    { 0 }
 };
 
 #define EXPECTED_MAKER "TomTom Fitness"
