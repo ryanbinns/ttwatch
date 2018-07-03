@@ -155,12 +155,12 @@ The TomTom devices support the standard [Generic Attribute](https://www.bluetoot
 UUID   | Handle | Name | Properties | Read value (for me)
 -------|--------|------|------------|-----------
 `2a00` | `0003` | Device Name | READ | `'Lenski'`
-`2a01` | `0005` | Appearance | READ | `11 00` ([not a well-known value](https://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.gap.appearance.xml))
+`2a01` | `0005` | Appearance | READ | `11 00` (["Running Walking Sensor"](https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.gap.appearance.xml))
 `2a02` | `0007` | Peripheral Privacy Flag | READ | `00` (no privacy mode)
 `2a03` | `0009` | Reconnection Address | WRITE |
-`2a04` | `000b` | [Peripheral Preferred Connection Parameters](https://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.gap.peripheral_preferred_connection_parameters.xml) | READ | `50 00 a0 00 00 00 e8 03` = (80, 10, 0, 1000)
+`2a04` | `000b` | [Peripheral Preferred Connection Parameters](https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.gap.peripheral_preferred_connection_parameters.xml) | READ | `50 00 a0 00 00 00 e8 03` = (80, 10, 0, 1000)
 
-They also support the standard [Device Information](https://developer.bluetooth.org/gatt/services/Pages/ServiceViewer.aspx?u=org.bluetooth.service.device_information.xml) service (service UUID=`0x180a`, handles `0x0010` to `0x0022`):
+They also support the standard [Device Information](https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.service.device_information.xml) service (service UUID=`0x180a`, handles `0x0010` to `0x0022`):
 
 UUID   | Handle | Name | Properties | Read value (for me)
 -------|--------|------|------------|--------------------
@@ -172,7 +172,7 @@ UUID   | Handle | Name | Properties | Read value (for me)
 `2a28` | `001c` | Software Revision String | READ | `'1.8.42\0\0\0\0'`
 `2a29` | `001e` | Manufacturer Name String | READ | `'TomTom Fitness\0'`
 `2a2a` | `0020` | IEEE 11073-20601 Regulatory Cert. Data List | READ | `'\xfe\x00experimental'`
-`2a50` | `0022` | [PnP ID](https://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.pnp_id.xml) | READ | `01 0d 00 00 00 10 01`<br/>[vendor `0x000D`](https://www.bluetooth.org/en-us/specification/assigned-numbers/company-identifiers) &rArr; [Texas Instruments' BLE IC](http://www.ti.com/lsds/ti/wireless_connectivity/bluetooth_bluetooth-ble/products.page#p3049=Bluetooth%20Smart%20%28Bluetooth%20low%20energy%29)?
+`2a50` | `0022` | [PnP ID](https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.pnp_id.xml) | READ | `01 0d 00 00 00 10 01`<br/>[vendor `0x000D`](https://www.bluetooth.org/en-us/specification/assigned-numbers/company-identifiers) &rArr; [Texas Instruments' BLE IC](http://www.ti.com/lsds/ti/wireless_connectivity/bluetooth_bluetooth-ble/products.page#p3049=Bluetooth%20Smart%20%28Bluetooth%20low%20energy%29)?
 
 ## Authorization sequence
 
