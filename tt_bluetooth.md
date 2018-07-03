@@ -127,6 +127,9 @@ Service: UUID=b993bf91-81e1-11e4-b4a9-0800200c9a66, handles=0x30 to 0xffff
 
 ### File transfer service
 
+Handles written as 0xF1/0xF2 are for v1 and v2 watches,
+written as {handle v1}/{handle v2}.
+
 ```
 Service: UUID=b993bf90-81e1-11e4-b4a9-0800200c9a66, handles=0x23 to 0x2f
   Char: UUID=170d0d31-4213-11e3-aa6e-0800200c9a66, handle=0x25/0x72
