@@ -95,17 +95,17 @@ tt_device_init(int protocol_version, int fd) {
         d->oldest_tested_firmware = VERSION_TUPLE(1,8,34);
         d->newest_tested_firmware = VERSION_TUPLE(1,8,46);
         d->tested_models = tested_models_v1;
-	d->files = &v1_files;
+        d->files = &v1_files;
         break;
     case 2:
         d->h = &v2_handles;
         d->info = v2_info;
         d->oldest_tested_firmware = VERSION_TUPLE(1,1,19);
         d->newest_tested_firmware = VERSION_TUPLE(1,7,64);
-	// @drkingpo confirmed v1.2.0 works now (see issue #5)
-	// @Grimler91 tested 1.7.62 and 1.7.64.
+        // @drkingpo confirmed v1.2.0 works now (see issue #5)
+        // @Grimler91 tested 1.7.62 and 1.7.64.
         d->tested_models = tested_models_v2;
-	d->files = &v2_files;
+        d->files = &v2_files;
         break;
     default:
         return NULL;
