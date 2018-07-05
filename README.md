@@ -167,12 +167,15 @@ See [`tt_bluetooth.md`](tt_bluetooth.md) for reverse-engineered protocol documen
 
 # Credits
 
-[**@ryanbinns**](http://github.com/ryanbinns) did a lot of the heavy
+[**@ryanbinns**](https://github.com/ryanbinns) did a lot of the heavy
 lifting by writing his excellent
 [`ttwatch`](http://github.com/ryanbinns/ttwatch) utility to sync with
 TomTom GPS watches over *USB*, and in the process documenting the
 `ttbin` binary format of the activity files, as well as many of the
 internal data structures of the units.
+
+[**@Grimler91**](https://github.com/Grimler91) for adding support for
+TomTom GPS watches using the "v2" protocol. (Spark, Runner v2, etc.)
 
 # License
 
