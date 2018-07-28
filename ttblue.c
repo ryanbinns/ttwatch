@@ -532,11 +532,11 @@ int main(int argc, const char **argv)
         tt_write_file(ttd, ttd->files->hostname, false, (uint8_t*)hostname, strlen(hostname), write_delay);
 
 #ifdef DUMP_0x000f20000
-        fprintf(stderr, "Reading preference file 0x%08x from watch...\n", fileno);
-        if ((length=tt_read_file(ttd, ttd->files->manifest, debug, &fbuf)) < 0) {
-            fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", fileno);
+        fprintf(stderr, "Reading preference file 0x%08x from watch...\n", ttd->files->preference);
+        if ((length=tt_read_file(ttd, ttd->files->preference, debug, &fbuf)) < 0) {
+            fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", ttd->files->preference);
         } else {
-            save_buf_to_file(make_tt_filename(ttd->files->manifest, "xml"), "wxb", fbuf, length, 2, true);
+            save_buf_to_file(make_tt_filename(ttd->files->preference, "xml"), "wxb", fbuf, length, 2, true);
             free(fbuf);
         }
 #endif

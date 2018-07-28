@@ -22,7 +22,8 @@ struct tt_handles v2_handles = { .ppcp=0,    .passcode=0x82, .magic=0x85, .cmd_s
 
 struct tt_files v1_files = {
     .hostname       = 0x00020002,
-    .manifest       = 0x000f2000,
+    .preference     = 0x00f20000,
+    .manifest       = 0x00850000,
     .activity_start = 0x00910000,
     .gps_status     = 0x00020001,
     .quickgps       = 0x00010100
@@ -30,7 +31,8 @@ struct tt_files v1_files = {
 
 struct tt_files v2_files = {
     .hostname       = 0x00020003,
-    .manifest       = 0x000f2000,
+    .preference     = 0x00f20000,
+    .manifest       = 0x00850000,
     .activity_start = 0x00910000,
     .gps_status     = 0x00020001,
     .quickgps       = 0x00010100
