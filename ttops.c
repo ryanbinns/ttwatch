@@ -250,12 +250,8 @@ tt_authorize(TTDEV *d, uint32_t code, bool new_code)
 int
 tt_reboot(TTDEV *d)
 {
-    // ... then overwhelm the device with a torrent of zeros to the status register
-    uint32_t bork = 0;
-    for (int ii=1; ii<=1000; ii++) {
-        if (att_wrreq(d->fd, d->h->cmd_status, &bork, 4) < 0)
-            return ii;
-    }
+    uint8_t cmd[] = {0x07, 0, 0, 0};
+    att_wrreq(d->fd, d->h->cmd_status, cmd, sizeof cmd);
     return -1;
 }
 
