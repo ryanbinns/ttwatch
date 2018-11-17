@@ -48,6 +48,14 @@ void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)
         do_get_activities(watch, new_options, formats);
     }
 
+    if (new_options->get_summaries)
+    {
+        uint32_t formats = get_configured_formats(watch);
+        if (!new_options->set_formats)
+            formats |= new_options->formats;
+        do_get_activity_summaries(watch, new_options, formats);
+    }
+
     if (new_options->update_gps)
         do_update_gps(watch);
 
@@ -186,9 +194,11 @@ void help(char *argv[])
     write_log(0, "  -h, --help                 Print this help\n");
     write_log(0, "  -s, --activity-store=PATH Specify an alternate place for storing\n");
     write_log(0, "                               downloaded ttbin activity files\n");
-    write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --set-time\"\n");
+    write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --get-summaries --set-time\"\n");
     write_log(0, "  -d, --device=STRING        Specify which device to use (see below)\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
+    write_log(0, "                               currently stored on the watch\n");
+    write_log(0, "      --get-summaries        Downloads any daily activity summary records\n");
     write_log(0, "                               currently stored on the watch\n");
     write_log(0, "      --packets              Displays the packets being sent/received\n");
     write_log(0, "                               to/from the watch. Only used for debugging\n");
@@ -237,6 +247,7 @@ int main(int argc, char *argv[])
         { "update-gps",     no_argument,       &options->update_gps,      1 },
         { "set-time",       no_argument,       &options->set_time,        1 },
         { "get-activities", no_argument,       &options->get_activities,  1 },
+        { "get-summaries",  no_argument,       &options->get_summaries,   1 },
         { "packets",        no_argument,       &options->show_packets,    1 },
         { "runas",          required_argument, 0, 3   },
         { "auto",           no_argument,       0, 'a' },
@@ -261,6 +272,7 @@ int main(int argc, char *argv[])
             options->update_firmware = 1;
             options->update_gps      = 1;
             options->get_activities  = 1;
+            options->get_summaries   = 1;
             options->set_time        = 1;
             break;
         case 'd':   /* select device */
@@ -313,12 +325,13 @@ int main(int argc, char *argv[])
     load_conf_file("/etc/ttwatch", options, LoadDaemonOperations);
 
     /* we have to include some useful functions, otherwise there's no point... */
-    if (!options->update_firmware && !options->update_gps && !options->get_activities && !options->set_time)
+    if (!options->update_firmware && !options->update_gps && !options->get_activities && !options->get_summaries && !options->set_time)
     {
         write_log(1, "You must include one or more of:\n");
         write_log(1, "    --update-fw\n");
         write_log(1, "    --update-gps\n");
         write_log(1, "    --get-activities\n");
+        write_log(1, "    --get-summaries\n");
         write_log(1, "    --set-time\n");
         write_log(1, "    --auto (OR -a)\n");
         free_options(options);

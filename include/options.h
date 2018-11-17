@@ -28,6 +28,7 @@ typedef struct
     int get_time;
     int set_time;
     int get_activities;
+    int get_summaries;
     int get_name;
     int set_name;
     char *watch_name;

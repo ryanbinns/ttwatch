@@ -4,6 +4,7 @@
 \******************************************************************************/
 
 #include "download.h"
+#include "export.h"
 #include "log.h"
 #include "json.h"
 #include "misc.h"
@@ -129,4 +130,3 @@ uint32_t get_configured_formats(TTWATCH *watch)
         write_log(1, "Unable to read configured formats\n");
     return formats;
 }
-

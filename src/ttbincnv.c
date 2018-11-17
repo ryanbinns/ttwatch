@@ -4,6 +4,7 @@
 \*****************************************************************************/
 
 #include "ttbin.h"
+#include "export.h"
 
 #include <ctype.h>
 #include <getopt.h>

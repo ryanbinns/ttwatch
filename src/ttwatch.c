@@ -4,6 +4,8 @@
 \******************************************************************************/
 
 #include "ttbin.h"
+#include "protobuf.h"
+#include "export.h"
 #include "json.h"
 #include "log.h"
 #include "options.h"
@@ -1247,7 +1249,7 @@ void help(char *argv[])
     write_log(0, "  -h, --help                 Print this help\n");
     write_log(0, "  -s, --activity-store=PATH Specify an alternate place for storing\n");
     write_log(0, "                               downloaded ttbin activity files\n");
-    write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --set-time\"\n");
+    write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --get-summaries --set-time\"\n");
     write_log(0, "      --all-settings         List all the current settings on the watch\n");
     write_log(0, "      --clear-data           Delete all activities and history data from the\n");
     write_log(0, "                               watch. Does NOT save the data before deleting it\n");
@@ -1269,6 +1271,8 @@ void help(char *argv[])
     write_log(0, "                               saved when the watch is automatically processed\n");
     write_log(0, "      --get-name             Displays the current watch name\n");
     write_log(0, "      --get-time             Returns the current GPS time on the watch\n");
+    write_log(0, "      --get-summaries        Downloads any daily activity summary records\n");
+    write_log(0, "                               currently stored on the watch\n");
     write_log(0, "      --initial-setup        Performs an initial setup for the watch, adding a\n");
     write_log(0, "                               default preferences file and default race files\n");
 #ifdef UNSAFE
@@ -1423,6 +1427,7 @@ int main(int argc, char *argv[])
         { "get-time",       no_argument,       &options->get_time,        1 },
         { "set-time",       no_argument,       &options->set_time,        1 },
         { "get-activities", no_argument,       &options->get_activities,  1 },
+        { "get-summaries",  no_argument,       &options->get_summaries,   1 },
         { "packets",        no_argument,       &options->show_packets,    1 },
         { "devices",        no_argument,       &options->list_devices,    1 },
         { "get-formats",    no_argument,       &options->list_formats,    1 },
@@ -1506,6 +1511,7 @@ int main(int argc, char *argv[])
             options->update_firmware = 1;
             options->update_gps      = 1;
             options->get_activities  = 1;
+            options->get_summaries   = 1;
             options->set_time        = 1;
             break;
 #ifdef UNSAFE
@@ -1603,7 +1609,8 @@ int main(int argc, char *argv[])
         !options->read_file && !options->write_file && !options->delete_file && !options->list_files &&
 #endif
         !options->update_firmware && !options->update_gps && !options->show_versions &&
-        !options->get_activities && !options->get_time && !options->set_time &&
+        !options->get_activities && !options->get_summaries &&
+        !options->get_time && !options->set_time &&
         !options->list_devices && !options->get_name && !options->set_name &&
         !options->list_formats && !options->set_formats && !options->list_races &&
         !options->list_history && !options->delete_history && !options->update_race &&
@@ -1723,6 +1730,19 @@ int main(int argc, char *argv[])
             free(filename);
         }
         do_get_activities(watch, options, get_configured_formats(watch));
+    }
+
+    if (options->get_summaries)
+    {
+        char name[32];
+        if (!ttwatch_get_watch_name(watch, name, sizeof(name)) == TTWATCH_NoError)
+        {
+            char *filename = malloc(strlen(options->activity_store) + 1 + strlen(name) + 1 + 12 + 1);
+            sprintf(filename, "%s/%s/ttwatch.conf", options->activity_store, name);
+            load_conf_file(filename, options, LoadDaemonOperations);
+            free(filename);
+        }
+        do_get_activity_summaries(watch, options, get_configured_formats(watch));
     }
 
     if (options->update_gps)

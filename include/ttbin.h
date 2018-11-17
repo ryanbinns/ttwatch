@@ -344,14 +344,6 @@ const char *create_filename(TTBIN_FILE *file, const char *ext);
 
 void download_elevation_data(TTBIN_FILE *ttbin);
 
-void export_csv(TTBIN_FILE *ttbin, FILE *file);
-
-void export_gpx(TTBIN_FILE *ttbin, FILE *file);
-
-void export_kml(TTBIN_FILE *ttbin, FILE *file);
-
-void export_tcx(TTBIN_FILE *ttbin, FILE *file);
-
 uint32_t export_formats(TTBIN_FILE *ttbin, uint32_t formats);
 
 void free_ttbin(TTBIN_FILE *ttbin);
@@ -367,29 +359,6 @@ int truncate_goal(TTBIN_FILE *ttbin);
 int truncate_intervals(TTBIN_FILE *ttbin);
 
 /*****************************************************************************/
-
-#define OFFLINE_FORMAT_CSV  (0x00000001)
-#define OFFLINE_FORMAT_FIT  (0x00000002)
-#define OFFLINE_FORMAT_GPX  (0x00000004)
-#define OFFLINE_FORMAT_KML  (0x00000008)
-#define OFFLINE_FORMAT_PWX  (0x00000010)
-#define OFFLINE_FORMAT_TCX  (0x00000020)
-
-typedef struct
-{
-    uint32_t mask;
-    const char *name;
-    int gps_ok;
-    int treadmill_ok;
-    int pool_swim_ok;
-    int indoor_ok;
-    void (*producer)(TTBIN_FILE* ttbin, FILE *file);
-} OFFLINE_FORMAT;
-
-#define OFFLINE_FORMAT_COUNT    (6)
-extern const OFFLINE_FORMAT OFFLINE_FORMATS[OFFLINE_FORMAT_COUNT];
-
-uint32_t parse_format_list(const char *formats);
 
 #endif  /* __TTBIN_H__ */
 
