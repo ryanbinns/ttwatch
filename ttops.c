@@ -62,7 +62,7 @@ struct ble_dev_info v2_info[] = {
 
 #define EXPECTED_MAKER "TomTom Fitness"
 const char *tested_models_v1[] = {"1001","1002","1003","1004",NULL};
-const char *tested_models_v2[] = {"2005","2006","2008",NULL};
+const char *tested_models_v2[] = {"2005","2006","2008","2012",NULL};
 
 const char *FIRMWARE_TOO_OLD =
     "Firmware v%s is too old; at least v%s is required\n"
