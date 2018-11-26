@@ -546,7 +546,8 @@ int main(int argc, const char **argv)
             if ((length = tt_read_file(ttd, ttd->files->manifest, debug, &fbuf)) < 0) {
                 fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", ttd->files->manifest);
             } else {
-                // based on ttwatch/libttwatch/libttwatch.h, ttwatch/ttwatch/manifest_definitions.h
+                // based on: https://github.com/ryanbinns/ttwatch/tree/master/manifest
+                // the position of the UTC-offset in the manifest is 169 in all known firmware versions, so lazily hard-coded here for now
                 int32_t *watch_timezone = NULL;
                 for (int16_t *index = (int16_t*)(fbuf+4); index < (int16_t*)(fbuf+length); index += 3) {
                     if (btohl(*index) == 169) {
