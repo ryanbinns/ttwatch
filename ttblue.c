@@ -708,6 +708,7 @@ int main(int argc, const char **argv)
         success = true;
         if(needs_reboot) {
             fprintf(stderr, "Rebooting watch...\n");
+            fprintf(stderr, "WARNING: this may not work with some devices\n");
             tt_reboot(ttd);
         }
         first = false;
