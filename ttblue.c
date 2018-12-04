@@ -285,7 +285,8 @@ save_buf_to_file(const char *filename, const char *mode, const void *fbuf, int l
 int debug=1;
 int get_activities=0, set_time=0, update_gps=0, version=0, daemonize=0, new_pair=1;
 int sleep_success=3600, sleep_fail=10;
-uint32_t dev_code;
+char dev_code[6];
+char *read_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL, *gqf_url=GQF_GPS_URL;
 
 struct poptOption options[] = {
@@ -299,7 +300,7 @@ struct poptOption options[] = {
     { "qf-url", 0, POPT_ARG_STRING, &gqf_url, 0, "Alternate URL for QuickFix update (ephemeris) file." },
     { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will use first TomTom device if unspecified", "MACADDR" },
     { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
-    { "code", 'c', POPT_ARG_INT, &dev_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
+    { "code", 'c', POPT_ARG_STRING, &read_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
     { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
     { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
     { "quiet", 'q', POPT_ARG_VAL, &debug, 0, "Suppress debugging output" },
@@ -324,7 +325,6 @@ int main(int argc, const char **argv)
 
     // parse args
     int ch;
-    char dangling;
     poptContext optCon = poptGetContext(NULL, argc, argv, options, 0);
 
     while ((ch=poptGetNextOpt(optCon))>=0) {
@@ -368,6 +368,10 @@ int main(int argc, const char **argv)
     // get hostname
     char hostname[32];
     gethostname(hostname, sizeof hostname);
+
+    if (read_code != NULL) {
+        strcpy(dev_code, read_code);
+    }
 
     // prompt user to put device in pairing mode
     if (new_pair) {
@@ -506,15 +510,12 @@ int main(int argc, const char **argv)
         // prompt for pairing code
         if (new_pair) {
             fputs(PAIRING_CODE_PROMPT, stderr);
-            if (!(scanf("%d%c", &dev_code, &dangling) && isspace(dangling))) {
-                fprintf(stderr, "Pairing code should be 6-digit number.\n");
-                goto fatal;
-            }
+            fgets(dev_code, 7, stdin);
         }
 
         // authorize with the device
-        if (tt_authorize(ttd, dev_code) < 0) {
-            fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
+        if (tt_authorize(ttd, dev_code, new_pair) < 0) {
+            fprintf(stderr, "Device didn't accept pairing code %s.\n", dev_code);
             if (first) goto fatal; else goto fail;
         }
 
