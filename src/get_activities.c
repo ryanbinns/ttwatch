@@ -53,13 +53,16 @@ static void _mkdir(const char *dir)
 static void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdata)
 {
     DGACallback *c = (DGACallback*)cbdata;
-    char filename[256] = {0};
+    char *filename;
     uint8_t *data;
     TTBIN_FILE *ttbin;
     FILE *f;
     struct tm timestamp;
     uint32_t fmt1;
     int i;
+    char cwd[PATH_MAX];
+    char watch_name[256];
+    int dir_length;
 
     if (ttwatch_read_whole_file(c->watch, id, (void**)&data, 0) != TTWATCH_NoError)
     {
@@ -78,15 +81,31 @@ static void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdat
         gmtime_r(&t, &timestamp);
     }
 
+    /* get the current directory so we can restore it later */
+    getcwd(cwd, sizeof(cwd));
+
+    dir_length = strlen(c->options->activity_store) + 1 + 10;
+    if (ttwatch_get_watch_name(c->watch, watch_name, sizeof(watch_name)) == TTWATCH_NoError)
+        dir_length += strlen(watch_name) + 1;
+    else
+        watch_name[0] = 0;
+
+    filename = (char*)malloc(dir_length + 1);
+
     /* create the directory name: [store]/[watch name]/[date] */
     strcpy(filename, c->options->activity_store);
     strcat(filename, "/");
-    if (ttwatch_get_watch_name(c->watch, filename + strlen(filename), sizeof(filename) - strlen(filename)) == TTWATCH_NoError)
+    if (strlen(watch_name))
+    {
+        strcat(filename, watch_name);
         strcat(filename, "/");
+    }
     sprintf(filename + strlen(filename), "%04d-%02d-%02d",
         timestamp.tm_year + 1900, timestamp.tm_mon + 1, timestamp.tm_mday);
     _mkdir(filename);
     chdir(filename);
+
+    filename = (char*)realloc(filename, PATH_MAX);
 
     /* create the file name */
     if (ttbin)
@@ -112,6 +131,8 @@ static void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdat
                 free_ttbin(ttbin);
             free(data);
             free(data1);
+            chdir(cwd);
+            free(filename);
             return;
         }
         else
@@ -130,6 +151,8 @@ static void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdat
     {
         write_log(1, "Warning: Corrupt or unrecognisable activity file: %s\n", filename);
         free(data);
+        chdir(cwd);
+        free(filename);
         return;
     }
 
@@ -165,6 +188,8 @@ static void do_get_activities_callback(uint32_t id, uint32_t length, void *cbdat
 
     free_ttbin(ttbin);
     free(data);
+    chdir(cwd);
+    free(filename);
 }
 
 /*****************************************************************************/
