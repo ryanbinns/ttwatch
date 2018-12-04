@@ -188,6 +188,8 @@ typedef std::vector<std::pair<uint32_t,uint32_t> >  FileList;
 
 static int s_show_packets;
 
+#include "log.h"
+
 //------------------------------------------------------------------------------
 void print_packet(uint8_t *packet, uint8_t size)
 {
@@ -196,10 +198,10 @@ void print_packet(uint8_t *packet, uint8_t size)
     {
         struct timespec tmspec;
         clock_gettime(CLOCK_MONOTONIC, &tmspec);
-        printf("%lu.%03lu: ", tmspec.tv_sec, tmspec.tv_nsec / 1000000);
+        write_log(0, "%lu.%03lu: ", tmspec.tv_sec, tmspec.tv_nsec / 1000000);
         for (i = 0; i < size; ++i)
-            printf("%02X ", packet[i]);
-        printf("\n");
+            write_log(0, "%02X ", packet[i]);
+        write_log(0,"\n");
     }
 }
 

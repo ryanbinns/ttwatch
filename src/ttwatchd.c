@@ -64,21 +64,8 @@ void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)
 int hotplug_attach_callback(struct libusb_context *ctx, struct libusb_device *dev,
     libusb_hotplug_event event, void *user_data)
 {
-    OPTIONS *options = (OPTIONS*)user_data;
-    TTWATCH *watch = 0;
-
-    write_log(0, "Watch connected...\n");
-
-    if (ttwatch_open_device(dev, options->select_device ? options->device : 0, &watch) == TTWATCH_NoError)
-    {
-        daemon_watch_operations(watch, options);
-
-        write_log(0, "Finished watch operations\n");
-
-        ttwatch_close(watch);
-    }
-    else
-        write_log(0, "Watch not processed - does not match user selection\n");
+    struct libusb_device **device = (struct libusb_device**)user_data;
+    *device = dev;
     return 0;
 }
 
@@ -178,11 +165,11 @@ void daemonise(const char *user)
 }
 
 /*****************************************************************************/
-int register_callback(uint32_t product_id, OPTIONS *options)
+int register_callback(uint32_t product_id, struct libusb_device  **device)
 {
     int result = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
         LIBUSB_HOTPLUG_ENUMERATE, TOMTOM_VENDOR_ID, product_id,
-        LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, options, NULL);
+        LIBUSB_HOTPLUG_MATCH_ANY, hotplug_attach_callback, device, NULL);
     if (result)
         write_log(1, "Unable to register hotplug callback: %d\n", result);
     return result;
@@ -237,6 +224,8 @@ int main(int argc, char *argv[])
     int result;
 
     TTWATCH *watch = 0;
+    struct libusb_device *device = 0;
+
 
     OPTIONS *options = alloc_options();
 
@@ -354,9 +343,9 @@ int main(int argc, char *argv[])
         _exit(1);
     }
 
-    if (register_callback(TOMTOM_MULTISPORT_PRODUCT_ID, options) ||
-        register_callback(TOMTOM_SPARK_CARDIO_PRODUCT_ID, options) ||
-        register_callback(TOMTOM_SPARK_MUSIC_PRODUCT_ID, options))
+    if (register_callback(TOMTOM_MULTISPORT_PRODUCT_ID, &device) ||
+        register_callback(TOMTOM_SPARK_CARDIO_PRODUCT_ID, &device) ||
+        register_callback(TOMTOM_SPARK_MUSIC_PRODUCT_ID, &device))
     {
         libusb_exit(NULL);
         free_options(options);
@@ -366,7 +355,26 @@ int main(int argc, char *argv[])
     /* infinite loop - handle events every 10 seconds */
     while (1)
     {
+        device = 0;
         libusb_handle_events_completed(NULL, NULL);
+        if (device)
+        {
+            TTWATCH *watch = 0;
+
+            write_log(0, "Watch connected...\n");
+
+            int ret = ttwatch_open_device(device, options->select_device ? options->device : 0, &watch);
+            if (ret == TTWATCH_NoError)
+            {
+                daemon_watch_operations(watch, options);
+
+                write_log(0, "Finished watch operations\n");
+
+                ttwatch_close(watch);
+            }
+            else
+                write_log(0, "Watch not processed - does not match user selection (%d)\n", ret);
+        }
         usleep(10000);
     }
 
