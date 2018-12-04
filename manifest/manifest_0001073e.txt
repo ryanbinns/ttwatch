@@ -190,7 +190,7 @@ freestyle/training/race/recent/file,322,i,0,,,
 freestyle/training/race/mysports,323,i,1,,0,4
 options/tracker,331,e,1,1=on,2=off
 options/start_of_week,332,e,1,0=sunday,1=monday,2=tuesday,3=wednesday,4=thursday,5=friday,6=saturday
-options/tracker/goals/type,333,e,1,0=time,1=steps,2=calories,3=distance
+options/tracker/goals/type,333,e,1,0=time,1=steps,2=calories,3=distance,6=points
 options/tracker/goals/calories,334,i,1,,,
 options/tracker/goals/time,335,i,0,s,,
 options/tracker/goals/distance,336,i,0,m,,
