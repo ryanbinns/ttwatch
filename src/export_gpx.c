@@ -54,8 +54,8 @@ void export_gpx(TTBIN_FILE *ttbin, FILE *file)
             if ((record->gps.timestamp == 0) || ((record->gps.latitude == 0) && (record->gps.longitude == 0)))
                 continue;
             strftime(timestr, sizeof(timestr), "%FT%X.000Z", gmtime(&record->gps.timestamp));
-            fprintf(file, "            <trkpt lon=\"%.6f\" lat=\"%.6f\">\r\n",
-                record->gps.longitude, record->gps.latitude);
+            fprintf(file, "            <trkpt lat=\"%.6f\" lon=\"%.6f\">\r\n",
+                record->gps.latitude, record->gps.longitude);
             if (!isnan(record->gps.elevation))
                 fprintf(file, "                <ele>%d</ele>\r\n", (int)record->gps.elevation);
             fputs(        "                <time>", file);
