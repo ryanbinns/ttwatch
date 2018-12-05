@@ -96,7 +96,7 @@ tt_device_init(int protocol_version, int fd) {
         d->h = &v1_handles;
         d->info = v1_info;
         d->oldest_tested_firmware = VERSION_TUPLE(1,8,34);
-        d->newest_tested_firmware = VERSION_TUPLE(1,8,46);
+        d->newest_tested_firmware = VERSION_TUPLE(1,8,52);
         d->tested_models = tested_models_v1;
         d->files = &v1_files;
         break;
@@ -186,29 +186,28 @@ tt_authorize(TTDEV *d, uint32_t code, bool new_code)
 
     switch (d->protocol_version) {
     case 1:
-        // TomTom MySports 2.1.13-a3eb49a for Android
-        magic_bytes = BARRAY( 0x01, 0x16, 0, 0, 0x01, 0x29, 0, 0 );
+        magic_bytes = BARRAY( 0x01, 0x19, 0, 0, 0x01, 0x17, 0, 0 );
         if (new_code) {
-            att_write(d->fd, 0x0033, &auth_one, sizeof auth_one);
-            att_write(d->fd, 0x0026, &auth_one, sizeof auth_one);
-            att_write(d->fd, 0x002f, &auth_one, sizeof auth_one);
-            att_write(d->fd, 0x0029, &auth_one, sizeof auth_one);
-            att_write(d->fd, 0x002c, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x0033, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x0026, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x002f, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x0029, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x002c, &auth_one, sizeof auth_one);
             att_wrreq(d->fd, d->h->magic, magic_bytes, 8);
             att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode);
         } else {
-            att_write(d->fd, 0x0033, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x0033, &auth_one, sizeof auth_one);
             att_wrreq(d->fd, d->h->magic, magic_bytes, sizeof magic_bytes);
-            att_write(d->fd, 0x0026, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x0026, &auth_one, sizeof auth_one);
             att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode);
 
             int res = EXPECT_uint8(d, d->h->passcode, 1);
             if (res < 0)
                 return res;
 
-            att_write(d->fd, 0x002f, &auth_one, sizeof auth_one);
-            att_write(d->fd, 0x0029, &auth_one, sizeof auth_one);
-            att_write(d->fd, 0x002c, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x002f, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x0029, &auth_one, sizeof auth_one);
+            att_wrreq(d->fd, 0x002c, &auth_one, sizeof auth_one);
             att_wrreq(d->fd, d->h->magic, magic_bytes, 8);
             att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode);
         }
