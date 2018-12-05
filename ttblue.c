@@ -512,7 +512,7 @@ int main(int argc, const char **argv)
         }
 
         // authorize with the device
-        if (tt_authorize(ttd, dev_code, new_pair) < 0) {
+        if (tt_authorize(ttd, dev_code) < 0) {
             fprintf(stderr, "Device didn't accept pairing code %d.\n", dev_code);
             if (first) goto fatal; else goto fail;
         }
