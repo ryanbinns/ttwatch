@@ -192,22 +192,21 @@ tt_authorize(TTDEV *d, uint32_t code)
         att_wrreq(d->fd, 0x002f, &auth_one, sizeof auth_one);
         att_wrreq(d->fd, 0x0029, &auth_one, sizeof auth_one);
         att_wrreq(d->fd, 0x002c, &auth_one, sizeof auth_one);
-        att_wrreq(d->fd, d->h->magic, magic_bytes, 8);
-        att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode);
-        return EXPECT_uint8(d, d->h->passcode, 1);
+        break;
     case 2:
-        // Android software, from @drkingpo's log, updated by @Grimler91 for 1.7.64
         att_wrreq(d->fd, 0x0083, &auth_one, sizeof auth_one); // (v1 + 0x50)
         att_wrreq(d->fd, 0x0088, &auth_one, sizeof auth_one);
         att_wrreq(d->fd, 0x0073, &auth_one, sizeof auth_one); // (v1 + 0x4d)
         att_wrreq(d->fd, 0x007c, &auth_one, sizeof auth_one); // (v1 + 0x4d)
         att_wrreq(d->fd, 0x0076, &auth_one, sizeof auth_one); // (v1 + 0x4d)
         att_wrreq(d->fd, 0x0079, &auth_one, sizeof auth_one); // (v1 + 0x4d)
-        att_wrreq(d->fd, d->h->magic, magic_bytes, 8); // (v1 + 0x50)
-        att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode); //  (v1 + 0x50)
-        return EXPECT_uint8(d, d->h->passcode, 1);
+        break;
+    default:
+        return -2;
     }
-    return -2;
+    att_wrreq(d->fd, d->h->magic, magic_bytes, 8);
+    att_wrreq(d->fd, d->h->passcode, &bcode, sizeof bcode);
+    return EXPECT_uint8(d, d->h->passcode, 1);
 }
 
 int
