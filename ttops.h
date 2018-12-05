@@ -6,8 +6,6 @@
 
 struct tt_handles { uint16_t ppcp, passcode, magic, cmd_status, length, transfer, check; };
 
-struct tt_files { uint32_t hostname, preference, manifest, activity_start, gps_status, quickgps; };
-
 struct ble_dev_info {
     uint16_t handle;
     const char *name;

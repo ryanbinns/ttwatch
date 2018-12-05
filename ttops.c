@@ -14,29 +14,12 @@
 #include "util.h"
 #include "ttops.h"
 #include "version.h"
+#include "ttblue.h"
 
 /****************************************************************************/
 
 struct tt_handles v1_handles = { .ppcp=0x0b, .passcode=0x32, .magic=0x35, .cmd_status=0x25, .length=0x28, .transfer=0x2b, .check=0x2e };
 struct tt_handles v2_handles = { .ppcp=0,    .passcode=0x82, .magic=0x85, .cmd_status=0x72, .length=0x75, .transfer=0x78, .check=0x7b };
-
-struct tt_files v1_files = {
-    .hostname       = 0x00020002,
-    .preference     = 0x00f20000,
-    .manifest       = 0x00850000,
-    .activity_start = 0x00910000,
-    .gps_status     = 0x00020001,
-    .quickgps       = 0x00010100
-};
-
-struct tt_files v2_files = {
-    .hostname       = 0x00020003,
-    .preference     = 0x00f20000,
-    .manifest       = 0x00850000,
-    .activity_start = 0x00910000,
-    .gps_status     = 0x00020001,
-    .quickgps       = 0x00010100
-};
 
 struct ble_dev_info v1_info[] = {
     { 0x001e, "maker" },
@@ -98,7 +81,6 @@ tt_device_init(int protocol_version, int fd) {
         d->oldest_tested_firmware = VERSION_TUPLE(1,8,34);
         d->newest_tested_firmware = VERSION_TUPLE(1,8,52);
         d->tested_models = tested_models_v1;
-        d->files = &v1_files;
         break;
     case 2:
         d->h = &v2_handles;
@@ -108,7 +90,6 @@ tt_device_init(int protocol_version, int fd) {
         // @drkingpo confirmed v1.2.0 works now (see issue #5)
         // @Grimler91 tested 1.7.62 and 1.7.64.
         d->tested_models = tested_models_v2;
-        d->files = &v2_files;
         break;
     default:
         return NULL;
@@ -228,7 +209,7 @@ tt_read_file(TTDEV *d, uint32_t fileno, int debug, uint8_t **buf)
     if (fileno>>24)
         return -EINVAL;
 
-    uint8_t cmd[] = {1, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    uint8_t cmd[] = {MSG_READ, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(d->fd, d->h->cmd_status, cmd, sizeof cmd);
     if (EXPECT_uint32(d, d->h->cmd_status, 1) < 0)
         goto prealloc_fail;
@@ -309,7 +290,7 @@ tt_write_file(TTDEV *d, uint32_t fileno, int debug, const uint8_t *buf, uint32_t
     if (fileno>>24)
         return -EINVAL;
 
-    uint8_t cmd[] = {0, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    uint8_t cmd[] = {MSG_WRITE, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(d->fd, d->h->cmd_status, cmd, sizeof cmd);
     if (EXPECT_uint32(d, d->h->cmd_status, 1) < 0)
        return -1;
@@ -408,7 +389,7 @@ tt_delete_file(TTDEV *d, uint32_t fileno)
     if (fileno>>24)
         return -EINVAL;
 
-    uint8_t cmd[] = {4, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    uint8_t cmd[] = {MSG_DELETE, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(d->fd, d->h->cmd_status, cmd, sizeof cmd);
     if (EXPECT_uint32(d, d->h->cmd_status, 1) < 0)
         return -1;
@@ -433,7 +414,7 @@ tt_list_sub_files(TTDEV *d, uint32_t fileno, uint16_t **outlist)
     if (fileno>>24)
         return -EINVAL;
 
-    uint8_t cmd[] = {3, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
+    uint8_t cmd[] = {MSG_LIST_FILES, (fileno>>16)&0xff, fileno&0xff, (fileno>>8)&0xff};
     att_wrreq(d->fd, d->h->cmd_status, cmd, sizeof cmd);
     if (EXPECT_uint32(d, d->h->cmd_status, 1) < 0)
         return -1;

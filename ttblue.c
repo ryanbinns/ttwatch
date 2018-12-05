@@ -29,6 +29,7 @@
 #include "bbatt.h"
 #include "ttops.h"
 #include "util.h"
+#include "ttblue.h"
 
 const char *PLEASE_SETCAP_ME =
     "**********************************************************\n"
@@ -228,12 +229,12 @@ read_gqf_status(TTDEV *ttd, int debug)
     time_t last_update = 0;
     uint8_t *fbuf;
     int length;
-    if ((length=tt_read_file(ttd, ttd->files->gps_status, debug, &fbuf)) < 0) {
-        fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", ttd->files->gps_status);
+    if ((length=tt_read_file(ttd, TTBLUE_FILE_GPS_STATUS, debug, &fbuf)) < 0) {
+        fprintf(stderr, "WARNING: Could not read GPS status file 0x%08x from watch.\n", TTBLUE_FILE_GPS_STATUS);
         last_update = -1;
     } else {
 #ifdef DUMP_0x00020001
-        save_buf_to_file(make_tt_filename(ttd->files->gps_status, "bin"), "wxb", fbuf, length, 2, true);
+        save_buf_to_file(make_tt_filename(TTBLUE_FILE_GPS_STATUS, "bin"), "wxb", fbuf, length, 2, true);
 #endif
         if (length > 6 && (fbuf[0x02] | fbuf[0x03] | fbuf[0x04] | fbuf[0x05]) != 0) {
             struct tm tmp = { .tm_mday = fbuf[0x05], .tm_mon = fbuf[0x04]-1, .tm_year = (((int)fbuf[0x02])<<8) + fbuf[0x03] - 1900 };
@@ -529,23 +530,25 @@ int main(int argc, const char **argv)
         int length;
 
         fprintf(stderr, "Setting PHONE menu to '%s'.\n", hostname);
-        tt_delete_file(ttd, ttd->files->hostname);
-        tt_write_file(ttd, ttd->files->hostname, false, (uint8_t*)hostname, strlen(hostname), write_delay);
+        tt_delete_file(ttd, TTBLUE_FILE_HOSTNAME1);
+        tt_write_file(ttd, TTBLUE_FILE_HOSTNAME1, false, (uint8_t*)hostname, strlen(hostname), write_delay);
+        tt_delete_file(ttd, TTBLUE_FILE_HOSTNAME2); // Write name to two files as V1 and V2 devices seem to use different files
+        tt_write_file(ttd, TTBLUE_FILE_HOSTNAME2, false, (uint8_t*)hostname, strlen(hostname), write_delay);
 
 #ifdef DUMP_0x000f20000
-        fprintf(stderr, "Reading preference file 0x%08x from watch...\n", ttd->files->preference);
-        if ((length=tt_read_file(ttd, ttd->files->preference, debug, &fbuf)) < 0) {
-            fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", ttd->files->preference);
+        fprintf(stderr, "Reading preference file 0x%08x from watch...\n", TTBLUE_FILE_PREFERENCES_XML);
+        if ((length=tt_read_file(ttd, TTBLUE_FILE_PREFERENCES_XML, debug, &fbuf)) < 0) {
+            fprintf(stderr, "WARNING: Could not read preferences file 0x%08x from watch.\n", TTBLUE_FILE_PREFERENCES_XML);
         } else {
-            save_buf_to_file(make_tt_filename(ttd->files->preference, "xml"), "wxb", fbuf, length, 2, true);
+            save_buf_to_file(make_tt_filename(TTBLUE_FILE_PREFERENCES_XML, "xml"), "wxb", fbuf, length, 2, true);
             free(fbuf);
         }
 #endif
 
         if (set_time) {
-            fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", ttd->files->manifest);
-            if ((length = tt_read_file(ttd, ttd->files->manifest, debug, &fbuf)) < 0) {
-                fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", ttd->files->manifest);
+            fprintf(stderr, "Checking watch settings manifest file 0x%08x...\n", TTBLUE_FILE_MANIFEST1);
+            if ((length = tt_read_file(ttd, TTBLUE_FILE_MANIFEST1, debug, &fbuf)) < 0) {
+                fprintf(stderr, "WARNING: Could not read settings manifest file 0x%08x from watch!\n", TTBLUE_FILE_MANIFEST1);
             } else {
                 // based on: https://github.com/ryanbinns/ttwatch/tree/master/manifest
                 // the position of the UTC-offset in the manifest is 169 in all known firmware versions, so lazily hard-coded here for now
@@ -565,8 +568,8 @@ int main(int argc, const char **argv)
                     if (btohl(*watch_timezone) != lt->tm_gmtoff) {
                         fprintf(stderr, "  Changing timezone from UTC%+d to UTC%+ld.\n", btohl(*watch_timezone), lt->tm_gmtoff);
                         *watch_timezone = htobl(lt->tm_gmtoff);
-                        tt_delete_file(ttd, ttd->files->manifest);
-                        tt_write_file(ttd, ttd->files->manifest, false, fbuf, length, write_delay);
+                        tt_delete_file(ttd, TTBLUE_FILE_MANIFEST1);
+                        tt_write_file(ttd, TTBLUE_FILE_MANIFEST1, false, fbuf, length, write_delay);
                         needs_reboot = true;
                     }
                 }
@@ -576,7 +579,7 @@ int main(int argc, const char **argv)
 
         if (get_activities) {
             uint16_t *list;
-            int n_files = tt_list_sub_files(ttd, ttd->files->activity_start, &list);
+            int n_files = tt_list_sub_files(ttd, TTBLUE_FILE_TTBIN_DATA, &list);
 
             if (n_files < 0) {
                 fprintf(stderr, "Could not list activity files on watch!\n");
@@ -584,7 +587,7 @@ int main(int argc, const char **argv)
             }
             fprintf(stderr, "Found %d activity files on watch.\n", n_files);
             for (int ii=0; ii<n_files; ii++) {
-                uint32_t fileno = ttd->files->activity_start + list[ii];
+                uint32_t fileno = TTBLUE_FILE_TTBIN_DATA + list[ii];
 
                 fprintf(stderr, "  Reading activity file 0x%08X ...\n", fileno);
                 term_title("ttblue: Transferring activity %d/%d", ii+1, n_files);
@@ -668,8 +671,8 @@ int main(int argc, const char **argv)
                             goto fail;
                         } else {
                             fclose (f);
-                            tt_delete_file(ttd, ttd->files->quickgps);
-                            result = tt_write_file(ttd, ttd->files->quickgps, debug, fbuf, length, write_delay);
+                            tt_delete_file(ttd, TTBLUE_FILE_GPSQUICKFIX_DATA);
+                            result = tt_write_file(ttd, TTBLUE_FILE_GPSQUICKFIX_DATA, debug, fbuf, length, write_delay);
                             free(fbuf);
                             if (result < 0) {
                                 fputs("Failed to send QuickFixGPS update to watch.\n", stderr);
@@ -678,7 +681,7 @@ int main(int argc, const char **argv)
                                 // official TomTom Android app seems to only issue this
                                 // "magic" update command when the GPS is brand new or
                                 // after a factory reset, or with 3x --update-gps
-                                att_wrreq(ttd->fd, ttd->h->cmd_status, BARRAY(0x05, 0x01, 0x00, 0x01), 4);
+                                att_wrreq(ttd->fd, ttd->h->cmd_status, BARRAY(MSG_UPDATE_EPHEMERIS, 0x01, 0x00, 0x01), 4);
 
                                 time_t last_gqf_update = read_gqf_status(ttd, debug-1);
                                 if (last_gqf_update != -1 && last_gqf_update != 0)
