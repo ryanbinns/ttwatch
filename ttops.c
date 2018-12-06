@@ -250,17 +250,12 @@ tt_authorize(TTDEV *d, uint32_t code, bool new_code)
 int
 tt_reboot(TTDEV *d)
 {
-    uint32_t bork = 0;
-    uint8_t cmd[] = {0x07, 0, 0, 0};
-    switch (d->protocol_version) {
-    case 1:
-        // ... then overwhelm the device with a torrent of zeros to the status register
-        for (int ii=1; ii<=1000; ii++) {
-            if (att_wrreq(d->fd, d->h->cmd_status, &bork, 4) < 0)
-                return ii;
-        }
-    case 2:
-        att_wrreq(d->fd, d->h->cmd_status, cmd, sizeof cmd);
+    // overwhelm the device with a torrent of writes to the (read-only) status register
+    // v2 version tested by @Grimler91; v1 version tested by @dlenski on TomTom Runner v1
+    uint32_t bork = htobl(d->protocol_version == 2 ? 0x07 : 0);
+    for (int ii=1; ii<=1000; ii++) {
+        if (att_wrreq(d->fd, d->h->cmd_status, &bork, sizeof bork) < 0)
+            return ii;
     }
     return -1;
 }
