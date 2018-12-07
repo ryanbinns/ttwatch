@@ -194,7 +194,7 @@ tt_reboot(TTDEV *d)
 {
     // overwhelm the device with a torrent of writes to the (read-only) status register
     // v2 version tested by @Grimler91; v1 version tested by @dlenski on TomTom Runner v1
-    uint32_t bork = htobl(d->protocol_version == 2 ? 0x07 : 0);
+    uint32_t bork = htobl(d->protocol_version == 2 ? MSG_RESET_DEVICE : 0);
     for (int ii=1; ii<=1000; ii++) {
         if (att_wrreq(d->fd, d->h->cmd_status, &bork, sizeof bork) < 0)
             return ii;
