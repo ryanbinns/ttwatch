@@ -1259,6 +1259,7 @@ void help(char *argv[])
     write_log(0, "      --delete-history=[ENTRY] Deletes a single history entry from the watch\n");
     write_log(0, "  -d, --device=STRING        Specify which device to use (see below)\n");
     write_log(0, "      --devices              List detected USB devices that can be selected.\n");
+    write_log(0, "  -7, --eph7days             Uses a 7-day GPS ephemeris, instead of the default 3.\n");
     write_log(0, "      --factory-reset        Performs a factory reset on the watch. This option\n");
     write_log(0, "                               must be specified twice for safety.\n");
     write_log(0, "      --force                Forces the --setting command to write a setting to the\n");
@@ -1435,6 +1436,7 @@ int main(int argc, char *argv[])
         { "initial-setup",  no_argument,       &options->initial_setup,   1 },
         { "force",          no_argument,       &options->force,           1 },
         { "auto",           no_argument,       0, 'a' },
+        { "eph7days",       no_argument,       0, '7' },
         { "help",           no_argument,       0, 'h' },
         { "version",        no_argument,       0, 'v' },
         { "device",         required_argument, 0, 'd' },
@@ -1460,7 +1462,7 @@ int main(int argc, char *argv[])
 #ifdef UNSAFE
         "lr:w:"
 #endif
-        "ahd:s:v", long_options, &option_index)) != -1)
+        "ahd:s:v7", long_options, &option_index)) != -1)
     {
         switch (opt)
         {
@@ -1547,6 +1549,9 @@ int main(int argc, char *argv[])
                     free(options->activity_store);
                 options->activity_store = strdup(optarg);
             }
+            break;
+        case '7': /* 7-day ephemeris */
+            options->eph_7_days = 1;
             break;
         case 'h': /* help */
             help(argv);
@@ -1726,7 +1731,7 @@ int main(int argc, char *argv[])
     }
 
     if (options->update_gps)
-        do_update_gps(watch);
+        do_update_gps(watch, options->eph_7_days);
 
     if (options->update_firmware)
     {

@@ -288,6 +288,9 @@ Applicable options (*not* case sensitive) and their values are as follows:
             by the help command (`-h` or `--help` command line options). This
             list can be either space- or comma-separated, or a combination
             of the two. This is a string value.
+7. Ephemeris7Days: specifies that a 7-day GPS ephemeris should be uploaded
+                   to the watch, rather than the default 3-day ephemeris.
+                   This is a boolean value.
 
 The following options only take effect when running the `ttwatchd` daemon:
 

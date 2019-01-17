@@ -9,6 +9,6 @@
 #include "libttwatch.h"
 
 /******************************************************************************/
-void do_update_gps(TTWATCH *watch);
+void do_update_gps(TTWATCH *watch, int eph_7_days);
 
 #endif  /* __UPDATE_GPS_H__ */

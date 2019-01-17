@@ -55,6 +55,7 @@ typedef struct
     int factory_reset;
     int initial_setup;
     int force;
+    int eph_7_days;
 } OPTIONS;
 
 /*****************************************************************************/

@@ -180,6 +180,8 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
         }
         else if (!strcasecmp(option, "SkipElevation"))
             result = get_bool(value, &options->skip_elevation);
+        else if (!strcasecmp(option, "Ephemeris7days"))
+            result = get_bool(value, &options->eph_7_days);
 
         if (!result)
             write_log(0, "Invalid conf file line: %s\n", str);

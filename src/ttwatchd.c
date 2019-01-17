@@ -49,7 +49,7 @@ void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)
     }
 
     if (new_options->update_gps)
-        do_update_gps(watch);
+        do_update_gps(watch, options->eph_7_days);
 
     if (new_options->update_firmware)
         do_update_firmware(watch, 0);
@@ -188,6 +188,7 @@ void help(char *argv[])
     write_log(0, "                               downloaded ttbin activity files\n");
     write_log(0, "  -a, --auto                 Same as \"--update-fw --update-gps --get-activities --set-time\"\n");
     write_log(0, "  -d, --device=STRING        Specify which device to use (see below)\n");
+    write_log(0, "  -7, --eph7days             Uses a 7-day GPS ephemeris, instead of the default 3.\n");
     write_log(0, "      --get-activities       Downloads and deletes any activity records\n");
     write_log(0, "                               currently stored on the watch\n");
     write_log(0, "      --packets              Displays the packets being sent/received\n");
@@ -243,6 +244,7 @@ int main(int argc, char *argv[])
         { "help",           no_argument,       0, 'h' },
         { "device",         required_argument, 0, 'd' },
         { "activity-store", required_argument, 0, 's' },
+        { "eph7days",       no_argument,       0, '7' },
         {0}
     };
 
@@ -279,6 +281,9 @@ int main(int argc, char *argv[])
                     free(options->activity_store);
                 options->activity_store = strdup(optarg);
             }
+            break;
+        case '7': /* 7-day ephemeris */
+            options->eph_7_days = 1;
             break;
         case 'h': /* help */
             help(argv);

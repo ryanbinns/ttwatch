@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*****************************************************************************/
-void do_update_gps(TTWATCH *watch)
+void do_update_gps(TTWATCH *watch, int eph_7_days)
 {
     DOWNLOAD download = {0};
     char *url = 0;
@@ -22,8 +22,11 @@ void do_update_gps(TTWATCH *watch)
         write_log(1, "Unable to get GPSQuickFix data URL\n");
         return;
     }
-    /* get 3 days ephemeris */
-    url = replace(url, "{DAYS}", "3");
+    /* get days ephemeris */
+    if (eph_7_days)
+        url = replace(url, "{DAYS}", "7");
+    else
+        url = replace(url, "{DAYS}", "3");
 
     /* download the data file */
     write_log(0, "Downloading GPSQuickFix data file...\n");
