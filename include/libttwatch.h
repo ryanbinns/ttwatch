@@ -231,6 +231,7 @@ typedef enum
 #define TTWATCH_FILE_HISTORY_DATA           (0x00730000)
 #define TTWATCH_FILE_HISTORY_SUMMARY        (0x00830000)
 #define TTWATCH_FILE_TTBIN_DATA             (0x00910000)
+#define TTWATCH_FILE_ACTIVITY_SUMMARY       (0x00b30000)
 
 /******************************************************************************
 * Callback function for ttwatch_enumerate_devices. The watch is open before   *

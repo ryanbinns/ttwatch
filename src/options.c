@@ -3,9 +3,11 @@
 ** Implementation of basic config file loading                                **
 \******************************************************************************/
 
+#include "export.h"
 #include "options.h"
 #include "log.h"
 #include "ttbin.h"
+#include "protobuf.h"
 
 #include <ctype.h>
 #include <memory.h>

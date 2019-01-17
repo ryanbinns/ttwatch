@@ -4,6 +4,7 @@
 \*****************************************************************************/
 
 #include "ttbin.h"
+#include "protobuf.h"
 #include "cycling_cadence.h"
 
 #include <math.h>
@@ -203,3 +204,27 @@ void export_csv(TTBIN_FILE *ttbin, FILE *file)
 
 }
 
+void export_protobuf_csv(PROTOBUF_FILE *protobuf, FILE *file)
+{
+    char timestr[32];
+    unsigned time;
+    time_t timestamp;
+    int i;
+
+    fputs("recordId,time,utcOffset,duration,steps,activity_time,distance,calories,base_calories\r\n", file);
+
+    for (i = 0; i < protobuf->activity->n_rootcontainer; i++) {
+        RootContainer *container = protobuf->activity->rootcontainer[i];
+
+        if (container->datacontainer && container->datacontainer->subdatacontainer && container->datacontainer->subdatacontainer->summary) {
+            SummaryRecord *s = container->datacontainer->subdatacontainer->summary;
+
+            fprintf(file,"%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
+                s->recordid, s->time, s->timezone, s->interval, s->steps, s->activitytime, s->distance, s->calories, s->basecalories);
+        }
+    }
+
+    /* And now the totals record */
+    fprintf(file,"Totals,,,%d,%d,%d,%d,%d,%d\r\n",
+        protobuf->totals.interval, protobuf->totals.steps, protobuf->totals.activity_time, protobuf->totals.distance, protobuf->totals.calories, protobuf->totals.base_calories);
+}

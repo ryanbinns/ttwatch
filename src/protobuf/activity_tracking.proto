@@ -1,0 +1,163 @@
+
+syntax = "proto2";
+
+//#################################################################################################
+//
+// Definition file for the TomTom activity tracking files (files with ID
+// 0x00b1nnnn and 0x00b3nnnn).
+//
+//#################################################################################################
+
+
+//#################################################################################################
+// 1st level: root container
+//#################################################################################################
+
+message RootContainer
+{
+  optional Metadata             metadata          =7;
+  optional DataContainer        dataContainer     =8;
+}
+
+
+
+//#################################################################################################
+// 2nd level: metadata. Containing just two ints having the same value. Occurs often in one file
+//#################################################################################################
+
+message Metadata
+{
+  required fixed32              unknown1=1;  // always 0x1234DAEB
+  required fixed32              unknown2=2;  // always 0x00010100
+}
+
+
+//#################################################################################################
+// 2nd level: data container. Contains various types of data
+//#################################################################################################
+
+message DataContainer
+{
+  required SubDataContainer     subDataContainer  =1;
+}
+
+//#################################################################################################
+// 3rd level: sub data container
+//#################################################################################################
+
+
+message SubDataContainer
+{
+  optional DeviceInfo           deviceInfo        =1;
+  optional SummaryRecord        summary           =2;
+  optional Record2              record2           =3;
+  optional Record3              record3           =6;   // Heart rate??
+  optional Record4              record4           =7;
+}
+
+//#################################################################################################
+// 4th level: Device info
+//#################################################################################################
+
+message DeviceInfo
+{
+  required string               deviceName        =1;
+  required fixed32              year              =2;
+  required SoftwareVersion      softwareVersion   =3;
+}
+
+message SoftwareVersion
+{
+  required int32                majorVersion      =1;
+  required int32                mediumVersion     =2;
+  required int32                minorVersion      =3;
+  required Unknown01            unknown01         =4;
+}
+
+
+message Unknown01
+{
+  optional int32                dummy             =1;
+}
+
+
+//#################################################################################################
+// 4th level: Data Record
+//#################################################################################################
+message SummaryRecord
+{
+  required int32                recordId          =1;
+  required int32                time              =2;    // Epoch time in seconds
+  required int32                timeZone          =3;    // Difference between time and UTC in seconds (?)
+  required int32                interval          =4;    // Interval of this measurement = 900s often
+  required int32                steps             =5;    // Steps in this interval
+  required int32                activityTime      =6;    // How many seconds have been during an activity
+  required int32                distance          =7;    // Distance in meters in this interval
+  required int32                calories          =8;    // Calories in this interval
+  required int32                baseCalories      =9;    // Calories from just existing
+  optional int32                unknown10         =10;
+  required int32                unknown11         =11;
+}
+
+
+//#################################################################################################
+// 4th level: Data Record 2
+//#################################################################################################
+
+message Record2
+{
+  required fixed32              time              =1;    // Epoch time in seconds, 900 s interval = 15 min
+  required int32                interval          =2;    // Interval in seconds? 14400=4h
+  repeated TagValueContainer    tagValue          =3;
+  required int32                unknown1          =4;
+  required int32                unknown2          =5;
+  required int32                unknown3          =6;
+
+}
+
+message TagValueContainer
+{
+  required int32                tag               =1;
+  required ValueContainer       valueContainer    =2;
+}
+
+message ValueContainer
+{
+  required int32                value             =3;
+}
+
+//#################################################################################################
+// 4th level: Data Record 3
+//#################################################################################################
+
+message Record3
+{
+  required fixed32              time              =1;    // Epoch time in seconds, 900 s interval = 15 min
+  required int32                interval          =2;    // Interval in seconds?? 14400=4h
+  required int32                heartRate         =3;    // Heartrate in bpm. This value is displayed by TomTom MySports
+  required int32                value02           =4;    // Some other heartrate value
+  required int32                value03           =5;    // ?
+}
+
+
+//#################################################################################################
+// 4th level: Data Record 4
+//#################################################################################################
+
+message Record4
+{
+  required fixed32              time              =1;    // Epoch time in seconds, 900 s interval = 15 min
+  required int32                interval          =2;    // Interval in seconds?? 14400=4h
+  repeated int32                value             =3;    // 6 values in the message
+}
+
+//#################################################################################################
+// Root message
+//#################################################################################################
+
+
+message Activity
+{
+  repeated RootContainer        rootContainer =1;
+}
+

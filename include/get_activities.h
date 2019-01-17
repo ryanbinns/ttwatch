@@ -13,5 +13,6 @@
 
 /*************************************************************************************************/
 void do_get_activities(TTWATCH *watch, OPTIONS *options, uint32_t formats);
+void do_get_activity_summaries(TTWATCH *watch, OPTIONS *options, uint32_t formats);
 
 #endif  /* __GET_ACTIVITIES_H__ */
