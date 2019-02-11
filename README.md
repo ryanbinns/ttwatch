@@ -36,6 +36,10 @@ before attempting to build it.
    Available from http://curl.haxx.se/download.html
 4. `libusb` 1.0.16 or later (tested against version 1.0.19).
    Available from http://sourceforge.net/projects/libusb/
+5. `protobuf` 3.6.0 or later (tested against version 3.6.0)
+   Available from https://github.com/protocolbuffers/protobuf
+6. `protobuf-c` 1.3.0 or later (tested against version 1.3.1)
+   Available from https://github.com/protobuf-c/protobuf-c
 
 Prebuilt packages should be available for most systems using the system's
 built in package manager (dpkg, yum, apt, rpm etc...). Make sure that the
