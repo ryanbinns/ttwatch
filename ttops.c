@@ -163,7 +163,7 @@ tt_authorize(TTDEV *d, char code[6], bool new_code)
     // authorize with the device
     const uint16_t auth_one = btohs(0x0001);
     uint32_t bcode = htobl(atoi(code));
-    const uint8_t *magic_bytes;
+    const uint8_t *magic_bytes = BARRAY( 0x01, 0x19, 0, 0, 0x01, 0x17, 0, 0 );
 
     switch (d->protocol_version) {
     case 1:
