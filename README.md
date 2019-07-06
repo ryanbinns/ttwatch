@@ -191,6 +191,12 @@ to the USB devices is called `usb` as above, then the parameter will need to
 be `--runas fred:usb`, otherwise there will be permissions errors trying to
 communicate with the watch. Note that in this case `fred` will also need to
 be a member of the `usb` group, otherwise there will be permissions errors also.
+Note when starting the daemon with the `--runas` parameter the home directory used
+as the default activity store location `~/ttwatch` is still the home of the root
+user who is starting the daemon and not the home of the user running the daemon.
+In this case the activity store location must be specified on the command line
+or in the configuration file `/etc/ttwatch.conf` pointing to a location where the
+unprivileged user has write access.
 
 Note: The daemon is not supported under FreeBSD as the FreeBSD version of
       libusb does not support hot-plug detection and causes compilation
