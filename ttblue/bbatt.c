@@ -25,21 +25,24 @@ att_read(int fd, uint16_t handle, void *buf)
         return result;
 
     struct { uint8_t opcode; uint8_t buf[BT_ATT_DEFAULT_LE_MTU]; } __attribute__((packed)) rpkt = {0};
-    result = recv(fd, &rpkt, sizeof rpkt, 0);
-    if (result<0)
-        return result;
-    else if (rpkt.opcode == BT_ATT_OP_ERROR_RSP && result==1+sizeof(struct bt_att_pdu_error_rsp)) {
-        struct bt_att_pdu_error_rsp *err = (void *)rpkt.buf;
-        fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, btohs(err->handle), att_ecode2str(err->ecode));
-        return -2;
-    } else if (rpkt.opcode != BT_ATT_OP_READ_RSP) {
-        fprintf(stderr, "Expect ATT READ response opcode (0x%02x) but received 0x%02x\n", BT_ATT_OP_READ_RSP, rpkt.opcode);
-        return -2;
-    } else {
-        int length = result-1;
-        memcpy(buf, rpkt.buf, length);
-        return length;
+    while (rpkt.opcode != BT_ATT_OP_READ_RSP) {
+        result = recv(fd, &rpkt, sizeof rpkt, 0);
+        if (result<0)
+            return result;
+        else if (rpkt.opcode == BT_ATT_OP_ERROR_RSP && result==1+sizeof(struct bt_att_pdu_error_rsp)) {
+            struct bt_att_pdu_error_rsp *err = (void *)rpkt.buf;
+            fprintf(stderr, "ATT error for opcode 0x%02x, handle 0x%04x: %s\n", err->opcode, btohs(err->handle), att_ecode2str(err->ecode));
+            return -2;
+        } else if (rpkt.opcode != BT_ATT_OP_READ_RSP) {
+            fprintf(stderr, "Expect ATT READ response opcode (0x%02x) but received 0x%02x\n", BT_ATT_OP_READ_RSP, rpkt.opcode);
+            continue;
+        } else {
+            int length = result-1;
+            memcpy(buf, rpkt.buf, length);
+            return length;
+        }
     }
+    return -2;
 }
 
 int
