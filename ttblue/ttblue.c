@@ -290,24 +290,24 @@ char *read_code;
 char *activity_store=".", *dev_address=NULL, *interface=NULL, *postproc=NULL, *gqf_url=GQF_GPS_URL;
 
 struct poptOption options[] = {
-    { "auto", 'a', POPT_ARG_NONE, NULL, 'a', "Same as --get-activities --update-gps --set-time --version" },
-    { "get-activities", 0, POPT_ARG_NONE, &get_activities, 0, "Downloads and deletes .ttbin activity files from the watch" },
-    { "set-time", 0, POPT_ARG_NONE, &set_time, 0, "Set time zone on the watch to match this computer" },
-    { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 0, "Location to store .ttbin activity files", "PATH" },
-    { "post", 'p', POPT_ARG_STRING, &postproc, 0, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
-    { "update-gps", 0, POPT_ARG_NONE, NULL, 'G', "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
-    { "glonass", 0, POPT_ARG_NONE, NULL, 'g', "Use TomTom's GLONASS version of QuickFix update file." },
-    { "qf-url", 0, POPT_ARG_STRING, &gqf_url, 0, "Alternate URL for QuickFix update (ephemeris) file." },
-    { "device", 'd', POPT_ARG_STRING, &dev_address, 0, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will use first TomTom device if unspecified", "MACADDR" },
-    { "interface", 'i', POPT_ARG_STRING, &interface, 0, "Bluetooth HCI interface to use", "hciX" },
-    { "code", 'c', POPT_ARG_STRING, &read_code, 'c', "6-digit pairing code for the watch (if already paired)", "NUMBER" },
-    { "version", 'v', POPT_ARG_NONE, &version, 0, "Show watch firmware version and identifiers" },
-    { "debug", 'D', POPT_ARG_NONE, 0, 'D', "Increase level of debugging output" },
-    { "quiet", 'q', POPT_ARG_VAL, &debug, 0, "Suppress debugging output" },
-    { "daemon", 0, POPT_ARG_NONE, &daemonize, 0, "Run as a daemon which will try to connect repeatedly" },
-    { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 0, "Wait time after successful connection to watch", "SECONDS" },
-    { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 10, "Wait time after failed connection to watch", "SECONDS" },
-//    { "no-config", 'C', POPT_ARG_NONE, &config, 0, "Do not load or save settings from ~/.ttblue config file" },
+    { "auto", 'a', POPT_ARG_NONE, NULL, 0, "Same as --get-activities --update-gps --set-time --version" },
+    { "get-activities", 0, POPT_ARG_NONE, &get_activities, 1, "Downloads and deletes .ttbin activity files from the watch" },
+    { "set-time", 0, POPT_ARG_NONE, &set_time, 2, "Set time zone on the watch to match this computer" },
+    { "activity-store", 's', POPT_ARG_STRING|POPT_ARGFLAG_SHOW_DEFAULT, &activity_store, 3, "Location to store .ttbin activity files", "PATH" },
+    { "post", 'p', POPT_ARG_STRING, &postproc, 4, "Command to run (with .ttbin file as argument) for every activity file", "CMD" },
+    { "update-gps", 0, POPT_ARG_NONE, NULL, 5, "Download TomTom QuickFix update file and send it to the watch (if repeated, forces update even if not needed)" },
+    { "glonass", 0, POPT_ARG_NONE, NULL, 6, "Use TomTom's GLONASS version of QuickFix update file." },
+    { "qf-url", 0, POPT_ARG_STRING, &gqf_url, 7, "Alternate URL for QuickFix update (ephemeris) file." },
+    { "device", 'd', POPT_ARG_STRING, &dev_address, 8, "Bluetooth MAC address of the watch (E4:04:39:__:__:__); will use first TomTom device if unspecified", "MACADDR" },
+    { "interface", 'i', POPT_ARG_STRING, &interface, 9, "Bluetooth HCI interface to use", "hciX" },
+    { "code", 'c', POPT_ARG_STRING, &read_code, 10, "6-digit pairing code for the watch (if already paired)", "NUMBER" },
+    { "version", 'v', POPT_ARG_NONE, &version, 11, "Show watch firmware version and identifiers" },
+    { "debug", 'D', POPT_ARG_NONE, 0, 12, "Increase level of debugging output" },
+    { "quiet", 'q', POPT_ARG_VAL, &debug, 13, "Suppress debugging output" },
+    { "daemon", 0, POPT_ARG_NONE, &daemonize, 14, "Run as a daemon which will try to connect repeatedly" },
+    { "wait-success", 'w', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_success, 15, "Wait time after successful connection to watch", "SECONDS" },
+    { "wait-fail", 'W', POPT_ARG_INT|POPT_ARGFLAG_SHOW_DEFAULT, &sleep_fail, 16, "Wait time after failed connection to watch", "SECONDS" },
+//    { "no-config", 'C', POPT_ARG_NONE, &config, 17, "Do not load or save settings from ~/.ttblue config file" },
     POPT_AUTOHELP
     POPT_TABLEEND
 };
@@ -329,11 +329,11 @@ int main(int argc, const char **argv)
 
     while ((ch=poptGetNextOpt(optCon))>=0) {
         switch (ch) {
-        case 'c': new_pair=false; break;
-        case 'D': debug++; break;
-        case 'a': get_activities = update_gps = set_time = version = true; break;
-        case 'G': update_gps++; break;
-        case 'g': gqf_url = GQF_GLONASS_URL; break;
+        case 10: new_pair=false; break;
+        case 12: debug++; break;
+        case 0 : get_activities = update_gps = set_time = version = true; break;
+        case 5 : update_gps++; break;
+        case 6 : gqf_url = GQF_GLONASS_URL; break;
         }
     }
     if (ch<-1) {
