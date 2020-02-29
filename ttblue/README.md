@@ -47,11 +47,22 @@ $ sudo apt-get install libbluetooth-dev libcurl4-gnutls-dev libpopt-dev
 
 ## Compiling
 
-Compilation with `gcc` should be straightforward:
+Both in-source or out-of-source builds are supported. A simple in-source build
+is done as follows:
 
 ```bash
+$ cmake .
 $ make
-$ make setcap # requires sudo/root access
+$ sudo make setcap
+```
+
+An out-of-source build can be done as follows:
+
+```bash
+$ mkdir build
+$ cd build && cmake ..
+$ make
+$ sudo make setcap
 ```
 
 To fix the issue with [very slow file transfers](#why-so-slow), the
