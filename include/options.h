@@ -73,4 +73,6 @@ OPTIONS *alloc_options();
 OPTIONS *copy_options(const OPTIONS *o);
 void free_options(OPTIONS *o);
 
+#define GLOBAL_CONFIG_FILE  "/etc/ttwatch.conf"
+
 #endif  /* __OPTIONS_H__ */

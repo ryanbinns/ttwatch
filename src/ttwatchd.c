@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
     OPTIONS *options = alloc_options();
 
     /* load the system-wide options */
-    load_conf_file("/etc/ttwatch.conf", options, LoadAll);
+    load_conf_file(GLOBAL_CONFIG_FILE, options, LoadAll);
 
     struct option long_options[] = {
         { "update-fw",      no_argument,       &options->update_firmware, 1 },
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
     }
 
     /* reload the daemon operations from the config file. We don't load a per-user file */
-    load_conf_file("/etc/ttwatch", options, LoadDaemonOperations);
+    load_conf_file(GLOBAL_CONFIG_FILE, options, LoadDaemonOperations);
 
     /* we have to include some useful functions, otherwise there's no point... */
     if (!options->update_firmware && !options->update_gps && !options->get_activities && !options->get_summaries && !options->set_time)

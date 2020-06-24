@@ -80,7 +80,7 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
 {
     char str[256];
     FILE *file = 0;
-    int global = 0;
+    int global = !strcmp(filename, GLOBAL_CONFIG_FILE);
 
     /* open the conf file */
     file = fopen(filename, "r");
@@ -144,6 +144,7 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
             {
                 options->run_as = 1;
                 options->run_as_user = value;
+                value = 0;
             }
         }
         else if (!strcasecmp(option, "Device"))

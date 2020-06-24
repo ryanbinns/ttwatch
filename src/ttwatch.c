@@ -1401,7 +1401,7 @@ int main(int argc, char *argv[])
     OPTIONS *options = alloc_options();
 
     /* load the system-wide options */
-    load_conf_file("/etc/ttwatch.conf", options, LoadSettingsOnly);
+    load_conf_file(GLOBAL_CONFIG_FILE, options, LoadSettingsOnly);
     /* load the user-specific options */
     if (getuid() != 0)
     {
