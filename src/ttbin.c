@@ -179,7 +179,7 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
-    uint8_t  type;              /* 1 = warmup, 2 = work, 3 = rest, 4 = cooldown */
+    int16_t  type;              /* 1 = warmup, 2 = work, 3 = rest, 4 = cooldown */
     uint32_t total_time;        /* seconds */
     float    total_distance;    /* metres */
     uint16_t total_calories;
