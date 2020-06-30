@@ -6,6 +6,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 option(unsafe "Enable unsafe operations" off)
 option(daemon "Enable daemon operations" on)
+option(ttblue "Build ttblue (requires bluetooth)" on)
 
 if(unsafe)
   message(STATUS "Enabled unsafe operations")
@@ -32,6 +33,13 @@ endif(is_big_endian)
 include_directories(include src src/protobuf ${CMAKE_CURRENT_BINARY_DIR})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
+
+if(ttblue)
+  add_subdirectory(ttblue)
+  find_package(BLUETOOTH)
+  find_package(POPT)
+endif()
+
 find_package(CURL)
 find_package(OpenSSL)
 find_package(LibUSB)
