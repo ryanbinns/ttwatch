@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.0)
 project (TTWatch C CXX)
 if(NOT CMAKE_BUILD_TYPE)
   set (CMAKE_BUILD_TYPE Debug)
@@ -35,9 +35,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_mo
 find_package(CURL)
 find_package(OpenSSL)
 find_package(LibUSB)
+
 pkg_check_modules(LIBPROTOBUFC libprotobuf-c)
 
 include_directories(${LIBUSB_1_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${CURL_INCLUDE_DIRS} ${LIBPROTOBUFC_INCLUDE_DIRS})
+link_directories(${LIBUSB_1_LIBRARY_DIRS} ${OPENSSL_LIBRARY_DIR} ${CURL_LIBRARY_DIRS} ${LIBPROTOBUFC_LIBRARY_DIRS})
 
 set(LIBTTWATCH_SRC src/libttwatch.cpp src/libttwatch_cpp.cpp)
 add_library(libttwatch STATIC ${LIBTTWATCH_SRC})

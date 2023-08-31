@@ -31,6 +31,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+// Under Cygwin libusb.h defines WIN32, which throws off the logic of curl.h
+#undef WIN32
+
 #include <curl/curl.h>
 
 /*************************************************************************************************/
