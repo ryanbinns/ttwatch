@@ -46,6 +46,13 @@ built in package manager (dpkg, yum, apt, rpm etc...). Make sure that the
 `-dev` version of the packages (eg. `libssl-dev`, `libcurl-dev`, `libusb-1.0-0-dev`)
 are installed so that the headers are available.
 
+Under Cygwin install `protobuf-c` from source; the rest are available
+through packages.  Install `libssl-devel`, `libcurl-devel', `libusb-devel`,
+`libprotobuf-devel`.
+In order to use your the `protobuf-c` library compiled from source,
+run *cmake* as
+`PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH cmake .`
+
 Build Instructions
 ==================
 
@@ -146,6 +153,19 @@ must be run as `root`):
 # pw groupadd usb
 # pw groupmod usb -m <your_username>
 ```
+
+Windows Setup
+=============
+Under Windows you need to configure a USB device driver for the watch,
+such as [Zadig](https://zadig.akeo.ie/).
+You need to locate the watch (e.g. listed as Workout Drive Interface 0),
+and set its driver to WinUSB.
+Ensure that the vendor id matches TomTom (1390).
+Do not change the driver for the watch's storage interface
+(e.g. listed as GPS Watch Music Drive Interface 1).
+If drivers for the watch were previously installed, you need
+to replace the driver in the watch entry using the HidUsb driver,
+not the entry using the USBSTOR driver.
 
 Initial Setup
 =============
