@@ -131,6 +131,12 @@ void load_conf_file(const char *filename, OPTIONS *options, ConfLoadType load_ty
             options->formats = parse_format_list(value);
             result = 1;
         }
+        else if (!strcasecmp(option, "EphemerisURL"))
+        {
+            options->ephemeris_url = value;
+            value = 0;
+            result = 1;
+        }
         else if (!strcasecmp(option, "PostProcessor"))
         {
             options->post_processor = value;

@@ -53,6 +53,7 @@ typedef struct
     int list_settings;
     int skip_elevation;
     char *post_processor;
+    char *ephemeris_url;
     int factory_reset;
     int initial_setup;
     int force;
