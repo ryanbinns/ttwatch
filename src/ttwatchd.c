@@ -57,7 +57,7 @@ void daemon_watch_operations(TTWATCH *watch, OPTIONS *options)
     }
 
     if (new_options->update_gps)
-        do_update_gps(watch, options->eph_7_days);
+        do_update_gps(watch, options->eph_7_days, options->ephemeris_url);
 
     if (new_options->update_firmware)
         do_update_firmware(watch, 0);

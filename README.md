@@ -321,6 +321,11 @@ Applicable options (*not* case sensitive) and their values are as follows:
 7. Ephemeris7Days: specifies that a 7-day GPS ephemeris should be uploaded
                    to the watch, rather than the default 3-day ephemeris.
                    This is a boolean value.
+8. EphemerisURL: specifies the URL from which to obtain the QuickGPS
+                   ephemeris data.  A value that seems to work is
+		   `https://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p{DAYS}enc.ee`.
+		   The `{DAYS}` part is changed according the the setting of
+		   `Ephemeris7Days`.
 
 The following options only take effect when running the `ttwatchd` daemon:
 
@@ -342,9 +347,10 @@ user and group, and normal activities when a watch is connected could be:
 ActivityStore = /mnt/data/watch
 RunAsUser = jsmith:usb
 GetActivities = true
-UpdateFirmware = true
+UpdateFirmware = false
 UpdateGPS = true
 SetTime = true
+EphemerisURL = https://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p{DAYS}enc.ee
 ```
 A per-user config file could be added to specify a list of file formats to make:
 ```

@@ -11,22 +11,23 @@
 #include <stdlib.h>
 
 /*****************************************************************************/
-void do_update_gps(TTWATCH *watch, int eph_7_days)
+void do_update_gps(TTWATCH *watch, int eph_7_days, const char *url)
 {
     DOWNLOAD download = {0};
-    char *url = 0;
+    char *original_url;
 
-    url = get_config_string(watch, "service:ephemeris");
     if (!url)
     {
-        write_log(1, "Unable to get GPSQuickFix data URL\n");
+        write_log(1, "GPSQuickFix data URL option EphemerisURL not configured\n");
         return;
     }
+
+    original_url = strdup(url);
     /* get days ephemeris */
     if (eph_7_days)
-        url = replace(url, "{DAYS}", "7");
+        url = replace(original_url, "{DAYS}", "7");
     else
-        url = replace(url, "{DAYS}", "3");
+        url = replace(original_url, "{DAYS}", "3");
 
     /* download the data file */
     write_log(0, "Downloading GPSQuickFix data file...\n");

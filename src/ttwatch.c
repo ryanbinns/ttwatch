@@ -1754,7 +1754,7 @@ int main(int argc, char *argv[])
     }
 
     if (options->update_gps)
-        do_update_gps(watch, options->eph_7_days);
+        do_update_gps(watch, options->eph_7_days, options->ephemeris_url);
 
     if (options->update_firmware)
     {
