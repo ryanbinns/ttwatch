@@ -9,6 +9,7 @@
 #include "log.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 /*****************************************************************************/
 void do_update_gps(TTWATCH *watch, int eph_7_days, const char *url)
