@@ -53,10 +53,10 @@ In order to use your the `protobuf-c` library compiled from source,
 run *cmake* as
 `PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH cmake .`
 
-Under macos one way to build ttwatch is to install the following package using brew then follow the standard build instructions below.
+Under MacOS one way to build ttwatch is to install the following package using brew then follow the standard build instructions below.
 
 ```
-brew install cmake openssl curl libusb protobuf protobuf-c
+brew bundle
 ```
 
 Build Instructions
