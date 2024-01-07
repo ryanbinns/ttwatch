@@ -18,7 +18,11 @@ the data they collect.
                 file. Currently, adding/modifying lap markers and truncating the
                 file at the end of the workout (last lap, goal completion etc)
                 are supported.
-5. `ttbin2mysports.sh` - script that enabled uploading to a MapMyFitness account
+5. `ttblue`   - Alternative to ttwatch that communicates over bluetooth instead
+                of USB. Can download activity data and update quickGPS data. For
+                more information about ttblue, see the
+                [ttblue README](ttblue/README.md)
+6. `ttbin2mysports.sh` - script that enabled uploading to a MapMyFitness account
                          that is linked to a MySports account. Automatically
                          converts the ttbin file to a TCX file before uploading.
 
@@ -41,6 +45,13 @@ before attempting to build it.
 6. `protobuf-c` 1.3.0 or later (tested against version 1.3.1)
    Available from https://github.com/protobuf-c/protobuf-c
 
+If you want to compile `ttblue` you also need
+
+7. `popt` (tested against version 1.16)
+   Available from for example https://github.com/vathpela/popt
+8. `bluez` (tested against version 5.52) and a bluetooth adapter/card
+   Available from http://www.bluez.org/
+
 Prebuilt packages should be available for most systems using the system's
 built in package manager (dpkg, yum, apt, rpm etc...). Make sure that the
 `-dev` version of the packages (eg. `libssl-dev`, `libcurl-dev`, `libusb-1.0-0-dev`)
@@ -62,8 +73,11 @@ brew bundle
 Build Instructions
 ==================
 
-The `ttwatch` binaries are built using cmake. Both in-source or out-of-source
-builds are supported. A simple in-source build is done as follows:
+The `ttwatch` binaries are built using cmake. You can choose to not build ttblue
+by passing the flag `-Dttblue=off` to cmake.
+
+Both in-source or out-of-source builds are supported. A simple in-source build
+is done as follows:
 ```
 $ cmake .
 $ make
@@ -384,4 +398,3 @@ them, nor guarantee their functionality or safety. This list is for
 information only.
 
 [TT Watch Synchronizer - UI for ttwatch to manage your watch and tracks and optionaly upload to strava](https://github.com/Dica-Developer/ttws)
-

@@ -1,0 +1,22 @@
+notifications:
+  email:
+    false
+
+dist: trusty
+sudo: false
+
+language: c
+compiler:
+  - gcc
+
+env:
+  global:
+    - MAKEFLAGS="-j 2"
+
+before_script:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq build-essential libbluetooth-dev libcurl4-gnutls-dev libpopt-dev
+
+script:
+  - make
+
